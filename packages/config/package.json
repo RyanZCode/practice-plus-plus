@@ -1,0 +1,32 @@
+{
+  "name": "@practice-plus-plus/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./eslint": "./eslint/base.mjs",
+    "./prettier": "./prettier/base.mjs",
+    "./typescript/base.json": "./typescript/base.json",
+    "./vitest": "./vitest/base.mjs"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@eslint/js": "10.0.1",
+    "typescript-eslint": "8.68.0"
+  },
+  "peerDependencies": {
+    "eslint": "^10.0.0",
+    "prettier": "^3.0.0",
+    "typescript": ">=5.9.0 <6.1.0",
+    "vitest": "^4.0.0"
+  }
+}
