@@ -1,0 +1,26 @@
+{
+  "name": "practice-plus-plus",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Interview practice scheduling and analytics",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": "24.19.x",
+    "pnpm": "11.24.x"
+  },
+  "scripts": {
+    "build": "pnpm --recursive --if-present run build",
+    "format": "prettier --write apps packages package.json README.md pnpm-workspace.yaml *.config.mjs",
+    "format:check": "prettier --check apps packages package.json README.md pnpm-workspace.yaml *.config.mjs",
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "pnpm --recursive --if-present run typecheck"
+  },
+  "devDependencies": {
+    "@practice-plus-plus/config": "workspace:*",
+    "eslint": "10.9.1",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
+  }
+}
