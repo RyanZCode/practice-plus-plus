@@ -3,13 +3,21 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "vite build",
+    "dev": "vite",
+    "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
   "devDependencies": {
-    "@practice-plus-plus/config": "workspace:*"
+    "@practice-plus-plus/config": "workspace:*",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "@vitejs/plugin-react": "6.1.0",
+    "vite": "8.2.2"
   }
 }
