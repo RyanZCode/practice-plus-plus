@@ -3,13 +3,21 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/server.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "dev": "pnpm run build && node dist/server.js",
+    "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "dependencies": {
+    "express": "5.2.1",
+    "pino": "10.3.1",
+    "pino-http": "11.0.0"
+  },
   "devDependencies": {
-    "@practice-plus-plus/config": "workspace:*"
+    "@practice-plus-plus/config": "workspace:*",
+    "@types/express": "5.0.6",
+    "@types/node": "26.4.0"
   }
 }
