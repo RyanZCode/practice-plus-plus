@@ -10,8 +10,8 @@
   },
   "scripts": {
     "build": "pnpm --recursive --if-present run build",
-    "format": "prettier --write apps packages package.json README.md pnpm-workspace.yaml *.config.mjs",
-    "format:check": "prettier --check apps packages package.json README.md pnpm-workspace.yaml *.config.mjs",
+    "format": "prettier --write .github apps packages package.json README.md pnpm-workspace.yaml *.config.mjs",
+    "format:check": "prettier --check .github apps packages package.json README.md pnpm-workspace.yaml *.config.mjs",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run --passWithNoTests",
     "typecheck": "pnpm --recursive --if-present run typecheck"
