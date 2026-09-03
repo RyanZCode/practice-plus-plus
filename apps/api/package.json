@@ -6,7 +6,7 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "dev": "pnpm run build && node dist/server.js",
+    "dev": "pnpm run build && node --env-file-if-exists=.env dist/server.js",
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
