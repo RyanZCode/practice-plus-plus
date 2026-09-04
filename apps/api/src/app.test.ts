@@ -2,7 +2,7 @@ import { createServer, type Server } from "node:http";
 
 import type { Express } from "express";
 import pino from "pino";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "./app.js";
 
@@ -78,5 +78,31 @@ describe("API", () => {
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "Not found" });
+  });
+
+  it("creates or resolves the authenticated user's application profile", async () => {
+    const resolveByAuthSubject = vi.fn().mockResolvedValue({
+      authSubject: "verified-subject",
+      createdAt: new Date("2026-09-04T12:00:00Z"),
+      id: "application-profile-id",
+      updatedAt: new Date("2026-09-04T12:00:00Z"),
+    });
+    const app = createApp({
+      authentication: {
+        profileStore: { resolveByAuthSubject },
+        verifier: {
+          verify: vi.fn().mockResolvedValue({ subject: "verified-subject" }),
+        },
+      },
+      logger: pino({ level: "silent" }),
+    });
+    const url = await startServer(app);
+    const response = await fetch(`${url}/profile?userId=request-supplied-user`, {
+      headers: { authorization: "Bearer valid-token" },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ id: "application-profile-id" });
+    expect(resolveByAuthSubject).toHaveBeenCalledWith("verified-subject");
   });
 });
