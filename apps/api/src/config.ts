@@ -1,4 +1,5 @@
 export interface ApiConfig {
+  readonly databaseUrl: string;
   readonly port: number;
   readonly supabasePublishableKey: string;
   readonly supabaseUrl: string;
@@ -6,10 +7,28 @@ export interface ApiConfig {
 
 export function readConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
   return {
+    databaseUrl: readDatabaseUrl(environment.DATABASE_URL),
     port: readPort(environment.PORT),
     supabasePublishableKey: readPublishableKey(environment.SUPABASE_PUBLISHABLE_KEY),
     supabaseUrl: readUrl("SUPABASE_URL", environment.SUPABASE_URL),
   };
+}
+
+function readDatabaseUrl(value: string | undefined): string {
+  const databaseUrl = requireValue("DATABASE_URL", value);
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(databaseUrl);
+  } catch {
+    throw new Error("DATABASE_URL must be a valid PostgreSQL URL");
+  }
+
+  if (parsedUrl.protocol !== "postgres:" && parsedUrl.protocol !== "postgresql:") {
+    throw new Error("DATABASE_URL must be a valid PostgreSQL URL");
+  }
+
+  return databaseUrl;
 }
 
 function readPort(value: string | undefined): number {
