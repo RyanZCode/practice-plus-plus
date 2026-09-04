@@ -7,15 +7,23 @@ interface Environment {
   readonly VITE_SUPABASE_URL?: string;
 }
 
-export function validateConfig(environment: Environment = import.meta.env): void {
-  const apiUrl = environment.VITE_API_URL?.trim() || (environment.DEV ? LOCAL_API_URL : undefined);
-
-  validateUrl("VITE_API_URL", apiUrl);
-  validateUrl("VITE_SUPABASE_URL", environment.VITE_SUPABASE_URL?.trim());
-  validatePublishableKey(environment.VITE_SUPABASE_PUBLISHABLE_KEY);
+export interface WebConfig {
+  readonly apiUrl: string;
+  readonly supabasePublishableKey: string;
+  readonly supabaseUrl: string;
 }
 
-function validateUrl(name: string, value: string | undefined): void {
+export function readConfig(environment: Environment = import.meta.env): WebConfig {
+  const apiUrl = environment.VITE_API_URL?.trim() || (environment.DEV ? LOCAL_API_URL : undefined);
+
+  return {
+    apiUrl: readUrl("VITE_API_URL", apiUrl),
+    supabasePublishableKey: readPublishableKey(environment.VITE_SUPABASE_PUBLISHABLE_KEY),
+    supabaseUrl: readUrl("VITE_SUPABASE_URL", environment.VITE_SUPABASE_URL?.trim()),
+  };
+}
+
+function readUrl(name: string, value: string | undefined): string {
   if (value === undefined || value === "") {
     throw new Error(`${name} is required`);
   }
@@ -31,18 +39,24 @@ function validateUrl(name: string, value: string | undefined): void {
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
     throw new Error(`${name} must use HTTP or HTTPS`);
   }
+
+  return value;
 }
 
-function requireValue(name: string, value: string | undefined): void {
+function requireValue(name: string, value: string | undefined): string {
   if (value === undefined || value.trim() === "") {
     throw new Error(`${name} is required`);
   }
+
+  return value.trim();
 }
 
-function validatePublishableKey(value: string | undefined): void {
-  requireValue("VITE_SUPABASE_PUBLISHABLE_KEY", value);
+function readPublishableKey(value: string | undefined): string {
+  const key = requireValue("VITE_SUPABASE_PUBLISHABLE_KEY", value);
 
-  if (!value?.trim().startsWith("sb_publishable_")) {
+  if (!key.startsWith("sb_publishable_")) {
     throw new Error("VITE_SUPABASE_PUBLISHABLE_KEY must be a Supabase publishable key");
   }
+
+  return key;
 }
