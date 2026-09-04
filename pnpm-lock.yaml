@@ -26,6 +26,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@supabase/supabase-js':
+        specifier: 2.114.0
+        version: 2.114.0
       express:
         specifier: 5.2.1
         version: 5.2.1
