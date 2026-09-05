@@ -5,6 +5,8 @@ dist/
 coverage/
 *.tsbuildinfo
 apps/api/src/generated/prisma/
+supabase/.branches/
+supabase/.temp/
 
 .env
 .env.*
