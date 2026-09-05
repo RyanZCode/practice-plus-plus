@@ -1,0 +1,76 @@
+name: Promote production database
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database
+  cancel-in-progress: false
+
+jobs:
+  validate-main:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Require main branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "Production promotion must be dispatched from main."
+          exit 1
+
+  verify-staging:
+    needs: validate-main
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.19.0
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify staging migrations
+        run: pnpm --filter @practice-plus-plus/api prisma:migrate:status
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+  migrate-production:
+    needs: verify-staging
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.19.0
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply production migrations
+        run: pnpm --filter @practice-plus-plus/api prisma:migrate:deploy
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
