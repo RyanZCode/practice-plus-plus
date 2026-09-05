@@ -6,6 +6,7 @@ export interface ApplicationProfile {
   readonly authSubject: string;
   readonly createdAt: Date;
   readonly id: string;
+  readonly role: "ADMINISTRATOR" | "USER";
   readonly updatedAt: Date;
 }
 

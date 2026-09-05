@@ -85,6 +85,7 @@ describe("API", () => {
       authSubject: "verified-subject",
       createdAt: new Date("2026-09-04T12:00:00Z"),
       id: "application-profile-id",
+      role: "USER",
       updatedAt: new Date("2026-09-04T12:00:00Z"),
     });
     const app = createApp({
@@ -122,6 +123,7 @@ describe("API", () => {
             authSubject: "verified-subject",
             createdAt: new Date("2026-09-04T12:00:00Z"),
             id: "authenticated-profile-id",
+            role: "USER",
             updatedAt: new Date("2026-09-04T12:00:00Z"),
           }),
         },
@@ -161,6 +163,7 @@ describe("API", () => {
             authSubject: "verified-subject",
             createdAt: new Date("2026-09-04T12:00:00Z"),
             id: "authenticated-profile-id",
+            role: "USER",
             updatedAt: new Date("2026-09-04T12:00:00Z"),
           }),
         },
