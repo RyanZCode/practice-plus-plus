@@ -19,9 +19,15 @@ enum ProblemAvailability {
   UNAVAILABLE
 }
 
+enum UserRole {
+  USER
+  ADMINISTRATOR
+}
+
 model UserProfile {
   id               String            @id @default(uuid()) @db.Uuid
   authSubject      String            @unique @map("auth_subject") @db.Uuid
+  role             UserRole          @default(USER)
   createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
   practiceSettings PracticeSettings?
