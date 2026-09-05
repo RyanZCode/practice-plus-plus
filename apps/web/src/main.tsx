@@ -9,11 +9,12 @@ import { getSupabaseClient } from "./supabase";
 import "./styles.css";
 
 function Root() {
-  const client = getSupabaseClient(readConfig());
+  const config = readConfig();
+  const client = getSupabaseClient(config);
 
   return (
     <AuthProvider client={client}>
-      <App />
+      <App apiUrl={config.apiUrl} />
     </AuthProvider>
   );
 }

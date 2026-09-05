@@ -20,12 +20,17 @@ export const handleError: ErrorRequestHandler = (error, request, response, next)
   }
 
   const knownError = error instanceof HttpError;
+  const invalidJson = isInvalidJson(error);
 
-  if (!knownError) {
+  if (!knownError && !invalidJson) {
     request.log.error({ err: error }, "Unhandled request error");
   }
 
-  response.status(knownError ? error.statusCode : 500).json({
-    error: knownError ? error.message : "Internal server error",
+  response.status(knownError ? error.statusCode : invalidJson ? 400 : 500).json({
+    error: knownError ? error.message : invalidJson ? "Invalid JSON" : "Internal server error",
   });
 };
+
+function isInvalidJson(error: unknown): boolean {
+  return error instanceof SyntaxError && "status" in error && error.status === 400;
+}
