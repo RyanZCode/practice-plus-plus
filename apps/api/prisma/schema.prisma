@@ -8,10 +8,26 @@ datasource db {
 }
 
 model UserProfile {
-  id          String   @id @default(uuid()) @db.Uuid
-  authSubject String   @unique @map("auth_subject") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id               String            @id @default(uuid()) @db.Uuid
+  authSubject      String            @unique @map("auth_subject") @db.Uuid
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  practiceSettings PracticeSettings?
 
   @@map("user_profiles")
+}
+
+model PracticeSettings {
+  userProfileId      String      @id @map("user_profile_id") @db.Uuid
+  timeZone           String      @map("time_zone") @db.VarChar(100)
+  resetMinutes       Int         @map("reset_minutes") @db.SmallInt
+  dailyTarget        Int         @map("daily_target") @db.SmallInt
+  highIntervalDays   Int         @map("high_interval_days") @db.SmallInt
+  mediumIntervalDays Int         @map("medium_interval_days") @db.SmallInt
+  lowIntervalDays    Int         @map("low_interval_days") @db.SmallInt
+  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  userProfile        UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+
+  @@map("practice_settings")
 }

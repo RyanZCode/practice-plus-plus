@@ -15,6 +15,7 @@ describe("readConfig", () => {
       port: 3000,
       supabasePublishableKey: "sb_publishable_test",
       supabaseUrl: "https://project.supabase.co",
+      webOrigin: "http://localhost:5173",
     });
   });
 
@@ -52,6 +53,9 @@ describe("readConfig", () => {
     ).toThrow("SUPABASE_PUBLISHABLE_KEY must be a Supabase publishable key");
     expect(() => readConfig({ ...validEnvironment, DATABASE_URL: "https://example.com" })).toThrow(
       "DATABASE_URL must be a valid PostgreSQL URL",
+    );
+    expect(() => readConfig({ ...validEnvironment, WEB_ORIGIN: "not a url" })).toThrow(
+      "WEB_ORIGIN must be a valid URL",
     );
   });
 

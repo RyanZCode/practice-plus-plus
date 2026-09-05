@@ -3,6 +3,7 @@ export interface ApiConfig {
   readonly port: number;
   readonly supabasePublishableKey: string;
   readonly supabaseUrl: string;
+  readonly webOrigin: string;
 }
 
 export function readConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -11,6 +12,7 @@ export function readConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     port: readPort(environment.PORT),
     supabasePublishableKey: readPublishableKey(environment.SUPABASE_PUBLISHABLE_KEY),
     supabaseUrl: readUrl("SUPABASE_URL", environment.SUPABASE_URL),
+    webOrigin: readUrl("WEB_ORIGIN", environment.WEB_ORIGIN ?? "http://localhost:5173"),
   };
 }
 

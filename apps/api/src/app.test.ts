@@ -105,4 +105,89 @@ describe("API", () => {
     expect(await response.json()).toEqual({ id: "application-profile-id" });
     expect(resolveByAuthSubject).toHaveBeenCalledWith("verified-subject");
   });
+
+  it("loads and saves only the authenticated user's settings", async () => {
+    const settings = {
+      dailyTarget: 2,
+      redoIntervals: { high: 1, low: 7, medium: 3 },
+      resetTime: "04:00",
+      timeZone: "America/Toronto",
+    };
+    const findByUserProfileId = vi.fn().mockResolvedValue(null);
+    const save = vi.fn().mockResolvedValue(settings);
+    const app = createApp({
+      authentication: {
+        profileStore: {
+          resolveByAuthSubject: vi.fn().mockResolvedValue({
+            authSubject: "verified-subject",
+            createdAt: new Date("2026-09-04T12:00:00Z"),
+            id: "authenticated-profile-id",
+            updatedAt: new Date("2026-09-04T12:00:00Z"),
+          }),
+        },
+        settingsStore: { findByUserProfileId, save },
+        verifier: {
+          verify: vi.fn().mockResolvedValue({ subject: "verified-subject" }),
+        },
+      },
+      logger: pino({ level: "silent" }),
+      webOrigin: "http://localhost:5173",
+    });
+    const url = await startServer(app);
+    const headers = { authorization: "Bearer valid-token" };
+
+    const getResponse = await fetch(`${url}/settings?userId=other-profile`, { headers });
+    expect(getResponse.status).toBe(200);
+    expect(await getResponse.json()).toEqual({ settings: null });
+    expect(findByUserProfileId).toHaveBeenCalledWith("authenticated-profile-id");
+
+    const putResponse = await fetch(`${url}/settings`, {
+      body: JSON.stringify(settings),
+      headers: { ...headers, "content-type": "application/json" },
+      method: "PUT",
+    });
+    expect(putResponse.status).toBe(200);
+    expect(await putResponse.json()).toEqual({ settings });
+    expect(save).toHaveBeenCalledWith("authenticated-profile-id", settings);
+    expect(putResponse.headers.get("access-control-allow-origin")).toBe("http://localhost:5173");
+  });
+
+  it("rejects invalid practice settings before application logic runs", async () => {
+    const save = vi.fn();
+    const app = createApp({
+      authentication: {
+        profileStore: {
+          resolveByAuthSubject: vi.fn().mockResolvedValue({
+            authSubject: "verified-subject",
+            createdAt: new Date("2026-09-04T12:00:00Z"),
+            id: "authenticated-profile-id",
+            updatedAt: new Date("2026-09-04T12:00:00Z"),
+          }),
+        },
+        settingsStore: { findByUserProfileId: vi.fn(), save },
+        verifier: {
+          verify: vi.fn().mockResolvedValue({ subject: "verified-subject" }),
+        },
+      },
+      logger: pino({ level: "silent" }),
+    });
+    const url = await startServer(app);
+    const response = await fetch(`${url}/settings`, {
+      body: JSON.stringify({
+        dailyTarget: 20,
+        redoIntervals: { high: 7, low: 1, medium: 3 },
+        resetTime: "25:00",
+        timeZone: "somewhere",
+      }),
+      headers: {
+        authorization: "Bearer valid-token",
+        "content-type": "application/json",
+      },
+      method: "PUT",
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid practice settings" });
+    expect(save).not.toHaveBeenCalled();
+  });
 });

@@ -30,6 +30,10 @@ body {
   background: #ffffff;
 }
 
+.account-card {
+  width: min(100%, 38rem);
+}
+
 h1,
 p {
   margin: 0;
@@ -103,4 +107,108 @@ button:disabled {
 .account-card button,
 .auth-card > button {
   margin-top: 1.5rem;
+}
+
+.account-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.account-email,
+.settings-help {
+  color: #5f6b7d;
+}
+
+.account-heading .text-button {
+  min-height: auto;
+  margin: 0;
+  padding: 0.25rem;
+  border: 0;
+  color: #3730a3;
+  background: transparent;
+  font-weight: 600;
+}
+
+.account-heading .text-button:hover:not(:disabled) {
+  background: transparent;
+  text-decoration: underline;
+}
+
+.settings-status,
+.settings-form {
+  margin-top: 2rem;
+}
+
+.settings-status .secondary-button {
+  margin-top: 1rem;
+}
+
+.settings-form {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.settings-form h2,
+.settings-form legend {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.settings-help {
+  margin-top: 0.4rem;
+  line-height: 1.5;
+}
+
+.settings-form label {
+  display: grid;
+  gap: 0.45rem;
+  font-weight: 650;
+}
+
+.settings-form input {
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #b8c0cc;
+  border-radius: 0.5rem;
+  color: #172033;
+  background: #ffffff;
+  font: inherit;
+  font-weight: 400;
+}
+
+.settings-form input:focus-visible {
+  outline: 3px solid #c7d2fe;
+  border-color: #4f46e5;
+}
+
+.settings-form fieldset {
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid #dce1e9;
+  border-radius: 0.75rem;
+}
+
+.interval-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.save-message {
+  color: #166534;
+}
+
+.settings-form > button[type="submit"] {
+  margin-top: 0;
+}
+
+@media (max-width: 32rem) {
+  .interval-grid {
+    grid-template-columns: 1fr;
+  }
 }
