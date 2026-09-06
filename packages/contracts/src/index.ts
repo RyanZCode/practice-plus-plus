@@ -112,6 +112,62 @@ export type CatalogImportRow = z.infer<typeof catalogImportRowSchema>;
 export type CatalogImportSource = z.infer<typeof catalogImportSourceSchema>;
 export type CatalogImportResponse = z.infer<typeof catalogImportResponseSchema>;
 
+export const catalogReviewStatusSchema = z.enum(["DRAFT", "APPROVED", "REJECTED"]);
+
+export const catalogProblemInputSchema = catalogImportRowSchema;
+
+export const catalogReviewProblemSchema = z.strictObject({
+  id: z.string().uuid(),
+  importBatchId: z.string().uuid(),
+  leetcodeId: z.number().int().positive(),
+  slug: z.string(),
+  title: z.string(),
+  difficulty: z.enum(["EASY", "MEDIUM", "HARD"]),
+  url: z.string().url(),
+  availability: z.enum(["AVAILABLE", "PAID_ONLY", "UNAVAILABLE"]),
+  patterns: z.array(z.enum(mvpPatternNames)),
+  reviewStatus: catalogReviewStatusSchema,
+  published: z.boolean(),
+  reviewedAt: z.string().datetime().nullable(),
+  reviewedByUserProfileId: z.string().uuid().nullable(),
+  publishedAt: z.string().datetime().nullable(),
+  publishedByUserProfileId: z.string().uuid().nullable(),
+});
+
+export const catalogImportBatchReviewSchema = z.strictObject({
+  id: z.string().uuid(),
+  version: z.literal(1),
+  source: catalogImportSourceSchema,
+  createdAt: z.string().datetime(),
+  createdByUserProfileId: z.string().uuid(),
+  problems: z.array(catalogReviewProblemSchema),
+});
+
+export const catalogReviewDecisionRequestSchema = z.strictObject({
+  decision: z.enum(["APPROVED", "REJECTED"]),
+});
+
+export const catalogReviewActionResponseSchema = z.strictObject({
+  problemId: z.string().uuid(),
+  reviewStatus: z.enum(["APPROVED", "REJECTED"]),
+  reviewedAt: z.string().datetime(),
+  reviewedByUserProfileId: z.string().uuid(),
+});
+
+export const catalogPublishResponseSchema = z.strictObject({
+  batchId: z.string().uuid(),
+  publishedCount: z.number().int().nonnegative(),
+  publishedAt: z.string().datetime().nullable(),
+  publishedByUserProfileId: z.string().uuid().nullable(),
+});
+
+export type CatalogProblemInput = z.infer<typeof catalogProblemInputSchema>;
+export type CatalogReviewProblem = z.infer<typeof catalogReviewProblemSchema>;
+export type CatalogImportBatchReview = z.infer<typeof catalogImportBatchReviewSchema>;
+export type CatalogReviewDecision = z.infer<typeof catalogReviewDecisionRequestSchema>;
+export type CatalogReviewActionResponse = z.infer<typeof catalogReviewActionResponseSchema>;
+export type CatalogPublishResponse = z.infer<typeof catalogPublishResponseSchema>;
+
 function isValidTimeZone(timeZone: string): boolean {
   try {
     new Intl.DateTimeFormat("en", { timeZone }).format();
