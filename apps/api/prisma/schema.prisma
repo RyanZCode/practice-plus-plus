@@ -43,6 +43,8 @@ model UserProfile {
   updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
   practiceSettings     PracticeSettings?
   catalogImportBatches CatalogImportBatch[]
+  reviewedProblems     Problem[]            @relation("ProblemReviewedBy")
+  publishedProblems    Problem[]            @relation("ProblemPublishedBy")
 
   @@map("user_profiles")
 }
@@ -63,22 +65,30 @@ model PracticeSettings {
 }
 
 model Problem {
-  id              String               @id @default(uuid()) @db.Uuid
-  leetcodeId      Int                  @unique @map("leetcode_id")
-  slug            String               @unique @db.VarChar(255)
-  title           String               @db.VarChar(255)
-  difficulty      ProblemDifficulty
-  url             String               @db.VarChar(500)
-  availability    ProblemAvailability  @default(AVAILABLE)
-  reviewStatus    CatalogReviewStatus  @default(DRAFT) @map("review_status")
-  published       Boolean              @default(false)
-  importBatchId   String?              @map("import_batch_id") @db.Uuid
-  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
-  importBatch     CatalogImportBatch?  @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
-  problemPatterns ProblemPattern[]
+  id                       String              @id @default(uuid()) @db.Uuid
+  leetcodeId               Int                 @unique @map("leetcode_id")
+  slug                     String              @unique @db.VarChar(255)
+  title                    String              @db.VarChar(255)
+  difficulty               ProblemDifficulty
+  url                      String              @db.VarChar(500)
+  availability             ProblemAvailability @default(AVAILABLE)
+  reviewStatus             CatalogReviewStatus @default(DRAFT) @map("review_status")
+  published                Boolean             @default(false)
+  importBatchId            String?             @map("import_batch_id") @db.Uuid
+  reviewedByUserProfileId  String?             @map("reviewed_by_user_profile_id") @db.Uuid
+  reviewedAt               DateTime?           @map("reviewed_at") @db.Timestamptz(3)
+  publishedByUserProfileId String?             @map("published_by_user_profile_id") @db.Uuid
+  publishedAt              DateTime?           @map("published_at") @db.Timestamptz(3)
+  createdAt                DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  importBatch              CatalogImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  reviewedBy               UserProfile?        @relation("ProblemReviewedBy", fields: [reviewedByUserProfileId], references: [id], onDelete: Restrict)
+  publishedBy              UserProfile?        @relation("ProblemPublishedBy", fields: [publishedByUserProfileId], references: [id], onDelete: Restrict)
+  problemPatterns          ProblemPattern[]
 
   @@index([importBatchId])
+  @@index([reviewedByUserProfileId])
+  @@index([publishedByUserProfileId])
   @@map("problems")
 }
 
