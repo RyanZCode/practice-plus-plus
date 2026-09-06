@@ -1,5 +1,6 @@
 import { createApp } from "./app.js";
 import { createSupabaseAccessTokenVerifier } from "./auth.js";
+import { createPrismaCatalogImportStore } from "./catalogImport.js";
 import { readConfig } from "./config.js";
 import { createDatabase } from "./database.js";
 import { createLogger } from "./logger.js";
@@ -11,6 +12,7 @@ const logger = createLogger();
 const database = createDatabase(config.databaseUrl);
 const app = createApp({
   authentication: {
+    catalogImportStore: createPrismaCatalogImportStore(database),
     profileStore: createPrismaProfileStore(database),
     settingsStore: createPrismaSettingsStore(database),
     verifier: createSupabaseAccessTokenVerifier(config.supabaseUrl, config.supabasePublishableKey),

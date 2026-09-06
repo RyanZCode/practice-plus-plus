@@ -19,18 +19,30 @@ enum ProblemAvailability {
   UNAVAILABLE
 }
 
+enum CatalogImportSource {
+  CURATED
+  LLM_GENERATED
+}
+
+enum CatalogReviewStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+}
+
 enum UserRole {
   USER
   ADMINISTRATOR
 }
 
 model UserProfile {
-  id               String            @id @default(uuid()) @db.Uuid
-  authSubject      String            @unique @map("auth_subject") @db.Uuid
-  role             UserRole          @default(USER)
-  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
-  practiceSettings PracticeSettings?
+  id                   String               @id @default(uuid()) @db.Uuid
+  authSubject          String               @unique @map("auth_subject") @db.Uuid
+  role                 UserRole             @default(USER)
+  createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  practiceSettings     PracticeSettings?
+  catalogImportBatches CatalogImportBatch[]
 
   @@map("user_profiles")
 }
@@ -51,19 +63,37 @@ model PracticeSettings {
 }
 
 model Problem {
-  id              String              @id @default(uuid()) @db.Uuid
-  leetcodeId      Int                 @unique @map("leetcode_id")
-  slug            String              @unique @db.VarChar(255)
-  title           String              @db.VarChar(255)
+  id              String               @id @default(uuid()) @db.Uuid
+  leetcodeId      Int                  @unique @map("leetcode_id")
+  slug            String               @unique @db.VarChar(255)
+  title           String               @db.VarChar(255)
   difficulty      ProblemDifficulty
-  url             String              @db.VarChar(500)
-  availability    ProblemAvailability @default(AVAILABLE)
-  published       Boolean             @default(false)
-  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  url             String               @db.VarChar(500)
+  availability    ProblemAvailability  @default(AVAILABLE)
+  reviewStatus    CatalogReviewStatus  @default(DRAFT) @map("review_status")
+  published       Boolean              @default(false)
+  importBatchId   String?              @map("import_batch_id") @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  importBatch     CatalogImportBatch?  @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
   problemPatterns ProblemPattern[]
 
+  @@index([importBatchId])
   @@map("problems")
+}
+
+model CatalogImportBatch {
+  id                     String              @id @default(uuid()) @db.Uuid
+  formatVersion          Int                 @map("format_version") @db.SmallInt
+  sourceKind             CatalogImportSource @map("source_kind")
+  sourceName             String              @map("source_name") @db.VarChar(255)
+  createdByUserProfileId String              @map("created_by_user_profile_id") @db.Uuid
+  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdBy              UserProfile         @relation(fields: [createdByUserProfileId], references: [id], onDelete: Restrict)
+  problems               Problem[]
+
+  @@index([createdByUserProfileId])
+  @@map("catalog_import_batches")
 }
 
 model Pattern {

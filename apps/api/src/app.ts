@@ -4,6 +4,8 @@ import type { Logger } from "pino";
 import { pinoHttp } from "pino-http";
 
 import { requireAuthentication, type AccessTokenVerifier } from "./auth.js";
+import { requireAdministrator } from "./authorization.js";
+import { createCatalogImportRouter, type CatalogImportStore } from "./catalogImport.js";
 import { handleError, notFound } from "./errors.js";
 import { createHealthRouter, type ReadinessCheck } from "./health.js";
 import { createLogger } from "./logger.js";
@@ -11,6 +13,7 @@ import { getApplicationProfile, resolveApplicationProfile, type ProfileStore } f
 import { createSettingsRouter, type SettingsStore } from "./settings.js";
 
 interface AuthenticationOptions {
+  readonly catalogImportStore?: CatalogImportStore;
   readonly profileStore: ProfileStore;
   readonly settingsStore?: SettingsStore;
   readonly verifier: AccessTokenVerifier;
@@ -38,17 +41,33 @@ export function createApp(options: AppOptions = {}): Express {
     const authenticate = requireAuthentication(options.authentication.verifier);
     const resolveProfile = resolveApplicationProfile(options.authentication.profileStore);
 
+    if (
+      options.authentication.settingsStore !== undefined ||
+      options.authentication.catalogImportStore !== undefined
+    ) {
+      app.use(express.json());
+    }
+
     app.get("/profile", authenticate, resolveProfile, (request, response) => {
       response.json({ id: getApplicationProfile(request).id });
     });
 
     if (options.authentication.settingsStore !== undefined) {
-      app.use(express.json());
       app.use(
         "/settings",
         authenticate,
         resolveProfile,
         createSettingsRouter(options.authentication.settingsStore),
+      );
+    }
+
+    if (options.authentication.catalogImportStore !== undefined) {
+      app.use(
+        "/admin/catalog/imports",
+        authenticate,
+        resolveProfile,
+        requireAdministrator,
+        createCatalogImportRouter(options.authentication.catalogImportStore),
       );
     }
   }
