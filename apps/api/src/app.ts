@@ -5,6 +5,7 @@ import { pinoHttp } from "pino-http";
 
 import { requireAuthentication, type AccessTokenVerifier } from "./auth.js";
 import { requireAdministrator } from "./authorization.js";
+import { createCatalogRouter, type CatalogStore } from "./catalog.js";
 import { createCatalogImportRouter, type CatalogImportStore } from "./catalogImport.js";
 import { createCatalogReviewRouter, type CatalogReviewStore } from "./catalogReview.js";
 import { handleError, notFound } from "./errors.js";
@@ -14,6 +15,7 @@ import { getApplicationProfile, resolveApplicationProfile, type ProfileStore } f
 import { createSettingsRouter, type SettingsStore } from "./settings.js";
 
 interface AuthenticationOptions {
+  readonly catalogStore?: CatalogStore;
   readonly catalogImportStore?: CatalogImportStore;
   readonly catalogReviewStore?: CatalogReviewStore;
   readonly profileStore: ProfileStore;
@@ -54,6 +56,15 @@ export function createApp(options: AppOptions = {}): Express {
     app.get("/profile", authenticate, resolveProfile, (request, response) => {
       response.json({ id: getApplicationProfile(request).id });
     });
+
+    if (options.authentication.catalogStore !== undefined) {
+      app.use(
+        "/catalog",
+        authenticate,
+        resolveProfile,
+        createCatalogRouter(options.authentication.catalogStore),
+      );
+    }
 
     if (options.authentication.settingsStore !== undefined) {
       app.use(
