@@ -112,6 +112,23 @@ export type CatalogImportRow = z.infer<typeof catalogImportRowSchema>;
 export type CatalogImportSource = z.infer<typeof catalogImportSourceSchema>;
 export type CatalogImportResponse = z.infer<typeof catalogImportResponseSchema>;
 
+export const catalogProblemSchema = z.strictObject({
+  id: z.string().uuid(),
+  leetcodeId: z.number().int().positive(),
+  slug: z.string(),
+  title: z.string(),
+  difficulty: z.enum(["EASY", "MEDIUM", "HARD"]),
+  url: z.string().url(),
+  availability: z.enum(["AVAILABLE", "PAID_ONLY", "UNAVAILABLE"]),
+});
+
+export const catalogResponseSchema = z.strictObject({
+  problems: z.array(catalogProblemSchema),
+});
+
+export type CatalogProblem = z.infer<typeof catalogProblemSchema>;
+export type CatalogResponse = z.infer<typeof catalogResponseSchema>;
+
 export const catalogReviewStatusSchema = z.enum(["DRAFT", "APPROVED", "REJECTED"]);
 
 export const catalogProblemInputSchema = catalogImportRowSchema;
