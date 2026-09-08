@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import type { Attempt } from "@practice-plus-plus/contracts";
+import { confirmAttemptSchema, type Attempt } from "@practice-plus-plus/contracts";
 import pino from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
@@ -14,6 +14,16 @@ const attempt: Attempt = {
   practiceDate: "2026-09-06",
   startedAt: "2026-09-07T03:00:00.000Z",
   timerSkippedAt: null,
+  confirmedAt: null,
+  solutionReviewedAt: null,
+  outcome: null,
+  confidence: null,
+  optimality: null,
+  timeSpentSeconds: null,
+  approach: null,
+  notes: null,
+  reproducedFromMemory: null,
+  assistance: [],
   problem: {
     id: problemId,
     leetcodeId: 1,
@@ -57,11 +67,92 @@ async function server(store: AttemptStore) {
 }
 const headers = { authorization: "Bearer test", "content-type": "application/json" };
 describe("attempt routes", () => {
+  it("authenticates confirmation and solution review, validates bodies, and passes only the verified owner", async () => {
+    const store = {
+      active: vi.fn(),
+      start: vi.fn(),
+      skip: vi.fn(),
+      reviewSolution: vi.fn().mockResolvedValue(attempt),
+      confirm: vi.fn().mockResolvedValue(attempt),
+    };
+    const url = await server(store);
+    for (const path of ["confirm", "review-solution"]) {
+      expect(
+        (await fetch(`${url}/attempts/${attempt.id}/${path}`, { method: "POST" })).status,
+      ).toBe(401);
+      expect(
+        (
+          await fetch(`${url}/attempts/invalid/${path}`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ giveUp: true, outcome: "INDEPENDENT" }),
+          })
+        ).status,
+      ).toBe(400);
+    }
+    for (const body of [{}, { giveUp: false }, { giveUp: true, userProfileId: userId }]) {
+      expect(
+        (
+          await fetch(`${url}/attempts/${attempt.id}/review-solution`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(body),
+          })
+        ).status,
+      ).toBe(400);
+    }
+    for (const body of [
+      {},
+      { outcome: "REDO" },
+      { outcome: "INDEPENDENT", code: "private code" },
+      { outcome: "INDEPENDENT", userProfileId: userId },
+    ]) {
+      expect(
+        (
+          await fetch(`${url}/attempts/${attempt.id}/confirm`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(body),
+          })
+        ).status,
+      ).toBe(400);
+    }
+    expect(store.confirm).not.toHaveBeenCalled();
+    expect(store.reviewSolution).not.toHaveBeenCalled();
+    const reviewed = await fetch(`${url}/attempts/${attempt.id}/review-solution`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ giveUp: true }),
+    });
+    expect(reviewed.status).toBe(200);
+    expect(store.reviewSolution).toHaveBeenCalledExactlyOnceWith(
+      userId,
+      attempt.id,
+      expect.any(Date),
+    );
+    const confirmed = await fetch(`${url}/attempts/${attempt.id}/confirm`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ outcome: "INCOMPLETE" }),
+    });
+    expect(confirmed.status).toBe(200);
+    expect(store.confirm).toHaveBeenCalledExactlyOnceWith(
+      userId,
+      attempt.id,
+      confirmAttemptSchema.parse({ outcome: "INCOMPLETE" }),
+      expect.any(Date),
+    );
+    const payload = await confirmed.text();
+    expect(payload).not.toContain("patterns");
+    expect(payload).not.toContain("userProfileId");
+  });
   it("requires authentication and uses the verified profile for every operation", async () => {
     const store = {
       active: vi.fn().mockResolvedValue(attempt),
       start: vi.fn().mockResolvedValue(attempt),
       skip: vi.fn().mockResolvedValue(attempt),
+      reviewSolution: vi.fn().mockResolvedValue(attempt),
+      confirm: vi.fn().mockResolvedValue(attempt),
     };
     const url = await server(store);
     expect((await fetch(`${url}/attempts/active`)).status).toBe(401);
@@ -91,7 +182,13 @@ describe("attempt routes", () => {
     expect(store.skip).toHaveBeenCalledWith(userId, attempt.id, expect.any(Date));
   });
   it("rejects client-supplied ownership, type, practice date, and invalid identifiers", async () => {
-    const store = { active: vi.fn(), start: vi.fn(), skip: vi.fn() };
+    const store = {
+      active: vi.fn(),
+      start: vi.fn(),
+      skip: vi.fn(),
+      reviewSolution: vi.fn(),
+      confirm: vi.fn(),
+    };
     const url = await server(store);
     for (const extra of [
       { userProfileId: userId },
@@ -122,6 +219,7 @@ function database() {
     attempt: {
       findFirst: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue(record),
+      update: vi.fn().mockResolvedValue(record),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     problem: { findFirst: vi.fn().mockResolvedValue({ id: problemId }) },
@@ -136,6 +234,194 @@ function database() {
   return { tx, store: createPrismaAttemptStore(client) };
 }
 describe("attempt persistence", () => {
+  it("records explicit give-up and solution provenance once without confirming", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue(record);
+    const now = new Date();
+    await store.reviewSolution(userId, attempt.id, now);
+    expect(tx.attempt.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: attempt.id, userProfileId: userId } }),
+    );
+    expect(tx.attempt.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          outcome: "GAVE_UP",
+          solutionReviewedAt: now,
+          assistance: {
+            create: { type: "SOLUTION_REVIEW", source: "LEETCODE_SOLUTION", recordedAt: now },
+          },
+        },
+      }),
+    );
+    tx.attempt.findFirst.mockResolvedValue({ ...record, solutionReviewedAt: now });
+    await store.reviewSolution(userId, attempt.id, now);
+    expect(tx.attempt.update).toHaveBeenCalledTimes(1);
+  });
+  it.each(["INDEPENDENT", "ASSISTED", "INCOMPLETE"])(
+    "rejects %s after solution review",
+    async (outcome) => {
+      const { tx, store } = database();
+      tx.attempt.findFirst.mockResolvedValue({
+        ...record,
+        outcome: "GAVE_UP",
+        assistance: [{ type: "SOLUTION_REVIEW", hintLevel: null }],
+      });
+      await expect(
+        store.confirm(
+          userId,
+          attempt.id,
+          confirmAttemptSchema.parse({ outcome, reproducedFromMemory: true }),
+          new Date(),
+        ),
+      ).rejects.toMatchObject({ statusCode: 409 });
+      expect(tx.attempt.update).not.toHaveBeenCalled();
+    },
+  );
+  it.each([true, false])(
+    "confirms gave-up with reproduction %s and keeps confirmed submissions immutable",
+    async (reproducedFromMemory) => {
+      const { tx, store } = database();
+      const reviewed = {
+        ...record,
+        outcome: "GAVE_UP",
+        assistance: [{ type: "SOLUTION_REVIEW", hintLevel: null }],
+      };
+      tx.attempt.findFirst.mockResolvedValue(reviewed);
+      const input = confirmAttemptSchema.parse({ outcome: "GAVE_UP", reproducedFromMemory });
+      const now = new Date();
+      await store.confirm(userId, attempt.id, input, now);
+      expect(tx.attempt.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { ...input, confirmedAt: now, assistance: { create: [] } },
+        }),
+      );
+      tx.attempt.findFirst.mockResolvedValue({
+        ...reviewed,
+        ...input,
+        assistance: reviewed.assistance,
+        confirmedAt: now,
+      });
+      await store.confirm(userId, attempt.id, input, new Date());
+      expect(tx.attempt.update).toHaveBeenCalledTimes(1);
+    },
+  );
+  it("requires a reproduction report and rejects one without solution review", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue({
+      ...record,
+      assistance: [{ type: "SOLUTION_REVIEW", hintLevel: null }],
+    });
+    await expect(
+      store.confirm(
+        userId,
+        attempt.id,
+        confirmAttemptSchema.parse({ outcome: "GAVE_UP" }),
+        new Date(),
+      ),
+    ).rejects.toThrow("reproduce");
+    tx.attempt.findFirst.mockResolvedValue(record);
+    await expect(
+      store.confirm(
+        userId,
+        attempt.id,
+        confirmAttemptSchema.parse({ outcome: "INDEPENDENT", reproducedFromMemory: true }),
+        new Date(),
+      ),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(tx.attempt.update).not.toHaveBeenCalled();
+  });
+  it("rejects a different outcome after confirmation", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue({
+      ...record,
+      outcome: "INCOMPLETE",
+      confirmedAt: new Date(),
+    });
+    await expect(
+      store.confirm(
+        userId,
+        attempt.id,
+        confirmAttemptSchema.parse({ outcome: "INDEPENDENT" }),
+        new Date(),
+      ),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(tx.attempt.update).not.toHaveBeenCalled();
+  });
+  it.each(["CONCEPTUAL_HINT", "DEBUGGING", "OPTIMIZATION"])(
+    "rejects independent with recorded or reported %s",
+    async (type) => {
+      const { tx, store } = database();
+      const assistance = [{ type, hintLevel: type === "CONCEPTUAL_HINT" ? 2 : null }];
+      tx.attempt.findFirst.mockResolvedValue({ ...record, assistance });
+      await expect(
+        store.confirm(
+          userId,
+          attempt.id,
+          confirmAttemptSchema.parse({ outcome: "INDEPENDENT" }),
+          new Date(),
+        ),
+      ).rejects.toMatchObject({ statusCode: 409 });
+      tx.attempt.findFirst.mockResolvedValue(record);
+      await expect(
+        store.confirm(
+          userId,
+          attempt.id,
+          confirmAttemptSchema.parse({ outcome: "INDEPENDENT", assistance }),
+          new Date(),
+        ),
+      ).rejects.toMatchObject({ statusCode: 409 });
+      expect(tx.attempt.update).not.toHaveBeenCalled();
+    },
+  );
+  it("saves optional evidence and confirmation together without code or patterns", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue(record);
+    const input = confirmAttemptSchema.parse({
+      outcome: "ASSISTED",
+      confidence: "SHAKY",
+      optimality: "SUBOPTIMAL",
+      timeSpentSeconds: 600,
+      approach: "Compared pairs",
+      notes: "Missed duplicate values",
+      assistance: [{ type: "CONCEPTUAL_HINT", hintLevel: 2 }],
+    });
+    const now = new Date();
+    await store.confirm(userId, attempt.id, input, now);
+    expect(tx.$queryRaw).toHaveBeenCalled();
+    expect(tx.attempt.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: attempt.id, userProfileId: userId },
+        data: {
+          ...input,
+          confirmedAt: now,
+          assistance: {
+            create: [
+              { type: "CONCEPTUAL_HINT", hintLevel: 2, source: "SELF_REPORTED", recordedAt: now },
+            ],
+          },
+        },
+      }),
+    );
+  });
+  it("does not expose or change another user's attempt by identifier", async () => {
+    const { tx, store } = database();
+    for (const action of [
+      () => store.reviewSolution(userId, attempt.id, new Date()),
+      () =>
+        store.confirm(
+          userId,
+          attempt.id,
+          confirmAttemptSchema.parse({ outcome: "INCOMPLETE" }),
+          new Date(),
+        ),
+    ]) {
+      await expect(action()).rejects.toMatchObject({ statusCode: 404 });
+    }
+    expect(tx.attempt.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: attempt.id, userProfileId: userId } }),
+    );
+    expect(tx.attempt.update).not.toHaveBeenCalled();
+  });
   it.each([false, true])(
     "derives type from confirmed user history (previous: %s) and calculates practice date",
     async (previous) => {

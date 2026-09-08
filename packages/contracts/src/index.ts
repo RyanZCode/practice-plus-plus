@@ -199,6 +199,38 @@ function isValidTimeZone(timeZone: string): boolean {
 
 export const attemptTimerSeconds = 30 * 60;
 export const startAttemptSchema = z.strictObject({ problemId: z.string().uuid() });
+export const attemptOutcomeSchema = z.enum(["INDEPENDENT", "ASSISTED", "GAVE_UP", "INCOMPLETE"]);
+export const assistanceSchema = z
+  .strictObject({
+    type: z.enum([
+      "CLARIFICATION",
+      "CONCEPTUAL_HINT",
+      "DEBUGGING",
+      "OPTIMIZATION",
+      "SOLUTION_REVIEW",
+    ]),
+    hintLevel: z.number().int().positive().max(32767).nullable(),
+  })
+  .refine((value) => value.type === "CONCEPTUAL_HINT" || value.hintLevel === null, {
+    message: "Hint level applies only to conceptual hints.",
+  });
+export const confirmAttemptSchema = z.strictObject({
+  outcome: attemptOutcomeSchema,
+  confidence: z.enum(["CONFIDENT", "SHAKY"]).nullable().default(null),
+  optimality: z.enum(["OPTIMAL", "SUBOPTIMAL", "UNKNOWN"]).nullable().default(null),
+  assistance: z.array(assistanceSchema).max(5).default([]),
+  timeSpentSeconds: z.number().int().nonnegative().max(2147483647).nullable().default(null),
+  approach: z.string().trim().max(1000).nullable().default(null),
+  notes: z.string().trim().max(5000).nullable().default(null),
+  reproducedFromMemory: z.boolean().nullable().default(null),
+});
+export type ConfirmAttempt = z.infer<typeof confirmAttemptSchema>;
+export type Assistance = z.infer<typeof assistanceSchema>;
+export function suggestedOutcome(assistance: Assistance[]): "GAVE_UP" | "ASSISTED" | null {
+  if (assistance.some((event) => event.type === "SOLUTION_REVIEW")) return "GAVE_UP";
+  if (assistance.some((event) => event.type !== "CLARIFICATION")) return "ASSISTED";
+  return null;
+}
 export const attemptSchema = z.strictObject({
   id: z.string().uuid(),
   problem: catalogProblemSchema,
@@ -206,6 +238,16 @@ export const attemptSchema = z.strictObject({
   practiceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   startedAt: z.string().datetime(),
   timerSkippedAt: z.string().datetime().nullable(),
+  confirmedAt: z.string().datetime().nullable(),
+  solutionReviewedAt: z.string().datetime().nullable(),
+  outcome: attemptOutcomeSchema.nullable(),
+  confidence: confirmAttemptSchema.shape.confidence,
+  optimality: confirmAttemptSchema.shape.optimality,
+  timeSpentSeconds: confirmAttemptSchema.shape.timeSpentSeconds,
+  approach: confirmAttemptSchema.shape.approach,
+  notes: confirmAttemptSchema.shape.notes,
+  reproducedFromMemory: confirmAttemptSchema.shape.reproducedFromMemory,
+  assistance: z.array(assistanceSchema),
 });
 export const activeAttemptResponseSchema = z.strictObject({ attempt: attemptSchema.nullable() });
 export type Attempt = z.infer<typeof attemptSchema>;
