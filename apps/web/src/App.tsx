@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { useAuth } from "./auth";
 import { ProtectedRoute } from "./ProtectedRoute";
+import { Practice } from "./Practice";
 import { loadPracticeSettings, savePracticeSettings } from "./settingsApi";
 
 interface AppProps {
@@ -169,6 +170,10 @@ function AccountPage({ apiUrl }: AppProps) {
               Try again
             </button>
           </div>
+        ) : null}
+
+        {!isLoading && !loadFailed && !isOnboarding ? (
+          <Practice apiUrl={apiUrl} token={session.access_token} />
         ) : null}
 
         {!isLoading && !loadFailed ? (

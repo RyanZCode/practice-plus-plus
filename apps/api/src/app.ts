@@ -3,6 +3,7 @@ import cors from "cors";
 import type { Logger } from "pino";
 import { pinoHttp } from "pino-http";
 
+import { createAttemptRouter, type AttemptStore } from "./attempts.js";
 import { requireAuthentication, type AccessTokenVerifier } from "./auth.js";
 import { requireAdministrator } from "./authorization.js";
 import { createCatalogRouter, type CatalogStore } from "./catalog.js";
@@ -15,6 +16,7 @@ import { getApplicationProfile, resolveApplicationProfile, type ProfileStore } f
 import { createSettingsRouter, type SettingsStore } from "./settings.js";
 
 interface AuthenticationOptions {
+  readonly attemptStore?: AttemptStore;
   readonly catalogStore?: CatalogStore;
   readonly catalogImportStore?: CatalogImportStore;
   readonly catalogReviewStore?: CatalogReviewStore;
@@ -46,6 +48,8 @@ export function createApp(options: AppOptions = {}): Express {
     const resolveProfile = resolveApplicationProfile(options.authentication.profileStore);
 
     if (
+      options.authentication.attemptStore !== undefined ||
+      options.authentication.catalogStore !== undefined ||
       options.authentication.settingsStore !== undefined ||
       options.authentication.catalogImportStore !== undefined ||
       options.authentication.catalogReviewStore !== undefined
@@ -56,6 +60,15 @@ export function createApp(options: AppOptions = {}): Express {
     app.get("/profile", authenticate, resolveProfile, (request, response) => {
       response.json({ id: getApplicationProfile(request).id });
     });
+
+    if (options.authentication.attemptStore !== undefined) {
+      app.use(
+        "/attempts",
+        authenticate,
+        resolveProfile,
+        createAttemptRouter(options.authentication.attemptStore),
+      );
+    }
 
     if (options.authentication.catalogStore !== undefined) {
       app.use(

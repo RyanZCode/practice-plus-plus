@@ -32,6 +32,8 @@ const headers = { authorization: "Bearer valid-token" };
 
 function createStore(): CatalogStore {
   return {
+    preferences: vi.fn().mockResolvedValue({ hidePaidProblems: false }),
+    savePreferences: vi.fn().mockResolvedValue({ hidePaidProblems: true }),
     listPublished: vi.fn().mockResolvedValue([hiddenProblem]),
     findPublished: vi.fn().mockResolvedValue(hiddenProblem),
   };
@@ -188,6 +190,70 @@ describe("Prisma catalog store", () => {
     expect(findFirst).toHaveBeenCalledWith({
       where: { id: problem.id, published: true },
       select,
+    });
+  });
+});
+
+describe("catalog preferences", () => {
+  it("requires authentication and saves only the verified user's preference", async () => {
+    const store = createStore();
+    const url = await startServer(createCatalogApp(store));
+    expect((await fetch(`${url}/catalog/preferences`)).status).toBe(401);
+    expect((await fetch(`${url}/catalog/preferences`, { method: "PUT" })).status).toBe(401);
+    const response = await fetch(`${url}/catalog/preferences`, { headers });
+    expect(await response.json()).toEqual({ hidePaidProblems: false });
+    const saved = await fetch(`${url}/catalog/preferences`, {
+      method: "PUT",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({ hidePaidProblems: true }),
+    });
+    expect(saved.status).toBe(200);
+    expect(await saved.json()).toEqual({ hidePaidProblems: true });
+    expect(store.preferences).toHaveBeenCalledExactlyOnceWith(
+      "61a6afc6-d4de-4a61-879c-7ca6bdb5f6b1",
+    );
+    expect(store.savePreferences).toHaveBeenCalledExactlyOnceWith(
+      "61a6afc6-d4de-4a61-879c-7ca6bdb5f6b1",
+      { hidePaidProblems: true },
+    );
+  });
+
+  it("rejects invalid values and supplied ownership", async () => {
+    const store = createStore();
+    const url = await startServer(createCatalogApp(store));
+    for (const body of [
+      {},
+      { hidePaidProblems: "true" },
+      { hidePaidProblems: true, userProfileId: "other" },
+    ]) {
+      const response = await fetch(`${url}/catalog/preferences`, {
+        method: "PUT",
+        headers: { ...headers, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      expect(response.status).toBe(400);
+    }
+    expect(store.savePreferences).not.toHaveBeenCalled();
+  });
+
+  it("updates only the filter on the selected user profile", async () => {
+    const findUniqueOrThrow = vi.fn().mockResolvedValue({ hidePaidProblems: false });
+    const update = vi.fn().mockResolvedValue({ hidePaidProblems: true });
+    const store = createPrismaCatalogStore({
+      userProfile: { findUniqueOrThrow, update },
+    } as unknown as PrismaClient);
+    await expect(store.preferences("user-one")).resolves.toEqual({ hidePaidProblems: false });
+    await expect(store.savePreferences("user-two", { hidePaidProblems: true })).resolves.toEqual({
+      hidePaidProblems: true,
+    });
+    expect(findUniqueOrThrow).toHaveBeenCalledWith({
+      where: { id: "user-one" },
+      select: { hidePaidProblems: true },
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "user-two" },
+      data: { hidePaidProblems: true },
+      select: { hidePaidProblems: true },
     });
   });
 });

@@ -39,9 +39,11 @@ model UserProfile {
   id                   String               @id @default(uuid()) @db.Uuid
   authSubject          String               @unique @map("auth_subject") @db.Uuid
   role                 UserRole             @default(USER)
+  hidePaidProblems     Boolean              @default(false) @map("hide_paid_problems")
   createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
   practiceSettings     PracticeSettings?
+  attempts             Attempt[]
   catalogImportBatches CatalogImportBatch[]
   reviewedProblems     Problem[]            @relation("ProblemReviewedBy")
   publishedProblems    Problem[]            @relation("ProblemPublishedBy")
@@ -85,6 +87,7 @@ model Problem {
   reviewedBy               UserProfile?        @relation("ProblemReviewedBy", fields: [reviewedByUserProfileId], references: [id], onDelete: Restrict)
   publishedBy              UserProfile?        @relation("ProblemPublishedBy", fields: [publishedByUserProfileId], references: [id], onDelete: Restrict)
   problemPatterns          ProblemPattern[]
+  attempts                 Attempt[]
 
   @@index([importBatchId])
   @@index([reviewedByUserProfileId])
@@ -136,4 +139,26 @@ model ProblemPattern {
   @@id([problemId, patternId])
   @@index([patternId])
   @@map("problem_patterns")
+}
+
+enum AttemptType {
+  FRESH
+  REDO
+}
+
+model Attempt {
+  id             String      @id @default(uuid()) @db.Uuid
+  userProfileId  String      @map("user_profile_id") @db.Uuid
+  problemId      String      @map("problem_id") @db.Uuid
+  type           AttemptType
+  practiceDate   DateTime    @map("practice_date") @db.Date
+  startedAt      DateTime    @map("started_at") @db.Timestamptz(3)
+  timerSkippedAt DateTime?   @map("timer_skipped_at") @db.Timestamptz(3)
+  confirmedAt    DateTime?   @map("confirmed_at") @db.Timestamptz(3)
+  userProfile    UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+  problem        Problem     @relation(fields: [problemId], references: [id], onDelete: Restrict)
+
+  @@index([userProfileId, problemId])
+  @@index([problemId])
+  @@map("attempts")
 }
