@@ -37,6 +37,7 @@ function AccountPage({ apiUrl }: AppProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [reloadCount, setReloadCount] = useState(0);
 
   useEffect(() => {
@@ -145,14 +146,27 @@ function AccountPage({ apiUrl }: AppProps) {
               {session.user.email === undefined ? "You’re signed in." : session.user.email}
             </p>
           </div>
-          <button
-            className="text-button"
-            type="button"
-            disabled={isSigningOut}
-            onClick={() => void handleSignOut()}
-          >
-            {isSigningOut ? "Signing out…" : "Sign out"}
-          </button>
+          <div className="account-actions">
+            {!isLoading && !loadFailed && !isOnboarding ? (
+              <button
+                className="text-button"
+                type="button"
+                aria-expanded={showSettings}
+                aria-controls="practice-settings"
+                onClick={() => setShowSettings((show) => !show)}
+              >
+                {showSettings ? "Back to practice" : "Practice settings"}
+              </button>
+            ) : null}
+            <button
+              className="text-button"
+              type="button"
+              disabled={isSigningOut}
+              onClick={() => void handleSignOut()}
+            >
+              {isSigningOut ? "Signing out…" : "Sign out"}
+            </button>
+          </div>
         </div>
 
         {isLoading ? <p className="settings-status">Loading practice settings…</p> : null}
@@ -173,11 +187,23 @@ function AccountPage({ apiUrl }: AppProps) {
         ) : null}
 
         {!isLoading && !loadFailed && !isOnboarding ? (
-          <Practice apiUrl={apiUrl} token={session.access_token} />
+          <div hidden={showSettings}>
+            <Practice apiUrl={apiUrl} token={session.access_token} />
+          </div>
         ) : null}
 
-        {!isLoading && !loadFailed ? (
-          <form className="settings-form" onSubmit={(event) => void handleSave(event)}>
+        {!isLoading && !loadFailed && !isOnboarding && !showSettings && error !== undefined ? (
+          <p className="auth-message" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        {!isLoading && !loadFailed && (isOnboarding || showSettings) ? (
+          <form
+            id="practice-settings"
+            className="settings-form"
+            onSubmit={(event) => void handleSave(event)}
+          >
             <div>
               <h2>{isOnboarding ? "Set up your practice" : "Practice settings"}</h2>
               <p className="settings-help">

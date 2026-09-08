@@ -3,6 +3,7 @@ import {
   type Assistance,
   type Attempt,
   type ConfirmAttempt,
+  type ReportAttempt,
 } from "@practice-plus-plus/contracts";
 import { useState } from "react";
 
@@ -18,10 +19,12 @@ export function AttemptOutcomeForm({
   attempt,
   busy,
   onConfirm,
+  onReport,
 }: {
   attempt: Attempt;
   busy: boolean;
   onConfirm: (input: ConfirmAttempt) => Promise<void>;
+  onReport: (input: ReportAttempt) => Promise<void>;
 }) {
   const [outcome, setOutcome] = useState<ConfirmAttempt["outcome"] | "">(
     attempt.outcome ?? suggestedOutcome(attempt.assistance) ?? "",
@@ -30,6 +33,7 @@ export function AttemptOutcomeForm({
   const [reproduced, setReproduced] = useState<boolean | null>(null);
   const required = suggestedOutcome([...attempt.assistance, ...assistance]);
   const reviewed = required === "GAVE_UP";
+  const canConfirm = outcome === "INCOMPLETE" || attempt.outcome !== null;
 
   function toggleHelp(type: Assistance["type"], checked: boolean) {
     const next = checked
@@ -37,7 +41,7 @@ export function AttemptOutcomeForm({
       : assistance.filter((event) => event.type !== type);
     setAssistance(next);
     const suggestion = suggestedOutcome([...attempt.assistance, ...next]);
-    if (suggestion !== null) setOutcome(suggestion);
+    if (suggestion !== null) setOutcome(attempt.outcome === "GAVE_UP" ? "GAVE_UP" : suggestion);
     if (type === "SOLUTION_REVIEW") setReproduced(null);
   }
 
@@ -46,7 +50,7 @@ export function AttemptOutcomeForm({
       className="outcome-form"
       onSubmit={(event) => {
         event.preventDefault();
-        if (outcome === "" || (reviewed && reproduced === null)) return;
+        if (outcome === "" || !canConfirm || (reviewed && reproduced === null)) return;
         const data = new FormData(event.currentTarget);
         const text = (name: string) => String(data.get(name) ?? "").trim() || null;
         const minutes = text("minutes");
@@ -148,56 +152,82 @@ export function AttemptOutcomeForm({
             <option value="" disabled>
               Select an outcome
             </option>
-            <option value="INDEPENDENT" disabled={required !== null}>
+            <option
+              value="INDEPENDENT"
+              disabled={
+                required !== null || attempt.outcome === "ASSISTED" || attempt.outcome === "GAVE_UP"
+              }
+            >
               Independent — solved without substantive help
             </option>
-            <option value="ASSISTED" disabled={reviewed}>
+            <option value="ASSISTED" disabled={reviewed || attempt.outcome === "GAVE_UP"}>
               Assisted — solved with help
             </option>
             <option value="GAVE_UP">Gave up</option>
-            <option value="INCOMPLETE" disabled={reviewed}>
+            <option value="INCOMPLETE" disabled={reviewed || attempt.outcome !== null}>
               Incomplete — stopped without a result
             </option>
           </select>
         </label>
-        <details>
-          <summary>Optional details</summary>
-          <label>
-            Confidence
-            <select name="confidence" defaultValue="">
-              <option value="">Not specified</option>
-              <option value="CONFIDENT">Confident</option>
-              <option value="SHAKY">Shaky</option>
-            </select>
-          </label>
-          <label>
-            Solution quality
-            <select name="optimality" defaultValue="">
-              <option value="">Not specified</option>
-              <option value="OPTIMAL">Optimal</option>
-              <option value="SUBOPTIMAL">Suboptimal</option>
-              <option value="UNKNOWN">Unknown</option>
-            </select>
-          </label>
-          <label>
-            Time spent (minutes)
-            <input name="minutes" type="number" min="0" max="35791394" step="0.1" />
-          </label>
-          <label>
-            Approach (brief description, no source code)
-            <textarea name="approach" maxLength={1000} rows={2} />
-          </label>
-          <label>
-            Notes (no source code)
-            <textarea name="notes" maxLength={5000} rows={3} />
-          </label>
-        </details>
-        <button
-          type="submit"
-          disabled={busy || outcome === "" || (reviewed && reproduced === null)}
-        >
-          Confirm outcome
-        </button>
+        {!canConfirm ? (
+          <button
+            type="button"
+            disabled={busy || outcome === ""}
+            onClick={() => {
+              if (outcome !== "") void onReport({ outcome });
+            }}
+          >
+            Report result and reveal patterns
+          </button>
+        ) : null}
+        {attempt.outcome !== null ? (
+          <p>
+            Result reported. You can review the details before confirming. This attempt can no
+            longer be incomplete.
+          </p>
+        ) : null}
+        {canConfirm ? (
+          <details>
+            <summary>Optional details</summary>
+            <label>
+              Confidence
+              <select name="confidence" defaultValue="">
+                <option value="">Not specified</option>
+                <option value="CONFIDENT">Confident</option>
+                <option value="SHAKY">Shaky</option>
+              </select>
+            </label>
+            <label>
+              Solution quality
+              <select name="optimality" defaultValue="">
+                <option value="">Not specified</option>
+                <option value="OPTIMAL">Optimal</option>
+                <option value="SUBOPTIMAL">Suboptimal</option>
+                <option value="UNKNOWN">Unknown</option>
+              </select>
+            </label>
+            <label>
+              Time spent (minutes)
+              <input name="minutes" type="number" min="0" max="35791394" step="0.1" />
+            </label>
+            <label>
+              Approach (brief description, no source code)
+              <textarea name="approach" maxLength={1000} rows={2} />
+            </label>
+            <label>
+              Notes (no source code)
+              <textarea name="notes" maxLength={5000} rows={3} />
+            </label>
+          </details>
+        ) : null}
+        {canConfirm ? (
+          <button
+            type="submit"
+            disabled={busy || outcome === "" || (reviewed && reproduced === null)}
+          >
+            Confirm outcome
+          </button>
+        ) : null}
       </fieldset>
     </form>
   );

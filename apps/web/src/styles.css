@@ -31,7 +31,26 @@ body {
 }
 
 .account-card {
-  width: min(100%, 38rem);
+  width: min(100%, 46rem);
+  box-shadow: 0 8px 32px #17203308;
+}
+
+.app-shell {
+  place-content: start center;
+  padding-top: 3rem;
+}
+
+.account-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  justify-content: flex-end;
+}
+
+.account-email {
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
 }
 
 h1,
@@ -106,7 +125,7 @@ button:disabled {
 
 .account-card button,
 .auth-card > button {
-  margin-top: 1.5rem;
+  margin-top: 1rem;
 }
 
 .account-heading {
@@ -208,6 +227,18 @@ button:disabled {
 }
 
 @media (max-width: 32rem) {
+  .app-shell {
+    padding: 1rem;
+  }
+  .account-card {
+    padding: 1.25rem;
+  }
+  .account-heading {
+    flex-direction: column;
+  }
+  .account-actions {
+    justify-content: flex-start;
+  }
   .interval-grid {
     grid-template-columns: 1fr;
   }
@@ -216,11 +247,24 @@ button:disabled {
 .practice {
   margin-top: 2rem;
   border-top: 1px solid #dce1e9;
-  padding-top: 1rem;
+  padding-top: 1.5rem;
+  line-height: 1.5;
+}
+.practice h2 {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+}
+.practice h3 {
+  margin: 0 0 0.75rem;
+}
+.practice input[type="checkbox"],
+.practice input[type="radio"] {
+  accent-color: #3730a3;
 }
 .problem-list {
   list-style: none;
   padding: 0;
+  margin: 1rem 0 0;
 }
 .problem-list li {
   display: flex;
@@ -230,8 +274,17 @@ button:disabled {
   padding: 1rem 0;
   border-bottom: 1px solid #dce1e9;
 }
+.problem-list li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.problem-list .settings-help {
+  font-size: 0.75rem;
+  letter-spacing: 0.025em;
+}
 .problem-list li button {
   margin: 0;
+  flex-shrink: 0;
 }
 .countdown {
   font-size: 2rem;
@@ -244,10 +297,19 @@ button:disabled {
 
 .outcome-form fieldset {
   min-width: 0;
-  margin: 1rem 0;
-  padding: 1rem;
-  border: 1px solid #dce1e9;
-  border-radius: 0.5rem;
+  margin: 1.5rem 0;
+  padding: 0;
+  border: 0;
+}
+
+.outcome-form > fieldset {
+  margin-bottom: 0;
+}
+
+.outcome-form legend {
+  padding: 0;
+  margin-bottom: 0.5rem;
+  font-weight: 650;
 }
 
 .outcome-form label {
@@ -263,6 +325,22 @@ button:disabled {
   margin-top: 0.4rem;
   padding: 0.5rem;
   font: inherit;
+  border: 1px solid #b8c0cc;
+  border-radius: 0.5rem;
+  color: inherit;
+  background: #ffffff;
+}
+
+.outcome-form :is(select, textarea, input):focus-visible,
+summary:focus-visible {
+  outline: 3px solid #c7d2fe;
+  outline-offset: 2px;
+}
+
+.outcome-form summary {
+  cursor: pointer;
+  color: #3730a3;
+  font-weight: 600;
 }
 
 .outcome-form details {

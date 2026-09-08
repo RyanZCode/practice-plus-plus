@@ -67,11 +67,44 @@ async function server(store: AttemptStore) {
 }
 const headers = { authorization: "Bearer test", "content-type": "application/json" };
 describe("attempt routes", () => {
+  it("authenticates result reporting and rejects incomplete or forged input", async () => {
+    const { store } = database();
+    const report = vi
+      .spyOn(store, "report")
+      .mockResolvedValue({ ...attempt, outcome: "INDEPENDENT", patterns: ["Arrays & Hashing"] });
+    const url = await server(store);
+    const path = `${url}/attempts/${attempt.id}/report-result`;
+    expect((await fetch(path, { method: "POST" })).status).toBe(401);
+    for (const body of [
+      {},
+      { outcome: "INCOMPLETE" },
+      { outcome: "INDEPENDENT", userProfileId: "other" },
+      { outcome: "INDEPENDENT", patterns: ["Trees"] },
+    ]) {
+      expect(
+        (await fetch(path, { method: "POST", headers, body: JSON.stringify(body) })).status,
+      ).toBe(400);
+    }
+    expect(report).not.toHaveBeenCalled();
+    const response = await fetch(path, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ outcome: "INDEPENDENT" }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      outcome: "INDEPENDENT",
+      confirmedAt: null,
+      patterns: ["Arrays & Hashing"],
+    });
+    expect(report).toHaveBeenCalledExactlyOnceWith(userId, attempt.id, { outcome: "INDEPENDENT" });
+  });
   it("authenticates confirmation and solution review, validates bodies, and passes only the verified owner", async () => {
     const store = {
       active: vi.fn(),
       start: vi.fn(),
       skip: vi.fn(),
+      report: vi.fn().mockResolvedValue(attempt),
       reviewSolution: vi.fn().mockResolvedValue(attempt),
       confirm: vi.fn().mockResolvedValue(attempt),
     };
@@ -151,6 +184,7 @@ describe("attempt routes", () => {
       active: vi.fn().mockResolvedValue(attempt),
       start: vi.fn().mockResolvedValue(attempt),
       skip: vi.fn().mockResolvedValue(attempt),
+      report: vi.fn().mockResolvedValue(attempt),
       reviewSolution: vi.fn().mockResolvedValue(attempt),
       confirm: vi.fn().mockResolvedValue(attempt),
     };
@@ -186,6 +220,7 @@ describe("attempt routes", () => {
       active: vi.fn(),
       start: vi.fn(),
       skip: vi.fn(),
+      report: vi.fn().mockResolvedValue(attempt),
       reviewSolution: vi.fn(),
       confirm: vi.fn(),
     };
@@ -215,6 +250,7 @@ describe("attempt routes", () => {
 });
 function database() {
   const tx = {
+    problemPattern: { findMany: vi.fn().mockResolvedValue([]) },
     $queryRaw: vi.fn().mockResolvedValue([]),
     attempt: {
       findFirst: vi.fn().mockResolvedValue(null),
@@ -234,6 +270,89 @@ function database() {
   return { tx, store: createPrismaAttemptStore(client) };
 }
 describe("attempt persistence", () => {
+  it.each(["INDEPENDENT", "ASSISTED", "GAVE_UP"] as const)(
+    "reports %s without confirmation and survives reload",
+    async (outcome) => {
+      const { tx, store } = database();
+      tx.attempt.findFirst.mockResolvedValue(record);
+      tx.attempt.update.mockResolvedValue({ ...record, outcome });
+      tx.problemPattern.findMany.mockResolvedValue([{ pattern: { name: "Arrays & Hashing" } }]);
+      const result = await store.report(userId, attempt.id, { outcome });
+      expect(result).toMatchObject({ outcome, confirmedAt: null, patterns: ["Arrays & Hashing"] });
+      expect(tx.attempt.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: attempt.id, userProfileId: userId },
+          data: { outcome },
+        }),
+      );
+      tx.attempt.findFirst.mockResolvedValue({ ...record, outcome });
+      expect(await store.active(userId)).toEqual(result);
+      expect(await store.report(userId, attempt.id, { outcome })).toEqual(result);
+      expect(tx.attempt.update).toHaveBeenCalledTimes(1);
+      await expect(
+        store.confirm(
+          userId,
+          attempt.id,
+          confirmAttemptSchema.parse({ outcome: "INCOMPLETE" }),
+          new Date(),
+        ),
+      ).rejects.toMatchObject({ statusCode: 409 });
+    },
+  );
+
+  it("queries tags only through the authenticated user's resolved problem history", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue(record);
+    expect(await store.active(userId)).not.toHaveProperty("patterns");
+    expect(tx.problemPattern.findMany).toHaveBeenCalledExactlyOnceWith({
+      where: {
+        problemId,
+        problem: {
+          attempts: {
+            some: {
+              userProfileId: userId,
+              outcome: { in: ["INDEPENDENT", "ASSISTED", "GAVE_UP"] },
+            },
+          },
+        },
+      },
+      select: { pattern: { select: { name: true } } },
+      orderBy: { pattern: { name: "asc" } },
+    });
+    tx.attempt.update.mockResolvedValue({
+      ...record,
+      outcome: "INCOMPLETE",
+      confirmedAt: new Date(),
+    });
+    expect(
+      await store.confirm(
+        userId,
+        attempt.id,
+        confirmAttemptSchema.parse({ outcome: "INCOMPLETE" }),
+        new Date(),
+      ),
+    ).not.toHaveProperty("patterns");
+  });
+
+  it("rejects reporting another user's attempt, confirmed attempts, and contradictory results", async () => {
+    const { tx, store } = database();
+    await expect(
+      store.report(userId, attempt.id, { outcome: "INDEPENDENT" }),
+    ).rejects.toMatchObject({ statusCode: 404 });
+    expect(tx.problemPattern.findMany).not.toHaveBeenCalled();
+    for (const state of [
+      { ...record, confirmedAt: new Date() },
+      { ...record, outcome: "GAVE_UP" },
+      { ...record, outcome: "ASSISTED" },
+      { ...record, assistance: [{ type: "CONCEPTUAL_HINT", hintLevel: 1 }] },
+    ]) {
+      tx.attempt.findFirst.mockResolvedValue(state);
+      await expect(
+        store.report(userId, attempt.id, { outcome: "INDEPENDENT" }),
+      ).rejects.toMatchObject({ statusCode: 409 });
+    }
+    expect(tx.attempt.update).not.toHaveBeenCalled();
+  });
   it("records explicit give-up and solution provenance once without confirming", async () => {
     const { tx, store } = database();
     tx.attempt.findFirst.mockResolvedValue(record);
