@@ -256,3 +256,23 @@ export const attemptSchema = z.strictObject({
 });
 export const activeAttemptResponseSchema = z.strictObject({ attempt: attemptSchema.nullable() });
 export type Attempt = z.infer<typeof attemptSchema>;
+
+export const attemptHistoryQuerySchema = z
+  .strictObject({
+    before: z.string().datetime().optional(),
+    beforeId: z.string().uuid().optional(),
+  })
+  .refine((value) => (value.before === undefined) === (value.beforeId === undefined));
+export type AttemptHistoryQuery = z.infer<typeof attemptHistoryQuerySchema>;
+export const attemptHistoryResponseSchema = z.strictObject({
+  attempts: z
+    .array(
+      attemptSchema.extend({
+        confirmedAt: z.string().datetime(),
+        outcome: attemptOutcomeSchema,
+      }),
+    )
+    .max(20),
+  next: attemptHistoryQuerySchema.nullable(),
+});
+export type AttemptHistoryResponse = z.infer<typeof attemptHistoryResponseSchema>;

@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "./auth";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { Practice } from "./Practice";
+import { AttemptHistory } from "./AttemptHistory";
 import { loadPracticeSettings, savePracticeSettings } from "./settingsApi";
 
 interface AppProps {
@@ -38,6 +39,7 @@ function AccountPage({ apiUrl }: AppProps) {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [reloadCount, setReloadCount] = useState(0);
 
   useEffect(() => {
@@ -151,9 +153,25 @@ function AccountPage({ apiUrl }: AppProps) {
               <button
                 className="text-button"
                 type="button"
+                aria-expanded={showHistory}
+                onClick={() => {
+                  setShowHistory((show) => !show);
+                  setShowSettings(false);
+                }}
+              >
+                {showHistory ? "Back to practice" : "Attempt history"}
+              </button>
+            ) : null}
+            {!isLoading && !loadFailed && !isOnboarding ? (
+              <button
+                className="text-button"
+                type="button"
                 aria-expanded={showSettings}
                 aria-controls="practice-settings"
-                onClick={() => setShowSettings((show) => !show)}
+                onClick={() => {
+                  setShowSettings((show) => !show);
+                  setShowHistory(false);
+                }}
               >
                 {showSettings ? "Back to practice" : "Practice settings"}
               </button>
@@ -187,9 +205,13 @@ function AccountPage({ apiUrl }: AppProps) {
         ) : null}
 
         {!isLoading && !loadFailed && !isOnboarding ? (
-          <div hidden={showSettings}>
+          <div hidden={showSettings || showHistory}>
             <Practice apiUrl={apiUrl} token={session.access_token} />
           </div>
+        ) : null}
+
+        {!isLoading && !loadFailed && !isOnboarding && showHistory ? (
+          <AttemptHistory apiUrl={apiUrl} token={session.access_token} />
         ) : null}
 
         {!isLoading && !loadFailed && !isOnboarding && !showSettings && error !== undefined ? (

@@ -67,6 +67,24 @@ async function server(store: AttemptStore) {
 }
 const headers = { authorization: "Bearer test", "content-type": "application/json" };
 describe("attempt routes", () => {
+  it("authenticates history and rejects invalid or forged pagination", async () => {
+    const { store } = database();
+    const history = vi.spyOn(store, "history").mockResolvedValue({ attempts: [], next: null });
+    const url = await server(store);
+    expect((await fetch(`${url}/attempts`)).status).toBe(401);
+    for (const query of [
+      "userProfileId=other",
+      "limit=1000",
+      "before=invalid",
+      `beforeId=${attempt.id}`,
+      "before=2026-09-08T00:00:00.000Z&beforeId=invalid",
+    ]) {
+      expect((await fetch(`${url}/attempts?${query}`, { headers })).status).toBe(400);
+    }
+    expect(history).not.toHaveBeenCalled();
+    expect((await fetch(`${url}/attempts`, { headers })).status).toBe(200);
+    expect(history).toHaveBeenCalledExactlyOnceWith(userId, {});
+  });
   it("authenticates result reporting and rejects incomplete or forged input", async () => {
     const { store } = database();
     const report = vi
@@ -101,6 +119,7 @@ describe("attempt routes", () => {
   });
   it("authenticates confirmation and solution review, validates bodies, and passes only the verified owner", async () => {
     const store = {
+      history: vi.fn(),
       active: vi.fn(),
       start: vi.fn(),
       skip: vi.fn(),
@@ -181,6 +200,7 @@ describe("attempt routes", () => {
   });
   it("requires authentication and uses the verified profile for every operation", async () => {
     const store = {
+      history: vi.fn(),
       active: vi.fn().mockResolvedValue(attempt),
       start: vi.fn().mockResolvedValue(attempt),
       skip: vi.fn().mockResolvedValue(attempt),
@@ -217,6 +237,7 @@ describe("attempt routes", () => {
   });
   it("rejects client-supplied ownership, type, practice date, and invalid identifiers", async () => {
     const store = {
+      history: vi.fn(),
       active: vi.fn(),
       start: vi.fn(),
       skip: vi.fn(),
@@ -253,6 +274,7 @@ function database() {
     problemPattern: { findMany: vi.fn().mockResolvedValue([]) },
     $queryRaw: vi.fn().mockResolvedValue([]),
     attempt: {
+      findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue(record),
       update: vi.fn().mockResolvedValue(record),
@@ -270,6 +292,62 @@ function database() {
   return { tx, store: createPrismaAttemptStore(client) };
 }
 describe("attempt persistence", () => {
+  it("bounds confirmed history, scopes every page to its owner, and excludes hidden fields", async () => {
+    const { tx, store } = database();
+    const confirmedAt = new Date("2026-09-08T12:00:00.000Z");
+    const rows = Array.from({ length: 21 }, (_, index) => ({
+      ...record,
+      id: `d3b65a55-1a50-43e1-82e0-${String(100 - index).padStart(12, "0")}`,
+      confirmedAt,
+      outcome: "INCOMPLETE",
+      approach: "Tracked the running total.",
+      code: "must not be returned",
+      problem: { ...record.problem, patterns: ["hidden"] },
+    }));
+    tx.attempt.findMany.mockResolvedValue(rows);
+    const first = await store.history(userId, {});
+    expect(first.attempts).toHaveLength(20);
+    expect(first.next).toEqual({ before: confirmedAt.toISOString(), beforeId: rows[19]?.id });
+    expect(first.attempts[0]).toMatchObject({
+      outcome: "INCOMPLETE",
+      approach: "Tracked the running total.",
+    });
+    expect(JSON.stringify(first)).not.toMatch(/hidden|must not be returned|patterns|"code"/);
+    expect(tx.attempt.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { userProfileId: userId, confirmedAt: { not: null } },
+        orderBy: [{ confirmedAt: "desc" }, { id: "desc" }],
+        take: 21,
+      }),
+    );
+    tx.attempt.findMany.mockResolvedValue([rows[20]]);
+    const second = await store.history(userId, first.next ?? {});
+    expect(second.attempts).toHaveLength(1);
+    expect(second.next).toBeNull();
+    expect(tx.attempt.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: {
+          userProfileId: userId,
+          confirmedAt: { not: null },
+          OR: [{ confirmedAt: { lt: confirmedAt } }, { confirmedAt, id: { lt: rows[19]?.id } }],
+        },
+      }),
+    );
+    tx.attempt.findMany.mockResolvedValue([]);
+    expect(await store.history("another-owner", first.next ?? {})).toEqual({
+      attempts: [],
+      next: null,
+    });
+    expect(tx.attempt.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userProfileId: "another-owner",
+          confirmedAt: { not: null },
+        }),
+      }),
+    );
+    expect(tx.problemPattern.findMany).not.toHaveBeenCalled();
+  });
   it.each(["INDEPENDENT", "ASSISTED", "GAVE_UP"] as const)(
     "reports %s without confirmation and survives reload",
     async (outcome) => {
