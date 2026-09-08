@@ -146,19 +146,72 @@ enum AttemptType {
   REDO
 }
 
+enum AttemptOutcome {
+  INDEPENDENT
+  ASSISTED
+  GAVE_UP
+  INCOMPLETE
+}
+
+enum AttemptConfidence {
+  CONFIDENT
+  SHAKY
+}
+
+enum AttemptOptimality {
+  OPTIMAL
+  SUBOPTIMAL
+  UNKNOWN
+}
+
+enum AssistanceType {
+  CLARIFICATION
+  CONCEPTUAL_HINT
+  DEBUGGING
+  OPTIMIZATION
+  SOLUTION_REVIEW
+}
+
+enum AssistanceSource {
+  SELF_REPORTED
+  LEETCODE_SOLUTION
+}
+
 model Attempt {
-  id             String      @id @default(uuid()) @db.Uuid
-  userProfileId  String      @map("user_profile_id") @db.Uuid
-  problemId      String      @map("problem_id") @db.Uuid
-  type           AttemptType
-  practiceDate   DateTime    @map("practice_date") @db.Date
-  startedAt      DateTime    @map("started_at") @db.Timestamptz(3)
-  timerSkippedAt DateTime?   @map("timer_skipped_at") @db.Timestamptz(3)
-  confirmedAt    DateTime?   @map("confirmed_at") @db.Timestamptz(3)
-  userProfile    UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
-  problem        Problem     @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  id                   String             @id @default(uuid()) @db.Uuid
+  userProfileId        String             @map("user_profile_id") @db.Uuid
+  problemId            String             @map("problem_id") @db.Uuid
+  type                 AttemptType
+  practiceDate         DateTime           @map("practice_date") @db.Date
+  startedAt            DateTime           @map("started_at") @db.Timestamptz(3)
+  timerSkippedAt       DateTime?          @map("timer_skipped_at") @db.Timestamptz(3)
+  confirmedAt          DateTime?          @map("confirmed_at") @db.Timestamptz(3)
+  solutionReviewedAt   DateTime?          @map("solution_reviewed_at") @db.Timestamptz(3)
+  outcome              AttemptOutcome?
+  confidence           AttemptConfidence?
+  optimality           AttemptOptimality?
+  timeSpentSeconds     Int?               @map("time_spent_seconds")
+  approach             String?            @db.VarChar(1000)
+  notes                String?            @db.VarChar(5000)
+  reproducedFromMemory Boolean?           @map("reproduced_from_memory")
+  assistance           AssistanceEvent[]
+  userProfile          UserProfile        @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+  problem              Problem            @relation(fields: [problemId], references: [id], onDelete: Restrict)
 
   @@index([userProfileId, problemId])
   @@index([problemId])
   @@map("attempts")
+}
+
+model AssistanceEvent {
+  id         String           @id @default(uuid()) @db.Uuid
+  attemptId  String           @map("attempt_id") @db.Uuid
+  type       AssistanceType
+  hintLevel  Int?             @map("hint_level") @db.SmallInt
+  source     AssistanceSource
+  recordedAt DateTime         @default(now()) @map("recorded_at") @db.Timestamptz(3)
+  attempt    Attempt          @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@index([attemptId])
+  @@map("assistance_events")
 }

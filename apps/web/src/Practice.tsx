@@ -7,7 +7,10 @@ import {
   saveCatalogPreferences,
   skipTimer,
   startAttempt,
+  reviewSolution,
+  confirmAttempt,
 } from "./attemptsApi";
+import { AttemptOutcomeForm } from "./AttemptOutcomeForm";
 import { eligibleProblems, remainingSeconds } from "./attemptState";
 
 export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
@@ -19,6 +22,8 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
   const [error, setError] = useState<string>();
   const [reload, setReload] = useState(0);
   const [now, setNow] = useState(Date.now());
+  const [classifying, setClassifying] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -57,6 +62,7 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
     setError(undefined);
     try {
       setAttempt(await action());
+      setSaved(false);
       setNow(Date.now());
     } catch (reason) {
       setError(message(reason));
@@ -83,6 +89,7 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
   return (
     <section className="practice">
       <h2>Practice</h2>
+      {saved ? <p role="status">Attempt confirmed.</p> : null}
       {loading ? <p role="status">Loading practice…</p> : null}
       {error === undefined ? null : (
         <div>
@@ -106,7 +113,17 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
               Open on LeetCode ↗
             </a>
           </p>
-          {seconds > 0 ? (
+          {attempt.solutionReviewedAt !== null ? (
+            <p>
+              <a
+                href={`https://leetcode.com/problems/${attempt.problem.slug}/solutions/`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Review LeetCode solutions ↗
+              </a>
+            </p>
+          ) : seconds > 0 ? (
             <div>
               <p
                 className="countdown"
@@ -136,10 +153,45 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
                 giving up.
               </p>
               <p className="settings-help">
-                Guided hints and the give-up flow are not available yet. Your attempt remains
-                active.
+                Integrated hints are not available yet. You can record help received elsewhere.
               </p>
             </div>
+          )}
+          {attempt.solutionReviewedAt === null ? (
+            <p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void update(() => reviewSolution(apiUrl, token, attempt.id))}
+              >
+                Give up and review a solution
+              </button>
+            </p>
+          ) : null}
+          {classifying || attempt.solutionReviewedAt !== null ? (
+            <AttemptOutcomeForm
+              key={`${attempt.id}-${attempt.solutionReviewedAt ?? "solving"}`}
+              attempt={attempt}
+              busy={busy}
+              onConfirm={async (input) => {
+                setBusy(true);
+                setError(undefined);
+                try {
+                  await confirmAttempt(apiUrl, token, attempt.id, input);
+                  setAttempt(null);
+                  setClassifying(false);
+                  setSaved(true);
+                } catch (reason) {
+                  setError(message(reason));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+          ) : (
+            <button type="button" disabled={busy} onClick={() => setClassifying(true)}>
+              Record outcome
+            </button>
           )}
         </div>
       ) : null}

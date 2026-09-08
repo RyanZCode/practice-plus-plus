@@ -6,6 +6,7 @@ import {
   type CatalogPreferences,
   type Attempt,
   type CatalogProblem,
+  type ConfirmAttempt,
 } from "@practice-plus-plus/contracts";
 
 async function request(
@@ -26,7 +27,9 @@ async function request(
   if (!response.ok) {
     if (response.status === 401) throw new Error("Your session expired. Sign in again.");
     if (response.status === 409)
-      throw new Error("An attempt is already active. Reload to resume it.");
+      throw new Error(
+        "The attempt changed or conflicts with recorded help. Reload practice and check your outcome.",
+      );
     throw new Error("Unable to load or update practice. Please try again.");
   }
   return response.json();
@@ -68,4 +71,23 @@ export async function skipTimer(
   attemptId: string,
 ): Promise<Attempt> {
   return attemptSchema.parse(await request(apiUrl, token, `/attempts/${attemptId}/skip-timer`, {}));
+}
+
+export async function reviewSolution(
+  apiUrl: string,
+  token: string,
+  attemptId: string,
+): Promise<Attempt> {
+  return attemptSchema.parse(
+    await request(apiUrl, token, `/attempts/${attemptId}/review-solution`, { giveUp: true }),
+  );
+}
+
+export async function confirmAttempt(
+  apiUrl: string,
+  token: string,
+  attemptId: string,
+  input: ConfirmAttempt,
+): Promise<Attempt> {
+  return attemptSchema.parse(await request(apiUrl, token, `/attempts/${attemptId}/confirm`, input));
 }
