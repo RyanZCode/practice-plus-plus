@@ -1,5 +1,9 @@
 import {
   activeAttemptResponseSchema,
+  attemptHistoryQuerySchema,
+  attemptHistoryResponseSchema,
+  type AttemptHistoryQuery,
+  type AttemptHistoryResponse,
   attemptSchema,
   startAttemptSchema,
   confirmAttemptSchema,
@@ -38,6 +42,7 @@ const select = {
 type AttemptRecord = Prisma.AttemptGetPayload<{ select: typeof select }>;
 
 export interface AttemptStore {
+  history(userProfileId: string, query: AttemptHistoryQuery): Promise<AttemptHistoryResponse>;
   report(userProfileId: string, attemptId: string, input: ReportAttempt): Promise<Attempt>;
   active(userProfileId: string): Promise<Attempt | null>;
   start(userProfileId: string, problemId: string, now: Date): Promise<Attempt>;
@@ -90,6 +95,37 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
     });
   }
   return {
+    async history(userProfileId, query) {
+      const records = await client.attempt.findMany({
+        where: {
+          userProfileId,
+          confirmedAt: { not: null },
+          ...(query.before === undefined || query.beforeId === undefined
+            ? {}
+            : {
+                OR: [
+                  { confirmedAt: { lt: new Date(query.before) } },
+                  { confirmedAt: new Date(query.before), id: { lt: query.beforeId } },
+                ],
+              }),
+        },
+        orderBy: [{ confirmedAt: "desc" }, { id: "desc" }],
+        take: 21,
+        select,
+      });
+      const page = records.slice(0, 20);
+      const last = page.at(-1);
+      return attemptHistoryResponseSchema.parse({
+        attempts: page.map(toAttempt),
+        next:
+          records.length > 20 && last
+            ? {
+                before: last.confirmedAt?.toISOString(),
+                beforeId: last.id,
+              }
+            : null,
+      });
+    },
     async report(userProfileId, attemptId, input) {
       return change(userProfileId, attemptId, async (tx, record) => {
         if (record.confirmedAt !== null)
@@ -261,6 +297,15 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
 
 export function createAttemptRouter(store: AttemptStore, clock = () => new Date()): Router {
   const router = Router();
+  router.get("/", async (request, response) => {
+    const query = attemptHistoryQuerySchema.safeParse(request.query);
+    if (!query.success) throw new HttpError(400, "Invalid history page.");
+    response.json(
+      attemptHistoryResponseSchema.parse(
+        await store.history(getApplicationProfile(request).id, query.data),
+      ),
+    );
+  });
   router.post("/:attemptId/report-result", async (request, response) => {
     const id = attemptSchema.shape.id.safeParse(request.params.attemptId);
     const input = reportAttemptSchema.safeParse(request.body);

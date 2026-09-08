@@ -1,5 +1,7 @@
 import {
   activeAttemptResponseSchema,
+  attemptHistoryResponseSchema,
+  type AttemptHistoryQuery,
   attemptSchema,
   catalogResponseSchema,
   catalogPreferencesSchema,
@@ -58,6 +60,16 @@ export async function saveCatalogPreferences(
 export async function loadActiveAttempt(apiUrl: string, token: string): Promise<Attempt | null> {
   return activeAttemptResponseSchema.parse(await request(apiUrl, token, "/attempts/active"))
     .attempt;
+}
+export async function loadAttemptHistory(
+  apiUrl: string,
+  token: string,
+  query: AttemptHistoryQuery,
+) {
+  const params = new URLSearchParams();
+  if (query.before !== undefined) params.set("before", query.before);
+  if (query.beforeId !== undefined) params.set("beforeId", query.beforeId);
+  return attemptHistoryResponseSchema.parse(await request(apiUrl, token, `/attempts?${params}`));
 }
 export async function startAttempt(
   apiUrl: string,

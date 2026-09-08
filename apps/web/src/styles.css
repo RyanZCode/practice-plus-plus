@@ -346,3 +346,28 @@ summary:focus-visible {
 .outcome-form details {
   margin-top: 1rem;
 }
+
+.history-list {
+  list-style: none;
+  padding: 0;
+}
+
+.history-list li {
+  padding: 1rem 0;
+  border-bottom: 1px solid #dce1e9;
+  overflow-wrap: anywhere;
+}
+
+.history-list summary {
+  cursor: pointer;
+}
+
+.history-list dt {
+  margin-top: 0.75rem;
+  font-weight: 600;
+}
+
+.history-list dd {
+  margin: 0.25rem 0 0;
+  white-space: pre-wrap;
+}
