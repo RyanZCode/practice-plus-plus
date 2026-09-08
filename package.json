@@ -16,7 +16,7 @@
     "format": "prettier --write .github apps packages package.json README.md pnpm-workspace.yaml *.config.mjs",
     "format:check": "prettier --check .github apps packages package.json README.md pnpm-workspace.yaml *.config.mjs",
     "lint": "eslint . --max-warnings 0",
-    "pretest": "pnpm --filter @practice-plus-plus/contracts build",
+    "pretest": "pnpm --filter @practice-plus-plus/contracts build && pnpm --filter @practice-plus-plus/scheduling build",
     "test": "vitest run --passWithNoTests",
     "pretypecheck": "pnpm --filter @practice-plus-plus/contracts build",
     "typecheck": "pnpm --recursive --if-present run typecheck"

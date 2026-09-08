@@ -1,14 +1,17 @@
 import {
   catalogProblemSchema,
+  catalogPreferencesSchema,
+  type CatalogPreferences,
   catalogResponseSchema,
   type CatalogProblem,
 } from "@practice-plus-plus/contracts";
 import { Router } from "express";
 
 import { HttpError } from "./errors.js";
+import { getApplicationProfile } from "./profile.js";
 import type { PrismaClient } from "./generated/prisma/client.js";
 
-const catalogProblemSelect = {
+export const catalogProblemSelect = {
   id: true,
   leetcodeId: true,
   slug: true,
@@ -19,12 +22,30 @@ const catalogProblemSelect = {
 } as const;
 
 export interface CatalogStore {
+  preferences(userProfileId: string): Promise<CatalogPreferences>;
+  savePreferences(
+    userProfileId: string,
+    preferences: CatalogPreferences,
+  ): Promise<CatalogPreferences>;
   listPublished(): Promise<CatalogProblem[]>;
   findPublished(problemId: string): Promise<CatalogProblem | null>;
 }
 
 export function createPrismaCatalogStore(client: PrismaClient): CatalogStore {
   return {
+    async preferences(userProfileId) {
+      return client.userProfile.findUniqueOrThrow({
+        where: { id: userProfileId },
+        select: { hidePaidProblems: true },
+      });
+    },
+    async savePreferences(userProfileId, preferences) {
+      return client.userProfile.update({
+        where: { id: userProfileId },
+        data: { hidePaidProblems: preferences.hidePaidProblems },
+        select: { hidePaidProblems: true },
+      });
+    },
     async listPublished() {
       return client.problem.findMany({
         where: { published: true },
@@ -43,6 +64,24 @@ export function createPrismaCatalogStore(client: PrismaClient): CatalogStore {
 
 export function createCatalogRouter(store: CatalogStore): Router {
   const router = Router();
+
+  router.get("/preferences", async (request, response) => {
+    response.json(
+      catalogPreferencesSchema.parse(await store.preferences(getApplicationProfile(request).id)),
+    );
+  });
+
+  router.put("/preferences", async (request, response) => {
+    const parsed = catalogPreferencesSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new HttpError(400, "Invalid catalog preferences");
+    }
+    response.json(
+      catalogPreferencesSchema.parse(
+        await store.savePreferences(getApplicationProfile(request).id, parsed.data),
+      ),
+    );
+  });
 
   router.get("/problems", async (_request, response) => {
     const problems = await store.listPublished();
@@ -66,7 +105,7 @@ export function createCatalogRouter(store: CatalogStore): Router {
   return router;
 }
 
-function toCatalogProblem(problem: CatalogProblem): CatalogProblem {
+export function toCatalogProblem(problem: CatalogProblem): CatalogProblem {
   return catalogProblemSchema.parse({
     id: problem.id,
     leetcodeId: problem.leetcodeId,

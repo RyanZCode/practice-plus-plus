@@ -129,6 +129,9 @@ export const catalogResponseSchema = z.strictObject({
 export type CatalogProblem = z.infer<typeof catalogProblemSchema>;
 export type CatalogResponse = z.infer<typeof catalogResponseSchema>;
 
+export const catalogPreferencesSchema = z.strictObject({ hidePaidProblems: z.boolean() });
+export type CatalogPreferences = z.infer<typeof catalogPreferencesSchema>;
+
 export const catalogReviewStatusSchema = z.enum(["DRAFT", "APPROVED", "REJECTED"]);
 
 export const catalogProblemInputSchema = catalogImportRowSchema;
@@ -193,3 +196,16 @@ function isValidTimeZone(timeZone: string): boolean {
     return false;
   }
 }
+
+export const attemptTimerSeconds = 30 * 60;
+export const startAttemptSchema = z.strictObject({ problemId: z.string().uuid() });
+export const attemptSchema = z.strictObject({
+  id: z.string().uuid(),
+  problem: catalogProblemSchema,
+  type: z.enum(["FRESH", "REDO"]),
+  practiceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startedAt: z.string().datetime(),
+  timerSkippedAt: z.string().datetime().nullable(),
+});
+export const activeAttemptResponseSchema = z.strictObject({ attempt: attemptSchema.nullable() });
+export type Attempt = z.infer<typeof attemptSchema>;

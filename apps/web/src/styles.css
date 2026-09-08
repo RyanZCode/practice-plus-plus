@@ -212,3 +212,32 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+.practice {
+  margin-top: 2rem;
+  border-top: 1px solid #dce1e9;
+  padding-top: 1rem;
+}
+.problem-list {
+  list-style: none;
+  padding: 0;
+}
+.problem-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid #dce1e9;
+}
+.problem-list li button {
+  margin: 0;
+}
+.countdown {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+  margin-top: 1rem;
+}
+.attempt-guidance {
+  margin-top: 1rem;
+}

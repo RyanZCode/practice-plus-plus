@@ -1,0 +1,71 @@
+import {
+  activeAttemptResponseSchema,
+  attemptSchema,
+  catalogResponseSchema,
+  catalogPreferencesSchema,
+  type CatalogPreferences,
+  type Attempt,
+  type CatalogProblem,
+} from "@practice-plus-plus/contracts";
+
+async function request(
+  apiUrl: string,
+  token: string,
+  path: string,
+  body?: object,
+  method?: "PUT",
+): Promise<unknown> {
+  const response = await fetch(`${apiUrl.replace(/\/$/, "")}${path}`, {
+    method: method ?? (body === undefined ? "GET" : "POST"),
+    headers: {
+      authorization: `Bearer ${token}`,
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("Your session expired. Sign in again.");
+    if (response.status === 409)
+      throw new Error("An attempt is already active. Reload to resume it.");
+    throw new Error("Unable to load or update practice. Please try again.");
+  }
+  return response.json();
+}
+export async function loadProblems(apiUrl: string, token: string): Promise<CatalogProblem[]> {
+  return catalogResponseSchema.parse(await request(apiUrl, token, "/catalog/problems")).problems;
+}
+
+export async function loadCatalogPreferences(
+  apiUrl: string,
+  token: string,
+): Promise<CatalogPreferences> {
+  return catalogPreferencesSchema.parse(await request(apiUrl, token, "/catalog/preferences"));
+}
+
+export async function saveCatalogPreferences(
+  apiUrl: string,
+  token: string,
+  hidePaidProblems: boolean,
+): Promise<CatalogPreferences> {
+  return catalogPreferencesSchema.parse(
+    await request(apiUrl, token, "/catalog/preferences", { hidePaidProblems }, "PUT"),
+  );
+}
+export async function loadActiveAttempt(apiUrl: string, token: string): Promise<Attempt | null> {
+  return activeAttemptResponseSchema.parse(await request(apiUrl, token, "/attempts/active"))
+    .attempt;
+}
+export async function startAttempt(
+  apiUrl: string,
+  token: string,
+  problemId: string,
+): Promise<Attempt> {
+  return attemptSchema.parse(await request(apiUrl, token, "/attempts", { problemId }));
+}
+export async function skipTimer(
+  apiUrl: string,
+  token: string,
+  attemptId: string,
+): Promise<Attempt> {
+  return attemptSchema.parse(await request(apiUrl, token, `/attempts/${attemptId}/skip-timer`, {}));
+}
