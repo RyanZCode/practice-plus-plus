@@ -4,6 +4,8 @@ import {
   startAttemptSchema,
   confirmAttemptSchema,
   suggestedOutcome,
+  reportAttemptSchema,
+  type ReportAttempt,
   type ConfirmAttempt,
   type Attempt,
 } from "@practice-plus-plus/contracts";
@@ -36,6 +38,7 @@ const select = {
 type AttemptRecord = Prisma.AttemptGetPayload<{ select: typeof select }>;
 
 export interface AttemptStore {
+  report(userProfileId: string, attemptId: string, input: ReportAttempt): Promise<Attempt>;
   active(userProfileId: string): Promise<Attempt | null>;
   start(userProfileId: string, problemId: string, now: Date): Promise<Attempt>;
   skip(userProfileId: string, attemptId: string, now: Date): Promise<Attempt>;
@@ -49,6 +52,28 @@ export interface AttemptStore {
 }
 
 export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
+  async function present(
+    db: Prisma.TransactionClient,
+    userProfileId: string,
+    record: AttemptRecord,
+  ) {
+    const tags = await db.problemPattern.findMany({
+      where: {
+        problemId: record.problem.id,
+        problem: {
+          attempts: {
+            some: { userProfileId, outcome: { in: ["INDEPENDENT", "ASSISTED", "GAVE_UP"] } },
+          },
+        },
+      },
+      select: { pattern: { select: { name: true } } },
+      orderBy: { pattern: { name: "asc" } },
+    });
+    return attemptSchema.parse({
+      ...toAttempt(record),
+      ...(tags.length === 0 ? {} : { patterns: tags.map((tag) => tag.pattern.name) }),
+    });
+  }
   async function change(
     userProfileId: string,
     attemptId: string,
@@ -61,10 +86,38 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
         select,
       });
       if (record === null) throw new HttpError(404, "Attempt not found.");
-      return toAttempt(await action(tx, record));
+      return present(tx, userProfileId, await action(tx, record));
     });
   }
   return {
+    async report(userProfileId, attemptId, input) {
+      return change(userProfileId, attemptId, async (tx, record) => {
+        if (record.confirmedAt !== null)
+          throw new HttpError(409, "This attempt is already confirmed.");
+        const required = suggestedOutcome(record.assistance);
+        if (
+          (record.outcome === "GAVE_UP" || required === "GAVE_UP") &&
+          input.outcome !== "GAVE_UP"
+        ) {
+          throw new HttpError(409, "Giving up requires the gave-up outcome.");
+        }
+        if (
+          (record.outcome === "ASSISTED" || required === "ASSISTED") &&
+          input.outcome === "INDEPENDENT"
+        ) {
+          throw new HttpError(
+            409,
+            "Recorded assistance is inconsistent with an independent solve.",
+          );
+        }
+        if (record.outcome === input.outcome) return record;
+        return tx.attempt.update({
+          where: { id: attemptId, userProfileId },
+          data: { outcome: input.outcome },
+          select,
+        });
+      });
+    },
     async reviewSolution(userProfileId, attemptId, now) {
       return change(userProfileId, attemptId, async (tx, record) => {
         if (record.confirmedAt !== null)
@@ -85,6 +138,16 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
     },
     async confirm(userProfileId, attemptId, input, now) {
       return change(userProfileId, attemptId, async (tx, record) => {
+        if (
+          record.outcome !== null &&
+          record.outcome !== "INCOMPLETE" &&
+          input.outcome === "INCOMPLETE"
+        ) {
+          throw new HttpError(409, "A reported result cannot become incomplete.");
+        }
+        if (record.outcome === "ASSISTED" && input.outcome === "INDEPENDENT") {
+          throw new HttpError(409, "An assisted result cannot become independent.");
+        }
         const required = suggestedOutcome([...record.assistance, ...input.assistance]);
         if (
           (record.outcome === "GAVE_UP" || required === "GAVE_UP") &&
@@ -133,7 +196,7 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
         where: { userProfileId, confirmedAt: null },
         select,
       });
-      return record === null ? null : toAttempt(record);
+      return record === null ? null : present(client, userProfileId, record);
     },
     async start(userProfileId, problemId, now) {
       return client.$transaction(async (tx) => {
@@ -144,7 +207,7 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
         });
         if (active !== null) {
           if (active.problem.id === problemId) {
-            return toAttempt(active);
+            return present(tx, userProfileId, active);
           }
           throw new HttpError(409, "Finish your active attempt before starting another problem.");
         }
@@ -176,7 +239,7 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
           },
           select,
         });
-        return toAttempt(record);
+        return present(tx, userProfileId, record);
       });
     },
     async skip(userProfileId, attemptId, now) {
@@ -190,7 +253,7 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
           select,
         });
         if (record === null) throw new HttpError(404, "Active attempt not found.");
-        return toAttempt(record);
+        return present(tx, userProfileId, record);
       });
     },
   };
@@ -198,6 +261,16 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
 
 export function createAttemptRouter(store: AttemptStore, clock = () => new Date()): Router {
   const router = Router();
+  router.post("/:attemptId/report-result", async (request, response) => {
+    const id = attemptSchema.shape.id.safeParse(request.params.attemptId);
+    const input = reportAttemptSchema.safeParse(request.body);
+    if (!id.success || !input.success) throw new HttpError(400, "Invalid attempt result.");
+    response.json(
+      attemptSchema.parse(
+        await store.report(getApplicationProfile(request).id, id.data, input.data),
+      ),
+    );
+  });
   router.get("/active", async (request, response) => {
     response.json(
       activeAttemptResponseSchema.parse({

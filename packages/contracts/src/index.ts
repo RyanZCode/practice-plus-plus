@@ -200,6 +200,10 @@ function isValidTimeZone(timeZone: string): boolean {
 export const attemptTimerSeconds = 30 * 60;
 export const startAttemptSchema = z.strictObject({ problemId: z.string().uuid() });
 export const attemptOutcomeSchema = z.enum(["INDEPENDENT", "ASSISTED", "GAVE_UP", "INCOMPLETE"]);
+export const reportAttemptSchema = z.strictObject({
+  outcome: z.enum(["INDEPENDENT", "ASSISTED", "GAVE_UP"]),
+});
+export type ReportAttempt = z.infer<typeof reportAttemptSchema>;
 export const assistanceSchema = z
   .strictObject({
     type: z.enum([
@@ -233,6 +237,7 @@ export function suggestedOutcome(assistance: Assistance[]): "GAVE_UP" | "ASSISTE
 }
 export const attemptSchema = z.strictObject({
   id: z.string().uuid(),
+  patterns: z.array(z.enum(mvpPatternNames)).optional(),
   problem: catalogProblemSchema,
   type: z.enum(["FRESH", "REDO"]),
   practiceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

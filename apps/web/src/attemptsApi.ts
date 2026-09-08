@@ -7,6 +7,7 @@ import {
   type Attempt,
   type CatalogProblem,
   type ConfirmAttempt,
+  type ReportAttempt,
 } from "@practice-plus-plus/contracts";
 
 async function request(
@@ -90,4 +91,15 @@ export async function confirmAttempt(
   input: ConfirmAttempt,
 ): Promise<Attempt> {
   return attemptSchema.parse(await request(apiUrl, token, `/attempts/${attemptId}/confirm`, input));
+}
+
+export async function reportAttempt(
+  apiUrl: string,
+  token: string,
+  attemptId: string,
+  input: ReportAttempt,
+): Promise<Attempt> {
+  return attemptSchema.parse(
+    await request(apiUrl, token, `/attempts/${attemptId}/report-result`, input),
+  );
 }

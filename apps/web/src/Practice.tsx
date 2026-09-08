@@ -9,6 +9,7 @@ import {
   startAttempt,
   reviewSolution,
   confirmAttempt,
+  reportAttempt,
 } from "./attemptsApi";
 import { AttemptOutcomeForm } from "./AttemptOutcomeForm";
 import { eligibleProblems, remainingSeconds } from "./attemptState";
@@ -23,7 +24,7 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
   const [reload, setReload] = useState(0);
   const [now, setNow] = useState(Date.now());
   const [classifying, setClassifying] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState<Attempt | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -62,7 +63,7 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
     setError(undefined);
     try {
       setAttempt(await action());
-      setSaved(false);
+      setSaved(null);
       setNow(Date.now());
     } catch (reason) {
       setError(message(reason));
@@ -89,7 +90,12 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
   return (
     <section className="practice">
       <h2>Practice</h2>
-      {saved ? <p role="status">Attempt confirmed.</p> : null}
+      {saved ? (
+        <div role="status">
+          <p>Attempt confirmed.</p>
+          {saved.patterns ? <p>Patterns: {saved.patterns.join(", ")}</p> : null}
+        </div>
+      ) : null}
       {loading ? <p role="status">Loading practice…</p> : null}
       {error === undefined ? null : (
         <div>
@@ -104,6 +110,7 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
       {!loading && attempt !== null ? (
         <div>
           <h3>{attempt.problem.title}</h3>
+          {attempt.patterns ? <p>Patterns: {attempt.patterns.join(", ")}</p> : null}
           <p>
             {attempt.type === "FRESH" ? "Fresh attempt" : "Redo attempt"} · {attempt.practiceDate}
             {attempt.problem.availability === "PAID_ONLY" ? " · LeetCode Premium required" : ""}
@@ -123,7 +130,7 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
                 Review LeetCode solutions ↗
               </a>
             </p>
-          ) : seconds > 0 ? (
+          ) : attempt.outcome !== null ? null : seconds > 0 ? (
             <div>
               <p
                 className="countdown"
@@ -157,7 +164,7 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
               </p>
             </div>
           )}
-          {attempt.solutionReviewedAt === null ? (
+          {attempt.solutionReviewedAt === null && attempt.outcome === null ? (
             <p>
               <button
                 type="button"
@@ -168,19 +175,20 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
               </button>
             </p>
           ) : null}
-          {classifying || attempt.solutionReviewedAt !== null ? (
+          {classifying || attempt.outcome !== null ? (
             <AttemptOutcomeForm
               key={`${attempt.id}-${attempt.solutionReviewedAt ?? "solving"}`}
               attempt={attempt}
               busy={busy}
+              onReport={(input) => update(() => reportAttempt(apiUrl, token, attempt.id, input))}
               onConfirm={async (input) => {
                 setBusy(true);
                 setError(undefined);
                 try {
-                  await confirmAttempt(apiUrl, token, attempt.id, input);
+                  const confirmed = await confirmAttempt(apiUrl, token, attempt.id, input);
                   setAttempt(null);
                   setClassifying(false);
-                  setSaved(true);
+                  setSaved(confirmed);
                 } catch (reason) {
                   setError(message(reason));
                 } finally {
