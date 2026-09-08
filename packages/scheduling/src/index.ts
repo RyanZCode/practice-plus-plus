@@ -1,3 +1,5 @@
+export { deriveReviewUrgency, type ReviewUrgency } from "./reviewUrgency.js";
+
 export function getPracticeDate(timestamp: Date, timeZone: string, resetTime: string): string {
   if (Number.isNaN(timestamp.getTime())) {
     throw new RangeError("Invalid timestamp");

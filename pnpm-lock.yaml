@@ -148,6 +148,10 @@ importers:
         version: link:../config
 
   packages/scheduling:
+    dependencies:
+      '@practice-plus-plus/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       '@practice-plus-plus/config':
         specifier: workspace:*
