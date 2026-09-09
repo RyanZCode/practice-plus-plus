@@ -312,14 +312,16 @@ button:disabled {
   font-weight: 650;
 }
 
-.outcome-form label {
+.outcome-form label,
+.review-date-form label {
   display: block;
   margin-top: 0.75rem;
 }
 
 .outcome-form select,
 .outcome-form textarea,
-.outcome-form input[type="number"] {
+.outcome-form input[type="number"],
+.review-date-form input {
   display: block;
   width: 100%;
   margin-top: 0.4rem;
@@ -332,6 +334,7 @@ button:disabled {
 }
 
 .outcome-form :is(select, textarea, input):focus-visible,
+.review-date-form input:focus-visible,
 summary:focus-visible {
   outline: 3px solid #c7d2fe;
   outline-offset: 2px;
@@ -341,6 +344,10 @@ summary:focus-visible {
   cursor: pointer;
   color: #3730a3;
   font-weight: 600;
+}
+
+.review-date-form {
+  margin-bottom: 1rem;
 }
 
 .outcome-form details {

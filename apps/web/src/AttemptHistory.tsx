@@ -1,6 +1,7 @@
 import type { AttemptHistoryQuery, AttemptHistoryResponse } from "@practice-plus-plus/contracts";
 import { useEffect, useState } from "react";
 import { loadAttemptHistory } from "./attemptsApi";
+import { ReviewDateForm } from "./ReviewDateForm";
 
 const labels: Record<string, string> = {
   INDEPENDENT: "Independent",
@@ -73,6 +74,14 @@ export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: strin
               {labels[attempt.outcome]} · {attempt.type === "FRESH" ? "Fresh" : "Redo"} · Practice
               date: {attempt.practiceDate}
             </p>
+            {attempt.review !== null ? (
+              <ReviewDateForm
+                apiUrl={apiUrl}
+                token={token}
+                attemptId={attempt.id}
+                review={attempt.review}
+              />
+            ) : null}
             <details>
               <summary>Attempt details</summary>
               <dl>

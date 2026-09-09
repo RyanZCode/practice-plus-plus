@@ -9,6 +9,7 @@ import type { PrismaClient } from "./generated/prisma/client.js";
 const userId = "25d64b95-b7cc-4fe5-91ac-ae296dc66383";
 const problemId = "6931f7d2-86fc-43de-b7db-dcc636528fc1";
 const attempt: Attempt = {
+  review: null,
   id: "d3b65a55-1a50-43e1-82e0-e23a263925a5",
   type: "FRESH",
   practiceDate: "2026-09-06",
@@ -67,6 +68,31 @@ async function server(store: AttemptStore) {
 }
 const headers = { authorization: "Bearer test", "content-type": "application/json" };
 describe("attempt routes", () => {
+  it("authenticates review overrides and accepts only a valid date or reset", async () => {
+    const { store } = database();
+    const override = vi.spyOn(store, "overrideReview").mockResolvedValue(attempt);
+    const url = `${await server(store)}/attempts/${attempt.id}/review`;
+    expect((await fetch(url, { method: "PUT" })).status).toBe(401);
+    for (const input of [
+      {},
+      { manualDueDate: "2026-02-30" },
+      { manualDueDate: "" },
+      { manualDueDate: "2026-09-10", userProfileId: userId },
+      { manualDueDate: "2026-09-10", generatedDueDate: "2026-09-10" },
+    ]) {
+      expect(
+        (await fetch(url, { method: "PUT", headers, body: JSON.stringify(input) })).status,
+      ).toBe(400);
+    }
+    expect(override).not.toHaveBeenCalled();
+    for (const manualDueDate of ["2026-09-10", null]) {
+      expect(
+        (await fetch(url, { method: "PUT", headers, body: JSON.stringify({ manualDueDate }) }))
+          .status,
+      ).toBe(200);
+      expect(override).toHaveBeenLastCalledWith(userId, attempt.id, manualDueDate);
+    }
+  });
   it("authenticates history and rejects invalid or forged pagination", async () => {
     const { store } = database();
     const history = vi.spyOn(store, "history").mockResolvedValue({ attempts: [], next: null });
@@ -119,6 +145,7 @@ describe("attempt routes", () => {
   });
   it("authenticates confirmation and solution review, validates bodies, and passes only the verified owner", async () => {
     const store = {
+      overrideReview: vi.fn(),
       history: vi.fn(),
       active: vi.fn(),
       start: vi.fn(),
@@ -200,6 +227,7 @@ describe("attempt routes", () => {
   });
   it("requires authentication and uses the verified profile for every operation", async () => {
     const store = {
+      overrideReview: vi.fn(),
       history: vi.fn(),
       active: vi.fn().mockResolvedValue(attempt),
       start: vi.fn().mockResolvedValue(attempt),
@@ -237,6 +265,7 @@ describe("attempt routes", () => {
   });
   it("rejects client-supplied ownership, type, practice date, and invalid identifiers", async () => {
     const store = {
+      overrideReview: vi.fn(),
       history: vi.fn(),
       active: vi.fn(),
       start: vi.fn(),
@@ -282,7 +311,13 @@ function database() {
     },
     problem: { findFirst: vi.fn().mockResolvedValue({ id: problemId }) },
     practiceSettings: {
-      findUnique: vi.fn().mockResolvedValue({ timeZone: "America/Toronto", resetMinutes: 240 }),
+      findUnique: vi.fn().mockResolvedValue({
+        timeZone: "America/Toronto",
+        resetMinutes: 240,
+        highIntervalDays: 1,
+        mediumIntervalDays: 3,
+        lowIntervalDays: 7,
+      }),
     },
   };
   const client = {
@@ -292,6 +327,139 @@ function database() {
   return { tx, store: createPrismaAttemptStore(client) };
 }
 describe("attempt persistence", () => {
+  it.each([
+    ["INDEPENDENT", null, null],
+    ["ASSISTED", "MEDIUM", "2026-09-11"],
+    ["GAVE_UP", "HIGH", "2026-09-08"],
+    ["INCOMPLETE", "HIGH", "2026-09-08"],
+  ] as const)(
+    "creates review work atomically for %s using current intervals and the attempt date",
+    async (outcome, urgency, due) => {
+      const { tx, store } = database();
+      tx.attempt.findFirst.mockResolvedValue(record);
+      tx.practiceSettings.findUnique.mockResolvedValue({
+        timeZone: "UTC",
+        resetMinutes: 0,
+        highIntervalDays: 2,
+        mediumIntervalDays: 5,
+        lowIntervalDays: 12,
+      });
+      await store.confirm(
+        userId,
+        attempt.id,
+        confirmAttemptSchema.parse({ outcome }),
+        new Date("2026-09-20T12:00:00Z"),
+      );
+      const data = tx.attempt.update.mock.calls[0]?.[0].data;
+      expect(data.confirmedAt).toEqual(new Date("2026-09-20T12:00:00Z"));
+      if (due === null) {
+        expect(data).not.toHaveProperty("review");
+      } else {
+        expect(data.review).toEqual({
+          create: { urgency, generatedDueDate: new Date(`${due}T00:00:00Z`) },
+        });
+        expect(tx.practiceSettings.findUnique).toHaveBeenCalledWith({
+          where: { userProfileId: userId },
+        });
+      }
+    },
+  );
+  it("includes previously recorded help in review urgency", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue({
+      ...record,
+      assistance: [{ type: "CONCEPTUAL_HINT", hintLevel: 1 }],
+    });
+    await store.confirm(
+      userId,
+      attempt.id,
+      confirmAttemptSchema.parse({ outcome: "ASSISTED" }),
+      new Date(),
+    );
+    expect(tx.attempt.update.mock.calls[0]?.[0].data.review.create.urgency).toBe("HIGH");
+  });
+  it("does not recalculate dates or lose overrides on repeated confirmation after settings change", async () => {
+    const { tx, store } = database();
+    const review = {
+      generatedDueDate: new Date("2026-09-09T00:00:00Z"),
+      manualDueDate: new Date("2026-09-15T00:00:00Z"),
+    };
+    tx.attempt.findFirst.mockResolvedValue({
+      ...record,
+      outcome: "ASSISTED",
+      confirmedAt: new Date(),
+      review,
+    });
+    tx.practiceSettings.findUnique.mockResolvedValue({
+      timeZone: "UTC",
+      resetMinutes: 0,
+      highIntervalDays: 30,
+      mediumIntervalDays: 40,
+      lowIntervalDays: 50,
+    });
+    const result = await store.confirm(
+      userId,
+      attempt.id,
+      confirmAttemptSchema.parse({ outcome: "ASSISTED" }),
+      new Date(),
+    );
+    expect(result.review).toEqual({ generatedDueDate: "2026-09-09", manualDueDate: "2026-09-15" });
+    expect(tx.practiceSettings.findUnique).not.toHaveBeenCalled();
+    expect(tx.attempt.update).not.toHaveBeenCalled();
+  });
+  it("rejects confirmation without required settings before persisting", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue(record);
+    tx.practiceSettings.findUnique.mockResolvedValue(null);
+    await expect(
+      store.confirm(
+        userId,
+        attempt.id,
+        confirmAttemptSchema.parse({ outcome: "INCOMPLETE" }),
+        new Date(),
+      ),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(tx.attempt.update).not.toHaveBeenCalled();
+  });
+  it("changes only the manual date and permits returning to the generated date", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue({
+      ...record,
+      confirmedAt: new Date(),
+      review: {
+        generatedDueDate: new Date("2026-09-09T00:00:00Z"),
+        manualDueDate: null,
+      },
+    });
+    for (const date of ["2026-09-18", null]) {
+      await store.overrideReview(userId, attempt.id, date);
+      expect(tx.attempt.update).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: { id: attempt.id, userProfileId: userId },
+          data: {
+            review: {
+              update: { manualDueDate: date === null ? null : new Date(`${date}T00:00:00Z`) },
+            },
+          },
+        }),
+      );
+    }
+    expect(tx.practiceSettings.findUnique).not.toHaveBeenCalled();
+  });
+  it("rejects cross-user overrides and attempts without review work", async () => {
+    const { tx, store } = database();
+    await expect(store.overrideReview(userId, attempt.id, "2026-09-18")).rejects.toMatchObject({
+      statusCode: 404,
+    });
+    expect(tx.attempt.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: attempt.id, userProfileId: userId } }),
+    );
+    tx.attempt.findFirst.mockResolvedValue(record);
+    await expect(store.overrideReview(userId, attempt.id, null)).rejects.toMatchObject({
+      statusCode: 404,
+    });
+    expect(tx.attempt.update).not.toHaveBeenCalled();
+  });
   it("bounds confirmed history, scopes every page to its owner, and excludes hidden fields", async () => {
     const { tx, store } = database();
     const confirmedAt = new Date("2026-09-08T12:00:00.000Z");
@@ -489,7 +657,14 @@ describe("attempt persistence", () => {
       await store.confirm(userId, attempt.id, input, now);
       expect(tx.attempt.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: { ...input, confirmedAt: now, assistance: { create: [] } },
+          data: {
+            ...input,
+            confirmedAt: now,
+            assistance: { create: [] },
+            review: {
+              create: { urgency: "HIGH", generatedDueDate: new Date("2026-09-07T00:00:00Z") },
+            },
+          },
         }),
       );
       tx.attempt.findFirst.mockResolvedValue({
@@ -591,6 +766,9 @@ describe("attempt persistence", () => {
         data: {
           ...input,
           confirmedAt: now,
+          review: {
+            create: { urgency: "HIGH", generatedDueDate: new Date("2026-09-07T00:00:00Z") },
+          },
           assistance: {
             create: [
               { type: "CONCEPTUAL_HINT", hintLevel: 2, source: "SELF_REPORTED", recordedAt: now },

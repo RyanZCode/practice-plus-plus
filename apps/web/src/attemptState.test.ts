@@ -3,6 +3,7 @@ import type { Attempt } from "@practice-plus-plus/contracts";
 import { eligibleProblems, remainingSeconds } from "./attemptState";
 
 const attempt: Attempt = {
+  review: null,
   id: "d3b65a55-1a50-43e1-82e0-e23a263925a5",
   type: "FRESH",
   practiceDate: "2026-09-06",

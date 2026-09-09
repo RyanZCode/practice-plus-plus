@@ -195,6 +195,7 @@ model Attempt {
   notes                String?            @db.VarChar(5000)
   reproducedFromMemory Boolean?           @map("reproduced_from_memory")
   assistance           AssistanceEvent[]
+  review               ReviewObligation?
   userProfile          UserProfile        @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
   problem              Problem            @relation(fields: [problemId], references: [id], onDelete: Restrict)
 
@@ -214,4 +215,20 @@ model AssistanceEvent {
 
   @@index([attemptId])
   @@map("assistance_events")
+}
+
+enum ReviewUrgency {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model ReviewObligation {
+  sourceAttemptId  String        @id @map("source_attempt_id") @db.Uuid
+  urgency          ReviewUrgency
+  generatedDueDate DateTime      @map("generated_due_date") @db.Date
+  manualDueDate    DateTime?     @map("manual_due_date") @db.Date
+  sourceAttempt    Attempt       @relation(fields: [sourceAttemptId], references: [id], onDelete: Cascade)
+
+  @@map("review_obligations")
 }

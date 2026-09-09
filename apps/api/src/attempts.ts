@@ -12,8 +12,13 @@ import {
   type ReportAttempt,
   type ConfirmAttempt,
   type Attempt,
+  reviewOverrideSchema,
 } from "@practice-plus-plus/contracts";
-import { getPracticeDate } from "@practice-plus-plus/scheduling";
+import {
+  calculateDueDate,
+  deriveReviewUrgency,
+  getPracticeDate,
+} from "@practice-plus-plus/scheduling";
 import { Router } from "express";
 
 import { catalogProblemSelect, toCatalogProblem } from "./catalog.js";
@@ -36,12 +41,18 @@ const select = {
   approach: true,
   notes: true,
   reproducedFromMemory: true,
+  review: { select: { generatedDueDate: true, manualDueDate: true } },
   assistance: { select: { type: true, hintLevel: true }, orderBy: { recordedAt: "asc" } },
   problem: { select: catalogProblemSelect },
 } as const;
 type AttemptRecord = Prisma.AttemptGetPayload<{ select: typeof select }>;
 
 export interface AttemptStore {
+  overrideReview(
+    userProfileId: string,
+    attemptId: string,
+    manualDueDate: string | null,
+  ): Promise<Attempt>;
   history(userProfileId: string, query: AttemptHistoryQuery): Promise<AttemptHistoryResponse>;
   report(userProfileId: string, attemptId: string, input: ReportAttempt): Promise<Attempt>;
   active(userProfileId: string): Promise<Attempt | null>;
@@ -95,6 +106,23 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
     });
   }
   return {
+    async overrideReview(userProfileId, attemptId, manualDueDate) {
+      return change(userProfileId, attemptId, async (tx, record) => {
+        if (record.review === null) throw new HttpError(404, "Review not found.");
+        return tx.attempt.update({
+          where: { id: attemptId, userProfileId },
+          data: {
+            review: {
+              update: {
+                manualDueDate:
+                  manualDueDate === null ? null : new Date(`${manualDueDate}T00:00:00.000Z`),
+              },
+            },
+          },
+          select,
+        });
+      });
+    },
     async history(userProfileId, query) {
       const records = await client.attempt.findMany({
         where: {
@@ -210,11 +238,35 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
           return record;
         }
         const { assistance, ...details } = input;
+        const urgency = deriveReviewUrgency({
+          ...input,
+          confirmedAt: now.toISOString(),
+          assistance: [...record.assistance, ...assistance],
+        });
+        let review;
+        if (urgency !== null) {
+          const settings = await tx.practiceSettings.findUnique({ where: { userProfileId } });
+          if (settings === null)
+            throw new HttpError(409, "Save practice settings before confirming.");
+          review = {
+            create: {
+              urgency,
+              generatedDueDate: new Date(
+                `${calculateDueDate(record.practiceDate.toISOString().slice(0, 10), urgency, {
+                  high: settings.highIntervalDays,
+                  medium: settings.mediumIntervalDays,
+                  low: settings.lowIntervalDays,
+                })}T00:00:00.000Z`,
+              ),
+            },
+          };
+        }
         return tx.attempt.update({
           where: { id: attemptId, userProfileId },
           data: {
             ...details,
             confirmedAt: now,
+            ...(review === undefined ? {} : { review }),
             assistance: {
               create: assistance.map((event) => ({
                 ...event,
@@ -297,6 +349,20 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
 
 export function createAttemptRouter(store: AttemptStore, clock = () => new Date()): Router {
   const router = Router();
+  router.put("/:attemptId/review", async (request, response) => {
+    const id = attemptSchema.shape.id.safeParse(request.params.attemptId);
+    const input = reviewOverrideSchema.safeParse(request.body);
+    if (!id.success || !input.success) throw new HttpError(400, "Invalid review override.");
+    response.json(
+      attemptSchema.parse(
+        await store.overrideReview(
+          getApplicationProfile(request).id,
+          id.data,
+          input.data.manualDueDate,
+        ),
+      ),
+    );
+  });
   router.get("/", async (request, response) => {
     const query = attemptHistoryQuerySchema.safeParse(request.query);
     if (!query.success) throw new HttpError(400, "Invalid history page.");
@@ -368,6 +434,13 @@ export function createAttemptRouter(store: AttemptStore, clock = () => new Date(
 function toAttempt(record: AttemptRecord): Attempt {
   return attemptSchema.parse({
     id: record.id,
+    review:
+      record.review === null
+        ? null
+        : {
+            generatedDueDate: record.review.generatedDueDate.toISOString().slice(0, 10),
+            manualDueDate: record.review.manualDueDate?.toISOString().slice(0, 10) ?? null,
+          },
     problem: toCatalogProblem(record.problem),
     type: record.type,
     practiceDate: record.practiceDate.toISOString().slice(0, 10),

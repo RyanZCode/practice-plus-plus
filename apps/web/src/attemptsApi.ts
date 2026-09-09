@@ -115,3 +115,14 @@ export async function reportAttempt(
     await request(apiUrl, token, `/attempts/${attemptId}/report-result`, input),
   );
 }
+
+export async function overrideReview(
+  apiUrl: string,
+  token: string,
+  attemptId: string,
+  manualDueDate: string | null,
+): Promise<Attempt> {
+  return attemptSchema.parse(
+    await request(apiUrl, token, `/attempts/${attemptId}/review`, { manualDueDate }, "PUT"),
+  );
+}
