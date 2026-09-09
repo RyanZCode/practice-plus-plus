@@ -235,9 +235,17 @@ export function suggestedOutcome(assistance: Assistance[]): "GAVE_UP" | "ASSISTE
   if (assistance.some((event) => event.type !== "CLARIFICATION")) return "ASSISTED";
   return null;
 }
+export const reviewObligationSchema = z.strictObject({
+  generatedDueDate: z.iso.date(),
+  manualDueDate: z.iso.date().nullable(),
+});
+export type ReviewObligation = z.infer<typeof reviewObligationSchema>;
+export const reviewOverrideSchema = z.strictObject({ manualDueDate: z.iso.date().nullable() });
+
 export const attemptSchema = z.strictObject({
   id: z.string().uuid(),
   patterns: z.array(z.enum(mvpPatternNames)).optional(),
+  review: reviewObligationSchema.nullable().default(null),
   problem: catalogProblemSchema,
   type: z.enum(["FRESH", "REDO"]),
   practiceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
