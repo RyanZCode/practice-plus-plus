@@ -7,6 +7,18 @@ export const reviewRankingReasonSchema = z.discriminatedUnion("code", [
 ]);
 export type ReviewRankingReason = z.infer<typeof reviewRankingReasonSchema>;
 
+export const freshRankingReasonSchema = z.strictObject({
+  code: z.enum([
+    "UNTESTED_PATTERN",
+    "LIMITED_PATTERN_EVIDENCE",
+    "WEAK_PATTERN",
+    "STALE_PATTERN",
+    "FRESH_PRACTICE",
+    "RECENT_PATTERN_CONCENTRATION",
+  ]),
+});
+export type FreshRankingReason = z.infer<typeof freshRankingReasonSchema>;
+
 const wholeDaysSchema = z.number().int().min(1).max(90);
 
 export const practiceSettingsSchema = z
