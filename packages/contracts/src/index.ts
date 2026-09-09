@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+export const reviewRankingReasonSchema = z.discriminatedUnion("code", [
+  z.strictObject({ code: z.literal("OVERDUE_REVIEW"), daysOverdue: z.number().int().positive() }),
+  z.strictObject({ code: z.literal("REVIEW_DUE_TODAY") }),
+  z.strictObject({ code: z.literal("REVIEW_URGENCY"), urgency: z.enum(["LOW", "MEDIUM", "HIGH"]) }),
+]);
+export type ReviewRankingReason = z.infer<typeof reviewRankingReasonSchema>;
+
 const wholeDaysSchema = z.number().int().min(1).max(90);
 
 export const practiceSettingsSchema = z

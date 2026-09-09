@@ -1,5 +1,6 @@
 export { deriveReviewUrgency, type ReviewUrgency } from "./reviewUrgency.js";
 export { calculateDueDate } from "./reviewDueDate.js";
+export { rankDueReviews, type ReviewCandidate, type RankedReview } from "./rankDueReviews.js";
 
 export function getPracticeDate(timestamp: Date, timeZone: string, resetTime: string): string {
   if (Number.isNaN(timestamp.getTime())) {
