@@ -1,6 +1,7 @@
-import type { Attempt, CatalogProblem } from "@practice-plus-plus/contracts";
+import type { Attempt, CatalogProblem, DailyPlan } from "@practice-plus-plus/contracts";
 import { useEffect, useState } from "react";
 import {
+  loadDailyPlan,
   loadActiveAttempt,
   loadProblems,
   loadCatalogPreferences,
@@ -15,6 +16,7 @@ import { AttemptOutcomeForm } from "./AttemptOutcomeForm";
 import { eligibleProblems, remainingSeconds } from "./attemptState";
 
 export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
+  const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [problems, setProblems] = useState<CatalogProblem[]>([]);
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [hidePaid, setHidePaid] = useState(false);
@@ -31,12 +33,14 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
     setLoading(true);
     setError(undefined);
     void Promise.all([
+      loadDailyPlan(apiUrl, token),
       loadProblems(apiUrl, token),
       loadActiveAttempt(apiUrl, token),
       loadCatalogPreferences(apiUrl, token),
     ])
-      .then(([catalog, current, preferences]) => {
+      .then(([dailyPlan, catalog, current, preferences]) => {
         if (active) {
+          setPlan(dailyPlan);
           setProblems(catalog);
           setAttempt(current);
           setHidePaid(preferences.hidePaidProblems);
@@ -189,6 +193,7 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
                   setAttempt(null);
                   setClassifying(false);
                   setSaved(confirmed);
+                  setReload((value) => value + 1);
                 } catch (reason) {
                   setError(message(reason));
                 } finally {
@@ -205,6 +210,58 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
       ) : null}
       {!loading && error === undefined && attempt === null ? (
         <div>
+          {plan === null ? null : (
+            <div className="daily-plan">
+              <h3>Today’s plan · {plan.practiceDate}</h3>
+              <p>
+                {plan.items.filter((item) => item.status === "FINISHED").length} of{" "}
+                {plan.items.length} finished · Target {plan.target}
+              </p>
+              <p className="settings-help">
+                Today’s selections stay fixed. Settings changes apply to the next plan.
+              </p>
+              {plan.items.length === 0 ? (
+                <p>No eligible work is available for today’s plan.</p>
+              ) : (
+                <ul className="problem-list">
+                  {plan.items.map((item) => (
+                    <li key={item.id}>
+                      <div>
+                        <strong>
+                          {item.problem.leetcodeId}. {item.problem.title}
+                        </strong>
+                        <p className="settings-help">
+                          {item.problem.difficulty}
+                          {item.problem.availability === "PAID_ONLY"
+                            ? " · LeetCode Premium required"
+                            : ""}
+                        </p>
+                        <p className="settings-help">{item.explanation}</p>
+                      </div>
+                      {item.status === "FINISHED" ? (
+                        <span>Finished</span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={busy || item.problem.availability === "UNAVAILABLE"}
+                          onClick={() =>
+                            void update(() => startAttempt(apiUrl, token, item.problem.id))
+                          }
+                        >
+                          {item.problem.availability === "UNAVAILABLE"
+                            ? "Unavailable"
+                            : item.status === "ACTIVE"
+                              ? "Resume"
+                              : "Start"}
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          <h3>Problem catalog</h3>
           <label>
             <input
               type="checkbox"

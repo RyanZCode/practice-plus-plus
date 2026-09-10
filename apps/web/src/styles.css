@@ -378,3 +378,7 @@ summary:focus-visible {
   margin: 0.25rem 0 0;
   white-space: pre-wrap;
 }
+
+.daily-plan {
+  margin-bottom: 2rem;
+}

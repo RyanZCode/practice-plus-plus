@@ -42,6 +42,7 @@ model UserProfile {
   hidePaidProblems     Boolean              @default(false) @map("hide_paid_problems")
   createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  dailyPlan            DailyPlan?
   practiceSettings     PracticeSettings?
   attempts             Attempt[]
   catalogImportBatches CatalogImportBatch[]
@@ -87,6 +88,7 @@ model Problem {
   reviewedBy               UserProfile?        @relation("ProblemReviewedBy", fields: [reviewedByUserProfileId], references: [id], onDelete: Restrict)
   publishedBy              UserProfile?        @relation("ProblemPublishedBy", fields: [publishedByUserProfileId], references: [id], onDelete: Restrict)
   problemPatterns          ProblemPattern[]
+  planItems                DailyPlanItem[]
   attempts                 Attempt[]
 
   @@index([importBatchId])
@@ -110,10 +112,11 @@ model CatalogImportBatch {
 }
 
 model Pattern {
-  id              String           @id @default(uuid()) @db.Uuid
-  name            String           @unique @db.VarChar(100)
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id              String               @id @default(uuid()) @db.Uuid
+  name            String               @unique @db.VarChar(100)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  transfers       TransferObligation[]
   aliases         PatternAlias[]
   problemPatterns ProblemPattern[]
 
@@ -178,26 +181,29 @@ enum AssistanceSource {
 }
 
 model Attempt {
-  id                   String             @id @default(uuid()) @db.Uuid
-  userProfileId        String             @map("user_profile_id") @db.Uuid
-  problemId            String             @map("problem_id") @db.Uuid
+  id                   String               @id @default(uuid()) @db.Uuid
+  userProfileId        String               @map("user_profile_id") @db.Uuid
+  problemId            String               @map("problem_id") @db.Uuid
   type                 AttemptType
-  practiceDate         DateTime           @map("practice_date") @db.Date
-  startedAt            DateTime           @map("started_at") @db.Timestamptz(3)
-  timerSkippedAt       DateTime?          @map("timer_skipped_at") @db.Timestamptz(3)
-  confirmedAt          DateTime?          @map("confirmed_at") @db.Timestamptz(3)
-  solutionReviewedAt   DateTime?          @map("solution_reviewed_at") @db.Timestamptz(3)
+  practiceDate         DateTime             @map("practice_date") @db.Date
+  startedAt            DateTime             @map("started_at") @db.Timestamptz(3)
+  timerSkippedAt       DateTime?            @map("timer_skipped_at") @db.Timestamptz(3)
+  confirmedAt          DateTime?            @map("confirmed_at") @db.Timestamptz(3)
+  solutionReviewedAt   DateTime?            @map("solution_reviewed_at") @db.Timestamptz(3)
   outcome              AttemptOutcome?
   confidence           AttemptConfidence?
   optimality           AttemptOptimality?
-  timeSpentSeconds     Int?               @map("time_spent_seconds")
-  approach             String?            @db.VarChar(1000)
-  notes                String?            @db.VarChar(5000)
-  reproducedFromMemory Boolean?           @map("reproduced_from_memory")
+  timeSpentSeconds     Int?                 @map("time_spent_seconds")
+  approach             String?              @db.VarChar(1000)
+  notes                String?              @db.VarChar(5000)
+  reproducedFromMemory Boolean?             @map("reproduced_from_memory")
+  planItems            DailyPlanItem[]
+  transfersCreated     TransferObligation[] @relation("TransferSource")
+  transferAttempt      TransferObligation?  @relation("TransferAttempt")
   assistance           AssistanceEvent[]
   review               ReviewObligation?
-  userProfile          UserProfile        @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
-  problem              Problem            @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  userProfile          UserProfile          @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+  problem              Problem              @relation(fields: [problemId], references: [id], onDelete: Restrict)
 
   @@index([userProfileId, problemId])
   @@index([problemId])
@@ -225,10 +231,63 @@ enum ReviewUrgency {
 
 model ReviewObligation {
   sourceAttemptId  String        @id @map("source_attempt_id") @db.Uuid
+  resolvedAt       DateTime?     @map("resolved_at") @db.Timestamptz(3)
   urgency          ReviewUrgency
   generatedDueDate DateTime      @map("generated_due_date") @db.Date
   manualDueDate    DateTime?     @map("manual_due_date") @db.Date
   sourceAttempt    Attempt       @relation(fields: [sourceAttemptId], references: [id], onDelete: Cascade)
 
   @@map("review_obligations")
+}
+
+model TransferObligation {
+  id                    String          @id @default(uuid()) @db.Uuid
+  sourceAttemptId       String          @map("source_attempt_id") @db.Uuid
+  patternId             String          @map("pattern_id") @db.Uuid
+  generatedEligibleDate DateTime        @map("generated_eligible_date") @db.Date
+  manualEligibleDate    DateTime?       @map("manual_eligible_date") @db.Date
+  attemptId             String?         @unique @map("attempt_id") @db.Uuid
+  resolvedAt            DateTime?       @map("resolved_at") @db.Timestamptz(3)
+  sourceAttempt         Attempt         @relation("TransferSource", fields: [sourceAttemptId], references: [id], onDelete: Cascade)
+  pattern               Pattern         @relation(fields: [patternId], references: [id], onDelete: Restrict)
+  attempt               Attempt?        @relation("TransferAttempt", fields: [attemptId], references: [id], onDelete: SetNull)
+  planItems             DailyPlanItem[]
+
+  @@index([sourceAttemptId])
+  @@index([patternId])
+  @@map("transfer_obligations")
+}
+
+model DailyPlan {
+  userProfileId String          @id @map("user_profile_id") @db.Uuid
+  practiceDate  DateTime        @map("practice_date") @db.Date
+  target        Int             @db.SmallInt
+  timeZone      String          @map("time_zone") @db.VarChar(100)
+  resetMinutes  Int             @map("reset_minutes") @db.SmallInt
+  userProfile   UserProfile     @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+  items         DailyPlanItem[]
+
+  @@map("daily_plans")
+}
+
+model DailyPlanItem {
+  id            String              @id @default(uuid()) @db.Uuid
+  userProfileId String              @map("user_profile_id") @db.Uuid
+  position      Int                 @db.SmallInt
+  problemId     String              @map("problem_id") @db.Uuid
+  kind          String              @db.VarChar(20)
+  reason        String              @db.VarChar(30)
+  attemptId     String?             @map("attempt_id") @db.Uuid
+  transferId    String?             @map("transfer_id") @db.Uuid
+  plan          DailyPlan           @relation(fields: [userProfileId], references: [userProfileId], onDelete: Cascade)
+  problem       Problem             @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  attempt       Attempt?            @relation(fields: [attemptId], references: [id], onDelete: SetNull)
+  transfer      TransferObligation? @relation(fields: [transferId], references: [id], onDelete: SetNull)
+
+  @@unique([userProfileId, position])
+  @@unique([userProfileId, problemId])
+  @@index([problemId])
+  @@index([attemptId])
+  @@index([transferId])
+  @@map("daily_plan_items")
 }

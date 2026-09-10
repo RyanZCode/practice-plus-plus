@@ -303,3 +303,22 @@ export const attemptHistoryResponseSchema = z.strictObject({
   next: attemptHistoryQuerySchema.nullable(),
 });
 export type AttemptHistoryResponse = z.infer<typeof attemptHistoryResponseSchema>;
+
+export const dailyPlanSchema = z
+  .strictObject({
+    practiceDate: z.iso.date(),
+    target: z.number().int().min(1).max(10),
+    items: z
+      .array(
+        z.strictObject({
+          id: z.string().uuid(),
+          problem: catalogProblemSchema,
+          kind: z.enum(["DIAGNOSTIC", "FRESH", "REDO", "TRANSFER"]),
+          explanation: z.string(),
+          status: z.enum(["PENDING", "ACTIVE", "FINISHED"]),
+        }),
+      )
+      .max(10),
+  })
+  .refine((plan) => plan.items.length <= plan.target);
+export type DailyPlan = z.infer<typeof dailyPlanSchema>;
