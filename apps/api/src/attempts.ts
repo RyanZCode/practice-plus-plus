@@ -22,6 +22,7 @@ import {
 import { Router } from "express";
 
 import { catalogProblemSelect, toCatalogProblem } from "./catalog.js";
+import { practiceDateFor } from "./dailyPlan.js";
 import { HttpError } from "./errors.js";
 import type { PrismaClient, Prisma } from "./generated/prisma/client.js";
 import { getApplicationProfile } from "./profile.js";
@@ -261,6 +262,17 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
             },
           };
         }
+        await tx.reviewObligation.updateMany({
+          where: {
+            resolvedAt: null,
+            sourceAttempt: { userProfileId, problemId: record.problem.id, id: { not: attemptId } },
+          },
+          data: { resolvedAt: now },
+        });
+        await tx.transferObligation.updateMany({
+          where: { attemptId, resolvedAt: null, sourceAttempt: { userProfileId } },
+          data: { resolvedAt: now },
+        });
         return tx.attempt.update({
           where: { id: attemptId, userProfileId },
           data: {
@@ -327,6 +339,35 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
           },
           select,
         });
+        const plan = await tx.dailyPlan.findUnique({
+          where: { userProfileId },
+          select: { practiceDate: true, timeZone: true, resetMinutes: true },
+        });
+        if (
+          plan !== null &&
+          practiceDateFor(now, plan) === plan.practiceDate.toISOString().slice(0, 10)
+        ) {
+          const item = await tx.dailyPlanItem.findFirst({
+            where: { userProfileId, problemId, attemptId: null },
+          });
+          if (item !== null) {
+            await tx.dailyPlanItem.update({
+              where: { id: item.id },
+              data: { attemptId: record.id },
+            });
+            if (item.transferId !== null) {
+              await tx.transferObligation.updateMany({
+                where: {
+                  id: item.transferId,
+                  attemptId: null,
+                  resolvedAt: null,
+                  sourceAttempt: { userProfileId },
+                },
+                data: { attemptId: record.id },
+              });
+            }
+          }
+        }
         return present(tx, userProfileId, record);
       });
     },

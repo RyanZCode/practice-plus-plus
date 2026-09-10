@@ -300,6 +300,10 @@ describe("attempt routes", () => {
 });
 function database() {
   const tx = {
+    dailyPlan: { findUnique: vi.fn().mockResolvedValue(null) },
+    dailyPlanItem: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn() },
+    reviewObligation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    transferObligation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     problemPattern: { findMany: vi.fn().mockResolvedValue([]) },
     $queryRaw: vi.fn().mockResolvedValue([]),
     attempt: {
@@ -327,6 +331,73 @@ function database() {
   return { tx, store: createPrismaAttemptStore(client) };
 }
 describe("attempt persistence", () => {
+  it("binds matching plan work and transfers when an attempt starts", async () => {
+    const { tx, store } = database();
+    tx.dailyPlan.findUnique.mockResolvedValue({
+      practiceDate: new Date("2026-09-09T00:00:00Z"),
+      timeZone: "UTC",
+      resetMinutes: 0,
+    });
+    tx.dailyPlanItem.findFirst.mockResolvedValue({ id: "item", transferId: "transfer" });
+    await store.start(userId, problemId, new Date("2026-09-09T12:00:00Z"));
+    expect(tx.dailyPlanItem.findFirst).toHaveBeenCalledWith({
+      where: { userProfileId: userId, problemId, attemptId: null },
+    });
+    expect(tx.dailyPlanItem.update).toHaveBeenCalledWith({
+      where: { id: "item" },
+      data: { attemptId: attempt.id },
+    });
+    expect(tx.transferObligation.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "transfer",
+        attemptId: null,
+        resolvedAt: null,
+        sourceAttempt: { userProfileId: userId },
+      },
+      data: { attemptId: attempt.id },
+    });
+  });
+  it("does not attach a new attempt to yesterday's plan", async () => {
+    const { tx, store } = database();
+    tx.dailyPlan.findUnique.mockResolvedValue({
+      practiceDate: new Date("2026-09-08T00:00:00Z"),
+      timeZone: "UTC",
+      resetMinutes: 0,
+    });
+    await store.start(userId, problemId, new Date("2026-09-09T12:00:00Z"));
+    expect(tx.dailyPlanItem.update).not.toHaveBeenCalled();
+  });
+  it("retires old reviews and fulfills bound transfers on confirmation only", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue(record);
+    const now = new Date("2026-09-10T12:00:00Z");
+    await store.confirm(
+      userId,
+      attempt.id,
+      confirmAttemptSchema.parse({ outcome: "INCOMPLETE" }),
+      now,
+    );
+    expect(tx.reviewObligation.updateMany).toHaveBeenCalledWith({
+      where: {
+        resolvedAt: null,
+        sourceAttempt: { userProfileId: userId, problemId, id: { not: attempt.id } },
+      },
+      data: { resolvedAt: now },
+    });
+    expect(tx.transferObligation.updateMany).toHaveBeenCalledWith({
+      where: { attemptId: attempt.id, resolvedAt: null, sourceAttempt: { userProfileId: userId } },
+      data: { resolvedAt: now },
+    });
+    tx.attempt.findFirst.mockResolvedValue({ ...record, confirmedAt: now, outcome: "INCOMPLETE" });
+    await store.confirm(
+      userId,
+      attempt.id,
+      confirmAttemptSchema.parse({ outcome: "INCOMPLETE" }),
+      now,
+    );
+    expect(tx.reviewObligation.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.transferObligation.updateMany).toHaveBeenCalledTimes(1);
+  });
   it.each([
     ["INDEPENDENT", null, null],
     ["ASSISTED", "MEDIUM", "2026-09-11"],

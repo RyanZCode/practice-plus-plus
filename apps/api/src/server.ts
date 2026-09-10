@@ -1,3 +1,4 @@
+import { createPrismaDailyPlanStore } from "./dailyPlan.js";
 import { createApp } from "./app.js";
 import { createPrismaAttemptStore } from "./attempts.js";
 import { createSupabaseAccessTokenVerifier } from "./auth.js";
@@ -15,6 +16,7 @@ const logger = createLogger();
 const database = createDatabase(config.databaseUrl);
 const app = createApp({
   authentication: {
+    dailyPlanStore: createPrismaDailyPlanStore(database),
     attemptStore: createPrismaAttemptStore(database),
     catalogStore: createPrismaCatalogStore(database),
     catalogImportStore: createPrismaCatalogImportStore(database),

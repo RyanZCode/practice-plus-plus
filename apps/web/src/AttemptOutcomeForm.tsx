@@ -158,14 +158,14 @@ export function AttemptOutcomeForm({
                 required !== null || attempt.outcome === "ASSISTED" || attempt.outcome === "GAVE_UP"
               }
             >
-              Independent — solved without substantive help
+              Independent: solved without substantive help
             </option>
             <option value="ASSISTED" disabled={reviewed || attempt.outcome === "GAVE_UP"}>
-              Assisted — solved with help
+              Assisted: solved with help
             </option>
             <option value="GAVE_UP">Gave up</option>
             <option value="INCOMPLETE" disabled={reviewed || attempt.outcome !== null}>
-              Incomplete — stopped without a result
+              Incomplete: stopped without a result
             </option>
           </select>
         </label>

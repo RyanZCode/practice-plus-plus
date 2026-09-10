@@ -1,3 +1,4 @@
+import { createDailyPlanRouter, type DailyPlanStore } from "./dailyPlan.js";
 import express, { type Express } from "express";
 import cors from "cors";
 import type { Logger } from "pino";
@@ -16,6 +17,7 @@ import { getApplicationProfile, resolveApplicationProfile, type ProfileStore } f
 import { createSettingsRouter, type SettingsStore } from "./settings.js";
 
 interface AuthenticationOptions {
+  readonly dailyPlanStore?: DailyPlanStore;
   readonly attemptStore?: AttemptStore;
   readonly catalogStore?: CatalogStore;
   readonly catalogImportStore?: CatalogImportStore;
@@ -60,6 +62,15 @@ export function createApp(options: AppOptions = {}): Express {
     app.get("/profile", authenticate, resolveProfile, (request, response) => {
       response.json({ id: getApplicationProfile(request).id });
     });
+
+    if (options.authentication.dailyPlanStore !== undefined) {
+      app.use(
+        "/daily-plan",
+        authenticate,
+        resolveProfile,
+        createDailyPlanRouter(options.authentication.dailyPlanStore),
+      );
+    }
 
     if (options.authentication.attemptStore !== undefined) {
       app.use(
