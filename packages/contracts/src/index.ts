@@ -237,7 +237,18 @@ export const assistanceSchema = z
   .refine((value) => value.type === "CONCEPTUAL_HINT" || value.hintLevel === null, {
     message: "Hint level applies only to conceptual hints.",
   });
+export const redoNextActionSchema = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.literal("REPEAT") }),
+  z.strictObject({ type: z.literal("COMPLETE") }),
+  z.strictObject({ type: z.literal("CUSTOM_DATE"), dueDate: z.iso.date() }),
+  z.strictObject({
+    type: z.literal("TRANSFER"),
+    pattern: z.enum(mvpPatternNames),
+    dueDate: z.iso.date().optional(),
+  }),
+]);
 export const confirmAttemptSchema = z.strictObject({
+  nextAction: redoNextActionSchema.optional(),
   outcome: attemptOutcomeSchema,
   confidence: z.enum(["CONFIDENT", "SHAKY"]).nullable().default(null),
   optimality: z.enum(["OPTIMAL", "SUBOPTIMAL", "UNKNOWN"]).nullable().default(null),
@@ -262,6 +273,7 @@ export type ReviewObligation = z.infer<typeof reviewObligationSchema>;
 export const reviewOverrideSchema = z.strictObject({ manualDueDate: z.iso.date().nullable() });
 
 export const attemptSchema = z.strictObject({
+  nextAction: redoNextActionSchema.optional(),
   id: z.string().uuid(),
   patterns: z.array(z.enum(mvpPatternNames)).optional(),
   review: reviewObligationSchema.nullable().default(null),

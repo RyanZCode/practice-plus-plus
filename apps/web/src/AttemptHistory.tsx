@@ -82,6 +82,16 @@ export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: strin
                 review={attempt.review}
               />
             ) : null}
+            {attempt.nextAction?.type === "COMPLETE" ? <p>Completed with no follow-up.</p> : null}
+            {attempt.nextAction?.type === "TRANSFER" ? (
+              <p>
+                Fresh {attempt.nextAction.pattern} problem:{" "}
+                {attempt.nextAction.dueDate
+                  ? `eligible from ${attempt.nextAction.dueDate}`
+                  : "eligible 7 calendar days after the practice date"}
+                .
+              </p>
+            ) : null}
             <details>
               <summary>Attempt details</summary>
               <dl>

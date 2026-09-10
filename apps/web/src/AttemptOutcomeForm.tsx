@@ -1,5 +1,6 @@
 import {
   suggestedOutcome,
+  redoNextActionSchema,
   type Assistance,
   type Attempt,
   type ConfirmAttempt,
@@ -31,6 +32,10 @@ export function AttemptOutcomeForm({
   );
   const [assistance, setAssistance] = useState<Assistance[]>([]);
   const [reproduced, setReproduced] = useState<boolean | null>(null);
+  const [selectedAction, setSelectedAction] = useState<string>();
+  const successfulRedo =
+    attempt.type === "REDO" && (outcome === "INDEPENDENT" || outcome === "ASSISTED");
+  const nextActionType = selectedAction ?? (outcome === "ASSISTED" ? "REPEAT" : "");
   const required = suggestedOutcome([...attempt.assistance, ...assistance]);
   const reviewed = required === "GAVE_UP";
   const canConfirm = outcome === "INCOMPLETE" || attempt.outcome !== null;
@@ -55,6 +60,18 @@ export function AttemptOutcomeForm({
         const text = (name: string) => String(data.get(name) ?? "").trim() || null;
         const minutes = text("minutes");
         void onConfirm({
+          ...(successfulRedo
+            ? {
+                nextAction: redoNextActionSchema.parse({
+                  type: nextActionType,
+                  ...(nextActionType === "TRANSFER" ? { pattern: text("transferPattern") } : {}),
+                  ...(nextActionType === "CUSTOM_DATE" ||
+                  (nextActionType === "TRANSFER" && text("dueDate") !== null)
+                    ? { dueDate: text("dueDate") }
+                    : {}),
+                }),
+              }
+            : {}),
           outcome,
           confidence: text("confidence") as ConfirmAttempt["confidence"],
           optimality: text("optimality") as ConfirmAttempt["optimality"],
@@ -186,6 +203,65 @@ export function AttemptOutcomeForm({
             longer be incomplete.
           </p>
         ) : null}
+        {canConfirm && successfulRedo ? (
+          <fieldset>
+            <legend>Next action</legend>
+            {outcome === "ASSISTED" ? (
+              <p>
+                Repeating the problem is suggested after an assisted solve. You can choose another
+                action.
+              </p>
+            ) : null}
+            <label>
+              After this redo
+              <select
+                required
+                value={nextActionType}
+                onChange={(event) => setSelectedAction(event.target.value)}
+              >
+                <option value="" disabled>
+                  Select a next action
+                </option>
+                <option value="REPEAT">Repeat this problem using my review interval</option>
+                <option value="TRANSFER">Practice a fresh problem with the same pattern</option>
+                <option value="COMPLETE">Complete with no follow-up</option>
+                <option value="CUSTOM_DATE">Repeat this problem on a custom date</option>
+              </select>
+            </label>
+            {nextActionType === "TRANSFER" ? (
+              <>
+                <label>
+                  Pattern to practice
+                  <select name="transferPattern" required defaultValue="">
+                    <option value="" disabled>
+                      Select a revealed pattern
+                    </option>
+                    {attempt.patterns?.map((pattern) => (
+                      <option key={pattern}>{pattern}</option>
+                    ))}
+                  </select>
+                </label>
+                <p>
+                  Eligible 7 calendar days after this attempt's practice date. The daily plan will
+                  choose the problem when space and a matching fresh problem are available.
+                </p>
+              </>
+            ) : null}
+            {nextActionType === "TRANSFER" || nextActionType === "CUSTOM_DATE" ? (
+              <label>
+                {nextActionType === "TRANSFER"
+                  ? "Eligibility date override (optional)"
+                  : "Review date"}
+                <input
+                  key={nextActionType}
+                  type="date"
+                  name="dueDate"
+                  required={nextActionType === "CUSTOM_DATE"}
+                />
+              </label>
+            ) : null}
+          </fieldset>
+        ) : null}
         {canConfirm ? (
           <details>
             <summary>Optional details</summary>
@@ -225,7 +301,7 @@ export function AttemptOutcomeForm({
             type="submit"
             disabled={busy || outcome === "" || (reviewed && reproduced === null)}
           >
-            Confirm outcome
+            {successfulRedo ? "Confirm outcome and next action" : "Confirm outcome"}
           </button>
         ) : null}
       </fieldset>
