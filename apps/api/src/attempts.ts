@@ -13,6 +13,7 @@ import {
   type ConfirmAttempt,
   type Attempt,
   reviewOverrideSchema,
+  redoNextActionSchema,
 } from "@practice-plus-plus/contracts";
 import {
   calculateDueDate,
@@ -28,6 +29,7 @@ import type { PrismaClient, Prisma } from "./generated/prisma/client.js";
 import { getApplicationProfile } from "./profile.js";
 
 const select = {
+  nextAction: true,
   id: true,
   type: true,
   practiceDate: true,
@@ -236,14 +238,65 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
           if (record.outcome !== input.outcome) {
             throw new HttpError(409, "This attempt is already confirmed with a different outcome.");
           }
+          if (
+            JSON.stringify(
+              record.nextAction == null ? undefined : redoNextActionSchema.parse(record.nextAction),
+            ) !== JSON.stringify(input.nextAction)
+          ) {
+            throw new HttpError(
+              409,
+              "This attempt is already confirmed with a different next action.",
+            );
+          }
           return record;
         }
-        const { assistance, ...details } = input;
-        const urgency = deriveReviewUrgency({
+        const { assistance, nextAction, ...details } = input;
+        const successfulRedo =
+          record.type === "REDO" &&
+          (input.outcome === "INDEPENDENT" || input.outcome === "ASSISTED");
+        if (successfulRedo && nextAction === undefined) {
+          throw new HttpError(400, "Accept a next action before confirming this redo.");
+        }
+        if (!successfulRedo && nextAction !== undefined) {
+          throw new HttpError(400, "Next actions apply only to successful redos.");
+        }
+        const derivedUrgency = deriveReviewUrgency({
           ...input,
           confirmedAt: now.toISOString(),
           assistance: [...record.assistance, ...assistance],
         });
+        const urgency =
+          nextAction === undefined
+            ? derivedUrgency
+            : nextAction.type === "REPEAT" || nextAction.type === "CUSTOM_DATE"
+              ? (derivedUrgency ?? "LOW")
+              : null;
+        let transfer;
+        if (nextAction?.type === "TRANSFER") {
+          const tags = await tx.problemPattern.findMany({
+            where: { problemId: record.problem.id, pattern: { name: nextAction.pattern } },
+            select: { patternId: true },
+          });
+          const tag = tags[0];
+          if (tag === undefined) throw new HttpError(400, "Choose a pattern from this problem.");
+          transfer = {
+            create: {
+              patternId: tag.patternId,
+              generatedEligibleDate: new Date(
+                `${calculateDueDate(record.practiceDate.toISOString().slice(0, 10), "LOW", {
+                  high: 7,
+                  medium: 7,
+                  low: 7,
+                })}T00:00:00.000Z`,
+              ),
+              ...(nextAction.dueDate === undefined
+                ? {}
+                : {
+                    manualEligibleDate: new Date(`${nextAction.dueDate}T00:00:00.000Z`),
+                  }),
+            },
+          };
+        }
         let review;
         if (urgency !== null) {
           const settings = await tx.practiceSettings.findUnique({ where: { userProfileId } });
@@ -252,6 +305,11 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
           review = {
             create: {
               urgency,
+              ...(nextAction?.type === "CUSTOM_DATE"
+                ? {
+                    manualDueDate: new Date(`${nextAction.dueDate}T00:00:00.000Z`),
+                  }
+                : {}),
               generatedDueDate: new Date(
                 `${calculateDueDate(record.practiceDate.toISOString().slice(0, 10), urgency, {
                   high: settings.highIntervalDays,
@@ -277,6 +335,8 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
           where: { id: attemptId, userProfileId },
           data: {
             ...details,
+            ...(nextAction === undefined ? {} : { nextAction }),
+            ...(transfer === undefined ? {} : { transfersCreated: transfer }),
             confirmedAt: now,
             ...(review === undefined ? {} : { review }),
             assistance: {
@@ -474,6 +534,7 @@ export function createAttemptRouter(store: AttemptStore, clock = () => new Date(
 
 function toAttempt(record: AttemptRecord): Attempt {
   return attemptSchema.parse({
+    ...(record.nextAction == null ? {} : { nextAction: record.nextAction }),
     id: record.id,
     review:
       record.review === null

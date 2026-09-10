@@ -331,6 +331,147 @@ function database() {
   return { tx, store: createPrismaAttemptStore(client) };
 }
 describe("attempt persistence", () => {
+  it.each(["INDEPENDENT", "ASSISTED"])(
+    "requires an accepted action for a %s redo",
+    async (outcome) => {
+      const { tx, store } = database();
+      tx.attempt.findFirst.mockResolvedValue({ ...record, type: "REDO" });
+      await expect(
+        store.confirm(userId, attempt.id, confirmAttemptSchema.parse({ outcome }), new Date()),
+      ).rejects.toThrow("Accept a next action");
+      expect(tx.attempt.update).not.toHaveBeenCalled();
+      expect(tx.reviewObligation.updateMany).not.toHaveBeenCalled();
+    },
+  );
+  it.each(["INDEPENDENT", "ASSISTED"])(
+    "applies each accepted action for a %s redo without duplicate follow-up",
+    async (outcome) => {
+      for (const nextAction of [
+        { type: "REPEAT" },
+        { type: "CUSTOM_DATE", dueDate: "2026-10-01" },
+        { type: "COMPLETE" },
+        { type: "TRANSFER", pattern: "Arrays & Hashing" },
+        { type: "TRANSFER", pattern: "Arrays & Hashing", dueDate: "2026-10-02" },
+      ]) {
+        const { tx, store } = database();
+        tx.attempt.findFirst.mockResolvedValue({ ...record, type: "REDO" });
+        tx.problemPattern.findMany.mockResolvedValue([
+          { patternId: "pattern-id", pattern: { name: "Arrays & Hashing" } },
+        ]);
+        tx.practiceSettings.findUnique.mockResolvedValue({
+          highIntervalDays: 2,
+          mediumIntervalDays: 5,
+          lowIntervalDays: 12,
+        });
+        const input = confirmAttemptSchema.parse({
+          outcome,
+          nextAction,
+          assistance: outcome === "ASSISTED" ? [{ type: "DEBUGGING", hintLevel: null }] : [],
+        });
+        const now = new Date("2026-09-10T12:00:00Z");
+        await store.confirm(userId, attempt.id, input, now);
+        const data = tx.attempt.update.mock.calls[0]?.[0].data;
+        expect(data).toMatchObject({ outcome, nextAction, confirmedAt: now });
+        expect(data.assistance.create).toHaveLength(input.assistance.length);
+        if (nextAction.type === "REPEAT" || nextAction.type === "CUSTOM_DATE") {
+          expect(data.review.create).toEqual({
+            urgency: outcome === "INDEPENDENT" ? "LOW" : "MEDIUM",
+            generatedDueDate: new Date(
+              outcome === "INDEPENDENT" ? "2026-09-18T00:00:00Z" : "2026-09-11T00:00:00Z",
+            ),
+            ...(nextAction.type === "CUSTOM_DATE"
+              ? { manualDueDate: new Date("2026-10-01T00:00:00Z") }
+              : {}),
+          });
+          expect(data.transfersCreated).toBeUndefined();
+        } else {
+          expect(data.review).toBeUndefined();
+          if (nextAction.type === "TRANSFER") {
+            expect(data.transfersCreated.create).toEqual({
+              patternId: "pattern-id",
+              generatedEligibleDate: new Date("2026-09-13T00:00:00Z"),
+              ...(nextAction.dueDate
+                ? { manualEligibleDate: new Date("2026-10-02T00:00:00Z") }
+                : {}),
+            });
+            expect(tx.problemPattern.findMany).toHaveBeenCalledWith({
+              where: { problemId, pattern: { name: "Arrays & Hashing" } },
+              select: { patternId: true },
+            });
+          } else expect(data.transfersCreated).toBeUndefined();
+        }
+        tx.attempt.findFirst.mockResolvedValue({
+          ...record,
+          type: "REDO",
+          outcome,
+          confirmedAt: now,
+          nextAction,
+        });
+        await store.confirm(userId, attempt.id, input, now);
+        expect(tx.attempt.update).toHaveBeenCalledTimes(1);
+        expect(tx.reviewObligation.updateMany).toHaveBeenCalledTimes(1);
+        await expect(
+          store.confirm(
+            userId,
+            attempt.id,
+            confirmAttemptSchema.parse({
+              ...input,
+              nextAction:
+                nextAction.type === "COMPLETE" ? { type: "REPEAT" } : { type: "COMPLETE" },
+            }),
+            now,
+          ),
+        ).rejects.toThrow("different next action");
+      }
+    },
+  );
+  it("rejects transfers to patterns outside the source problem", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue({ ...record, type: "REDO" });
+    await expect(
+      store.confirm(
+        userId,
+        attempt.id,
+        confirmAttemptSchema.parse({
+          outcome: "INDEPENDENT",
+          nextAction: { type: "TRANSFER", pattern: "Trees" },
+        }),
+        new Date(),
+      ),
+    ).rejects.toThrow("Choose a pattern");
+    expect(tx.attempt.update).not.toHaveBeenCalled();
+    expect(tx.reviewObligation.updateMany).not.toHaveBeenCalled();
+  });
+  it.each(["GAVE_UP", "INCOMPLETE"])(
+    "keeps automatic follow-up for %s redos and rejects a next action",
+    async (outcome) => {
+      const { tx, store } = database();
+      tx.attempt.findFirst.mockResolvedValue({ ...record, type: "REDO" });
+      await expect(
+        store.confirm(
+          userId,
+          attempt.id,
+          confirmAttemptSchema.parse({ outcome, nextAction: { type: "COMPLETE" } }),
+          new Date(),
+        ),
+      ).rejects.toThrow("only to successful redos");
+      await store.confirm(userId, attempt.id, confirmAttemptSchema.parse({ outcome }), new Date());
+      expect(tx.attempt.update.mock.calls[0]?.[0].data.review.create.urgency).toBe("HIGH");
+    },
+  );
+  it("rejects redo actions on fresh attempts", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue(record);
+    await expect(
+      store.confirm(
+        userId,
+        attempt.id,
+        confirmAttemptSchema.parse({ outcome: "INDEPENDENT", nextAction: { type: "REPEAT" } }),
+        new Date(),
+      ),
+    ).rejects.toThrow("only to successful redos");
+    expect(tx.attempt.update).not.toHaveBeenCalled();
+  });
   it("binds matching plan work and transfers when an attempt starts", async () => {
     const { tx, store } = database();
     tx.dailyPlan.findUnique.mockResolvedValue({

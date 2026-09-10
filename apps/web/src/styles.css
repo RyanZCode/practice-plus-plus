@@ -321,6 +321,7 @@ button:disabled {
 .outcome-form select,
 .outcome-form textarea,
 .outcome-form input[type="number"],
+.outcome-form input[type="date"],
 .review-date-form input {
   display: block;
   width: 100%;

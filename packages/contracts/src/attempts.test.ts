@@ -2,6 +2,18 @@ import { describe, expect, it } from "vitest";
 import { confirmAttemptSchema, suggestedOutcome } from "./index.js";
 
 describe("attempt confirmation", () => {
+  it.each([
+    { type: "CUSTOM_DATE" },
+    { type: "CUSTOM_DATE", dueDate: "2026-02-30" },
+    { type: "TRANSFER", pattern: "secret" },
+    { type: "TRANSFER" },
+    { type: "REPEAT", dueDate: "2026-09-12" },
+    { type: "COMPLETE", pattern: "Trees" },
+  ])("rejects malformed next actions %j", (nextAction) => {
+    expect(confirmAttemptSchema.safeParse({ outcome: "INDEPENDENT", nextAction }).success).toBe(
+      false,
+    );
+  });
   it.each(["INDEPENDENT", "ASSISTED", "GAVE_UP", "INCOMPLETE"])(
     "accepts %s without optional details",
     (outcome) => {

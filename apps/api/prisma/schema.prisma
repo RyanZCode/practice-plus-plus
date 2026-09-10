@@ -197,6 +197,7 @@ model Attempt {
   approach             String?              @db.VarChar(1000)
   notes                String?              @db.VarChar(5000)
   reproducedFromMemory Boolean?             @map("reproduced_from_memory")
+  nextAction           Json?                @map("next_action")
   planItems            DailyPlanItem[]
   transfersCreated     TransferObligation[] @relation("TransferSource")
   transferAttempt      TransferObligation?  @relation("TransferAttempt")
