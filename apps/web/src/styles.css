@@ -211,6 +211,19 @@ button:disabled {
   border-radius: 0.75rem;
 }
 
+.key-settings fieldset label {
+  display: flex;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.key-settings input[type="radio"] {
+  min-height: auto;
+  margin: 0;
+  padding: 0;
+  accent-color: #3730a3;
+}
+
 .interval-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

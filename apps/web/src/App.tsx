@@ -2,6 +2,7 @@ import { practiceSettingsSchema, type PracticeSettings } from "@practice-plus-pl
 import { useEffect, useState, type FormEvent } from "react";
 
 import { useAuth } from "./auth";
+import { BrowserKeySettings } from "./BrowserKeySettings";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { Practice } from "./Practice";
 import { AttemptHistory } from "./AttemptHistory";
@@ -321,6 +322,9 @@ function AccountPage({ apiUrl }: AppProps) {
               {isSaving ? "Saving…" : isOnboarding ? "Start practicing" : "Save settings"}
             </button>
           </form>
+        ) : null}
+        {!isLoading && !loadFailed && !isOnboarding && showSettings ? (
+          <BrowserKeySettings key={session.user.id} />
         ) : null}
       </section>
     </main>
