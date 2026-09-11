@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserKeyStore } from "./browserKey";
 
 import {
   authErrorState,
@@ -18,6 +19,7 @@ import {
 } from "./authState";
 
 interface AuthContextValue {
+  readonly browserKey: ReturnType<typeof createBrowserKeyStore>;
   readonly retry: () => void;
   readonly signIn: (provider: AuthProviderName) => Promise<void>;
   readonly signOut: () => Promise<void>;
@@ -34,29 +36,42 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children, client }: AuthProviderProps) {
   const [state, setState] = useState<AuthState>({ status: "loading" });
   const [retryCount, setRetryCount] = useState(0);
+  const [browserKey] = useState(() => createBrowserKeyStore(() => window.localStorage));
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => browserKey.handleStorageChange(event);
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [browserKey]);
 
   useEffect(() => {
     let active = true;
+    let authEventReceived = false;
+    function updateState(next: AuthState) {
+      browserKey.setUser(next.status === "authenticated" ? next.session.user.id : null);
+      setState(next);
+    }
     const {
       data: { subscription },
     } = client.auth.onAuthStateChange((_event, session) => {
       if (active) {
-        setState(resolveAuthState(session));
+        authEventReceived = true;
+        updateState(resolveAuthState(session));
       }
     });
 
     void client.auth
       .getSession()
       .then(({ data, error }) => {
-        if (!active) {
+        if (!active || authEventReceived) {
           return;
         }
 
-        setState(error === null ? resolveAuthState(data.session) : authErrorState(error));
+        updateState(error === null ? resolveAuthState(data.session) : authErrorState(error));
       })
       .catch((error: unknown) => {
-        if (active) {
-          setState(authErrorState(error));
+        if (active && !authEventReceived) {
+          updateState(authErrorState(error));
         }
       });
 
@@ -64,7 +79,7 @@ export function AuthProvider({ children, client }: AuthProviderProps) {
       active = false;
       subscription.unsubscribe();
     };
-  }, [client, retryCount]);
+  }, [browserKey, client, retryCount]);
 
   const retry = useCallback(() => {
     setState({ status: "loading" });
@@ -86,6 +101,8 @@ export function AuthProvider({ children, client }: AuthProviderProps) {
   );
 
   const signOut = useCallback(async () => {
+    browserKey.setUser(null);
+    setState({ status: "unauthenticated" });
     const { error } = await client.auth.signOut({ scope: "local" });
 
     setState({ status: "unauthenticated" });
@@ -93,9 +110,12 @@ export function AuthProvider({ children, client }: AuthProviderProps) {
     if (error !== null) {
       throw error;
     }
-  }, [client]);
+  }, [browserKey, client]);
 
-  const value = useMemo(() => ({ retry, signIn, signOut, state }), [retry, signIn, signOut, state]);
+  const value = useMemo(
+    () => ({ browserKey, retry, signIn, signOut, state }),
+    [browserKey, retry, signIn, signOut, state],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
