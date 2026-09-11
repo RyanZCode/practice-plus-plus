@@ -14,6 +14,7 @@ import { handleError, notFound } from "./errors.js";
 import { createHealthRouter, type ReadinessCheck } from "./health.js";
 import { createLogger } from "./logger.js";
 import { getApplicationProfile, resolveApplicationProfile, type ProfileStore } from "./profile.js";
+import { getProviders } from "./providers.js";
 import { createSettingsRouter, type SettingsStore } from "./settings.js";
 
 interface AuthenticationOptions {
@@ -61,6 +62,10 @@ export function createApp(options: AppOptions = {}): Express {
 
     app.get("/profile", authenticate, resolveProfile, (request, response) => {
       response.json({ id: getApplicationProfile(request).id });
+    });
+
+    app.get("/ai/providers", authenticate, (_request, response) => {
+      response.json(getProviders());
     });
 
     if (options.authentication.dailyPlanStore !== undefined) {
