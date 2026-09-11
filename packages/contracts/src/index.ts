@@ -1,5 +1,24 @@
 import { z } from "zod";
 
+export const providerIdSchema = z.enum(["openai"]);
+export type ProviderId = z.infer<typeof providerIdSchema>;
+
+export const providerSelectionSchema = z.strictObject({
+  providerId: providerIdSchema,
+  model: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/),
+});
+export type ProviderSelection = z.infer<typeof providerSelectionSchema>;
+
+export const providersResponseSchema = z.strictObject({
+  providers: z.array(z.strictObject({ id: providerIdSchema, name: z.string() })),
+});
+export type ProvidersResponse = z.infer<typeof providersResponseSchema>;
+
 export const reviewRankingReasonSchema = z.discriminatedUnion("code", [
   z.strictObject({ code: z.literal("OVERDUE_REVIEW"), daysOverdue: z.number().int().positive() }),
   z.strictObject({ code: z.literal("REVIEW_DUE_TODAY") }),

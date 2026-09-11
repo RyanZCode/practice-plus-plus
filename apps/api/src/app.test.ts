@@ -39,6 +39,24 @@ afterEach(async () => {
 });
 
 describe("API", () => {
+  it("lists only public provider metadata for authenticated users", async () => {
+    const url = await startServer(
+      createApp({
+        authentication: {
+          profileStore: { resolveByAuthSubject: vi.fn() },
+          verifier: { verify: vi.fn().mockResolvedValue({ subject: "verified-subject" }) },
+        },
+        logger: pino({ level: "silent" }),
+      }),
+    );
+    expect((await fetch(`${url}/ai/providers`)).status).toBe(401);
+    const response = await fetch(`${url}/ai/providers`, {
+      headers: { authorization: "Bearer valid-token" },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ providers: [{ id: "openai", name: "OpenAI" }] });
+  });
+
   it("reports liveness", async () => {
     const url = await startServer(createApp({ logger: pino({ level: "silent" }) }));
     const response = await fetch(`${url}/health/live`);
