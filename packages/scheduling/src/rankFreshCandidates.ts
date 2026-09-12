@@ -34,8 +34,54 @@ export function rankFreshCandidates(
   practiceDate: string,
   hidePaidProblems: boolean,
 ): RankedFreshCandidate[] {
-  const today = calendarDay(practiceDate);
   const attempted = new Set(history.map((attempt) => attempt.problemId));
+  const patterns = new Map(
+    getPatternEvidence(
+      [...new Set(candidates.flatMap((candidate) => candidate.patternIds))],
+      history,
+      practiceDate,
+    ).map((pattern) => [pattern.patternId, pattern]),
+  );
+  const difficultyOrder = { EASY: 0, MEDIUM: 1, HARD: 2 };
+
+  return candidates
+    .filter(
+      (candidate) =>
+        candidate.published &&
+        candidate.availability !== "UNAVAILABLE" &&
+        !(hidePaidProblems && candidate.availability === "PAID_ONLY") &&
+        !attempted.has(candidate.id),
+    )
+    .map((candidate) => {
+      const reasons = new Set<FreshRankingReason["code"]>();
+      let totalPriority = 0;
+      for (const patternId of candidate.patternIds) {
+        const pattern = patterns.get(patternId)!;
+        totalPriority += pattern.priority;
+        for (const reason of pattern.reasons) reasons.add(reason.code);
+      }
+      return {
+        candidate,
+        priority: totalPriority / candidate.patternIds.length,
+        reasons: [...reasons].sort().map((code) => ({ code })),
+      };
+    })
+    .sort(
+      (a, b) =>
+        a.priority - b.priority ||
+        difficultyOrder[a.candidate.difficulty] - difficultyOrder[b.candidate.difficulty] ||
+        a.candidate.leetcodeId - b.candidate.leetcodeId,
+    )
+    .map(({ candidate, reasons }) => ({ problemId: candidate.id, reasons }));
+}
+
+export function getPatternEvidence(
+  patternIds: readonly string[],
+  history: readonly FreshRankingAttempt[],
+  practiceDate: string,
+) {
+  const today = calendarDay(practiceDate);
+
   const evidence = history
     .filter((attempt) => {
       const day = calendarDay(attempt.practiceDate);
@@ -55,75 +101,57 @@ export function rankFreshCandidates(
     }
   }
 
-  const patterns = new Map<string, { priority: number; reasons: FreshRankingReason[] }>();
-  const difficultyOrder = { EASY: 0, MEDIUM: 1, HARD: 2 };
-
-  return candidates
-    .filter(
-      (candidate) =>
-        candidate.published &&
-        candidate.availability !== "UNAVAILABLE" &&
-        !(hidePaidProblems && candidate.availability === "PAID_ONLY") &&
-        !attempted.has(candidate.id),
-    )
-    .map((candidate) => {
-      const reasons = new Set<FreshRankingReason["code"]>();
-      let totalPriority = 0;
-      for (const patternId of candidate.patternIds) {
-        let pattern = patterns.get(patternId);
-        if (pattern === undefined) {
-          const attempts = evidence.filter((attempt) => attempt.patternIds.includes(patternId));
-          const fresh = attempts.filter((attempt) => attempt.type === "FRESH").slice(0, 5);
-          const total = fresh.reduce((sum, attempt) => sum + contribution(attempt), 0);
-          const weak = fresh
-            .filter(
-              (attempt) =>
-                attempt.outcome === "ASSISTED" ||
-                attempt.outcome === "GAVE_UP" ||
-                attempt.confidence === "SHAKY" ||
-                attempt.optimality === "SUBOPTIMAL",
-            )
-            .reduce((sum, attempt) => sum + contribution(attempt), 0);
-          const lastDay = attempts.reduce(
-            (latest, attempt) => Math.max(latest, calendarDay(attempt.practiceDate)),
-            -Infinity,
-          );
-          const code: FreshRankingReason["code"] =
-            fresh.length === 0
-              ? "UNTESTED_PATTERN"
-              : fresh.length < 3
-                ? "LIMITED_PATTERN_EVIDENCE"
-                : weak * 2 > total
-                  ? "WEAK_PATTERN"
-                  : today - lastDay >= 30
-                    ? "STALE_PATTERN"
-                    : "FRESH_PRACTICE";
-          let priority =
-            fresh.length < 3 ? 0 : code === "WEAK_PATTERN" ? 1 : code === "STALE_PATTERN" ? 2 : 3;
-          const patternReasons: FreshRankingReason[] = [{ code }];
-          if (recent.length >= 4 && (exposure.get(patternId) ?? 0) * 2 > recent.length * 6) {
-            priority = Math.min(priority + 1, 3);
-            patternReasons.push({ code: "RECENT_PATTERN_CONCENTRATION" });
-          }
-          pattern = { priority, reasons: patternReasons };
-          patterns.set(patternId, pattern);
-        }
-        totalPriority += pattern.priority;
-        for (const reason of pattern.reasons) reasons.add(reason.code);
-      }
-      return {
-        candidate,
-        priority: totalPriority / candidate.patternIds.length,
-        reasons: [...reasons].sort().map((code) => ({ code })),
-      };
-    })
-    .sort(
-      (a, b) =>
-        a.priority - b.priority ||
-        difficultyOrder[a.candidate.difficulty] - difficultyOrder[b.candidate.difficulty] ||
-        a.candidate.leetcodeId - b.candidate.leetcodeId,
-    )
-    .map(({ candidate, reasons }) => ({ problemId: candidate.id, reasons }));
+  return patternIds.map((patternId) => {
+    const attempts = evidence.filter((attempt) => attempt.patternIds.includes(patternId));
+    const fresh = attempts.filter((attempt) => attempt.type === "FRESH").slice(0, 5);
+    const total = fresh.reduce((sum, attempt) => sum + contribution(attempt), 0);
+    const weak = fresh
+      .filter(
+        (attempt) =>
+          attempt.outcome === "ASSISTED" ||
+          attempt.outcome === "GAVE_UP" ||
+          attempt.confidence === "SHAKY" ||
+          attempt.optimality === "SUBOPTIMAL",
+      )
+      .reduce((sum, attempt) => sum + contribution(attempt), 0);
+    const lastDay = attempts.reduce(
+      (latest, attempt) => Math.max(latest, calendarDay(attempt.practiceDate)),
+      -Infinity,
+    );
+    const code: FreshRankingReason["code"] =
+      fresh.length === 0
+        ? "UNTESTED_PATTERN"
+        : fresh.length < 3
+          ? "LIMITED_PATTERN_EVIDENCE"
+          : weak * 2 > total
+            ? "WEAK_PATTERN"
+            : today - lastDay >= 30
+              ? "STALE_PATTERN"
+              : "FRESH_PRACTICE";
+    let priority =
+      fresh.length < 3 ? 0 : code === "WEAK_PATTERN" ? 1 : code === "STALE_PATTERN" ? 2 : 3;
+    const patternReasons: FreshRankingReason[] = [{ code }];
+    if (recent.length >= 4 && (exposure.get(patternId) ?? 0) * 2 > recent.length * 6) {
+      priority = Math.min(priority + 1, 3);
+      patternReasons.push({ code: "RECENT_PATTERN_CONCENTRATION" });
+    }
+    const lastPracticed =
+      attempts
+        .map((attempt) => attempt.practiceDate)
+        .sort()
+        .at(-1) ?? null;
+    return {
+      patternId,
+      priority,
+      reasons: patternReasons,
+      freshSamples: fresh.length,
+      independentSamples: fresh.filter((attempt) => attempt.outcome === "INDEPENDENT").length,
+      assistedSamples: fresh.filter((attempt) => attempt.outcome === "ASSISTED").length,
+      gaveUpSamples: fresh.filter((attempt) => attempt.outcome === "GAVE_UP").length,
+      lastPracticed,
+      stale: lastPracticed !== null && today - calendarDay(lastPracticed) >= 30,
+    };
+  });
 }
 
 function contribution(attempt: FreshRankingAttempt): number {
