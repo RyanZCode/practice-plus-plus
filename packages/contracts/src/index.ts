@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export * from "./learnerContext.js";
+
 export const providerIdSchema = z.enum(["openai"]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
