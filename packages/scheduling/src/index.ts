@@ -3,6 +3,7 @@ export { calculateDueDate } from "./reviewDueDate.js";
 export { rankDueReviews, type ReviewCandidate, type RankedReview } from "./rankDueReviews.js";
 export {
   rankFreshCandidates,
+  getPatternEvidence,
   type FreshCandidate,
   type FreshRankingAttempt,
   type RankedFreshCandidate,
