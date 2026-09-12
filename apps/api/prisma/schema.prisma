@@ -36,18 +36,22 @@ enum UserRole {
 }
 
 model UserProfile {
-  id                   String               @id @default(uuid()) @db.Uuid
-  authSubject          String               @unique @map("auth_subject") @db.Uuid
-  role                 UserRole             @default(USER)
-  hidePaidProblems     Boolean              @default(false) @map("hide_paid_problems")
-  createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
-  dailyPlan            DailyPlan?
-  practiceSettings     PracticeSettings?
-  attempts             Attempt[]
-  catalogImportBatches CatalogImportBatch[]
-  reviewedProblems     Problem[]            @relation("ProblemReviewedBy")
-  publishedProblems    Problem[]            @relation("ProblemPublishedBy")
+  id                    String                @id @default(uuid()) @db.Uuid
+  authSubject           String                @unique @map("auth_subject") @db.Uuid
+  role                  UserRole              @default(USER)
+  hidePaidProblems      Boolean               @default(false) @map("hide_paid_problems")
+  createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  dailyPlan             DailyPlan?
+  practiceSettings      PracticeSettings?
+  attempts              Attempt[]
+  learnerGoals          LearnerGoal[]
+  teachingPreferences   TeachingPreference[]
+  conversationSummaries ConversationSummary[]
+  learnerMemories       LearnerMemory[]
+  catalogImportBatches  CatalogImportBatch[]
+  reviewedProblems      Problem[]             @relation("ProblemReviewedBy")
+  publishedProblems     Problem[]             @relation("ProblemPublishedBy")
 
   @@map("user_profiles")
 }
@@ -181,45 +185,52 @@ enum AssistanceSource {
 }
 
 model Attempt {
-  id                   String               @id @default(uuid()) @db.Uuid
-  userProfileId        String               @map("user_profile_id") @db.Uuid
-  problemId            String               @map("problem_id") @db.Uuid
-  type                 AttemptType
-  practiceDate         DateTime             @map("practice_date") @db.Date
-  startedAt            DateTime             @map("started_at") @db.Timestamptz(3)
-  timerSkippedAt       DateTime?            @map("timer_skipped_at") @db.Timestamptz(3)
-  confirmedAt          DateTime?            @map("confirmed_at") @db.Timestamptz(3)
-  solutionReviewedAt   DateTime?            @map("solution_reviewed_at") @db.Timestamptz(3)
-  outcome              AttemptOutcome?
-  confidence           AttemptConfidence?
-  optimality           AttemptOptimality?
-  timeSpentSeconds     Int?                 @map("time_spent_seconds")
-  approach             String?              @db.VarChar(1000)
-  notes                String?              @db.VarChar(5000)
-  reproducedFromMemory Boolean?             @map("reproduced_from_memory")
-  nextAction           Json?                @map("next_action")
-  planItems            DailyPlanItem[]
-  transfersCreated     TransferObligation[] @relation("TransferSource")
-  transferAttempt      TransferObligation?  @relation("TransferAttempt")
-  assistance           AssistanceEvent[]
-  review               ReviewObligation?
-  userProfile          UserProfile          @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
-  problem              Problem              @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  id                       String                  @id @default(uuid()) @db.Uuid
+  userProfileId            String                  @map("user_profile_id") @db.Uuid
+  problemId                String                  @map("problem_id") @db.Uuid
+  type                     AttemptType
+  practiceDate             DateTime                @map("practice_date") @db.Date
+  startedAt                DateTime                @map("started_at") @db.Timestamptz(3)
+  timerSkippedAt           DateTime?               @map("timer_skipped_at") @db.Timestamptz(3)
+  confirmedAt              DateTime?               @map("confirmed_at") @db.Timestamptz(3)
+  solutionReviewedAt       DateTime?               @map("solution_reviewed_at") @db.Timestamptz(3)
+  outcome                  AttemptOutcome?
+  confidence               AttemptConfidence?
+  optimality               AttemptOptimality?
+  timeSpentSeconds         Int?                    @map("time_spent_seconds")
+  approach                 String?                 @db.VarChar(1000)
+  notes                    String?                 @db.VarChar(5000)
+  reproducedFromMemory     Boolean?                @map("reproduced_from_memory")
+  nextAction               Json?                   @map("next_action")
+  planItems                DailyPlanItem[]
+  transfersCreated         TransferObligation[]    @relation("TransferSource")
+  transferAttempt          TransferObligation?     @relation("TransferAttempt")
+  assistance               AssistanceEvent[]
+  review                   ReviewObligation?
+  summary                  AttemptSummary?
+  conversationSummaries    ConversationSummary[]
+  memoryEvidence           LearnerMemoryEvidence[] @relation("AttemptEvidence")
+  assistanceMemoryEvidence LearnerMemoryEvidence[] @relation("AssistanceAttemptEvidence")
+  userProfile              UserProfile             @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+  problem                  Problem                 @relation(fields: [problemId], references: [id], onDelete: Restrict)
 
+  @@unique([id, userProfileId])
   @@index([userProfileId, problemId])
   @@index([problemId])
   @@map("attempts")
 }
 
 model AssistanceEvent {
-  id         String           @id @default(uuid()) @db.Uuid
-  attemptId  String           @map("attempt_id") @db.Uuid
-  type       AssistanceType
-  hintLevel  Int?             @map("hint_level") @db.SmallInt
-  source     AssistanceSource
-  recordedAt DateTime         @default(now()) @map("recorded_at") @db.Timestamptz(3)
-  attempt    Attempt          @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  id             String                  @id @default(uuid()) @db.Uuid
+  attemptId      String                  @map("attempt_id") @db.Uuid
+  type           AssistanceType
+  hintLevel      Int?                    @map("hint_level") @db.SmallInt
+  source         AssistanceSource
+  recordedAt     DateTime                @default(now()) @map("recorded_at") @db.Timestamptz(3)
+  attempt        Attempt                 @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  memoryEvidence LearnerMemoryEvidence[]
 
+  @@unique([id, attemptId])
   @@index([attemptId])
   @@map("assistance_events")
 }
@@ -291,4 +302,150 @@ model DailyPlanItem {
   @@index([attemptId])
   @@index([transferId])
   @@map("daily_plan_items")
+}
+
+enum LearnerGoalState {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum ConversationMode {
+  COACH
+  ATTEMPT_TUTOR
+}
+
+enum MemoryLifecycleState {
+  ACTIVE
+  IMPROVING
+  RESOLVED
+}
+
+enum MemoryApprovalState {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model LearnerGoal {
+  id             String                  @id @default(uuid()) @db.Uuid
+  userProfileId  String                  @map("user_profile_id") @db.Uuid
+  target         String                  @db.VarChar(1000)
+  priority       Int                     @default(0)
+  state          LearnerGoalState        @default(ACTIVE)
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  userProfile    UserProfile             @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+  memoryEvidence LearnerMemoryEvidence[]
+
+  @@unique([id, userProfileId])
+  @@index([userProfileId, state])
+  @@map("learner_goals")
+}
+
+model TeachingPreference {
+  id             String                  @id @default(uuid()) @db.Uuid
+  userProfileId  String                  @map("user_profile_id") @db.Uuid
+  preference     String                  @db.VarChar(1000)
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  userProfile    UserProfile             @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+  memoryEvidence LearnerMemoryEvidence[]
+
+  @@unique([id, userProfileId])
+  @@index([userProfileId])
+  @@map("teaching_preferences")
+}
+
+model AttemptSummary {
+  attemptId          String                  @id @map("attempt_id") @db.Uuid
+  userProfileId      String                  @map("user_profile_id") @db.Uuid
+  approach           String?                 @db.VarChar(1000)
+  stuckPoint         String?                 @map("stuck_point") @db.VarChar(1000)
+  misconception      String?                 @db.VarChar(1000)
+  assistance         String?                 @db.VarChar(1000)
+  progressTrigger    String?                 @map("progress_trigger") @db.VarChar(1000)
+  finalUnderstanding String?                 @map("final_understanding") @db.VarChar(1000)
+  nextTeachingAction String?                 @map("next_teaching_action") @db.VarChar(1000)
+  reviewedAt         DateTime?               @map("reviewed_at") @db.Timestamptz(3)
+  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  attempt            Attempt                 @relation(fields: [attemptId, userProfileId], references: [id, userProfileId], onDelete: Cascade)
+  memoryEvidence     LearnerMemoryEvidence[]
+
+  @@unique([attemptId, userProfileId])
+  @@index([userProfileId])
+  @@map("attempt_summaries")
+}
+
+model ConversationSummary {
+  id               String                  @id @default(uuid()) @db.Uuid
+  userProfileId    String                  @map("user_profile_id") @db.Uuid
+  mode             ConversationMode
+  attemptId        String?                 @map("attempt_id") @db.Uuid
+  topics           String                  @db.VarChar(1000)
+  learningProgress String?                 @map("learning_progress") @db.VarChar(1000)
+  nextSteps        String?                 @map("next_steps") @db.VarChar(1000)
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  userProfile      UserProfile             @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+  attempt          Attempt?                @relation(fields: [attemptId, userProfileId], references: [id, userProfileId], onDelete: Cascade)
+  memoryEvidence   LearnerMemoryEvidence[]
+
+  @@unique([id, userProfileId])
+  @@index([userProfileId, mode, updatedAt])
+  @@index([attemptId, userProfileId])
+  @@map("conversation_summaries")
+}
+
+model LearnerMemory {
+  id             String                  @id @default(uuid()) @db.Uuid
+  userProfileId  String                  @map("user_profile_id") @db.Uuid
+  category       String                  @db.VarChar(100)
+  content        String                  @db.VarChar(1000)
+  confidence     Float
+  lastObservedAt DateTime                @map("last_observed_at") @db.Timestamptz(3)
+  lifecycleState MemoryLifecycleState    @default(ACTIVE) @map("lifecycle_state")
+  approvalState  MemoryApprovalState     @default(PENDING) @map("approval_state")
+  reviewedAt     DateTime?               @map("reviewed_at") @db.Timestamptz(3)
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  userProfile    UserProfile             @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+  evidence       LearnerMemoryEvidence[]
+
+  @@unique([id, userProfileId])
+  @@index([userProfileId, approvalState, lifecycleState])
+  @@map("learner_memories")
+}
+
+model LearnerMemoryEvidence {
+  id                    String               @id @default(uuid()) @db.Uuid
+  userProfileId         String               @map("user_profile_id") @db.Uuid
+  memoryId              String               @map("memory_id") @db.Uuid
+  learnerGoalId         String?              @map("learner_goal_id") @db.Uuid
+  teachingPreferenceId  String?              @map("teaching_preference_id") @db.Uuid
+  attemptId             String?              @map("attempt_id") @db.Uuid
+  assistanceEventId     String?              @map("assistance_event_id") @db.Uuid
+  assistanceAttemptId   String?              @map("assistance_attempt_id") @db.Uuid
+  attemptSummaryId      String?              @map("attempt_summary_id") @db.Uuid
+  conversationSummaryId String?              @map("conversation_summary_id") @db.Uuid
+  createdAt             DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  memory                LearnerMemory        @relation(fields: [memoryId, userProfileId], references: [id, userProfileId], onDelete: Cascade)
+  learnerGoal           LearnerGoal?         @relation(fields: [learnerGoalId, userProfileId], references: [id, userProfileId], onDelete: Cascade)
+  teachingPreference    TeachingPreference?  @relation(fields: [teachingPreferenceId, userProfileId], references: [id, userProfileId], onDelete: Cascade)
+  attempt               Attempt?             @relation("AttemptEvidence", fields: [attemptId, userProfileId], references: [id, userProfileId], onDelete: Cascade)
+  assistanceEvent       AssistanceEvent?     @relation(fields: [assistanceEventId, assistanceAttemptId], references: [id, attemptId], onDelete: Cascade)
+  assistanceAttempt     Attempt?             @relation("AssistanceAttemptEvidence", fields: [assistanceAttemptId, userProfileId], references: [id, userProfileId], onDelete: Cascade)
+  attemptSummary        AttemptSummary?      @relation(fields: [attemptSummaryId, userProfileId], references: [attemptId, userProfileId], onDelete: Cascade)
+  conversationSummary   ConversationSummary? @relation(fields: [conversationSummaryId, userProfileId], references: [id, userProfileId], onDelete: Cascade)
+
+  @@index([memoryId, userProfileId])
+  @@index([learnerGoalId, userProfileId])
+  @@index([teachingPreferenceId, userProfileId])
+  @@index([attemptId, userProfileId])
+  @@index([assistanceEventId, assistanceAttemptId])
+  @@index([assistanceAttemptId, userProfileId])
+  @@index([attemptSummaryId, userProfileId])
+  @@index([conversationSummaryId, userProfileId])
+  @@map("learner_memory_evidence")
 }
