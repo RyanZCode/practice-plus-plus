@@ -7,14 +7,17 @@ export * from "./context.js";
 export const providerIdSchema = z.enum(["openai"]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
+export const openAiModels = ["gpt-5.4-mini", "gpt-5.4", "gpt-4.1-mini", "gpt-4.1"] as const;
+export const modelNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/);
+
 export const providerSelectionSchema = z.strictObject({
   providerId: providerIdSchema,
-  model: z
-    .string()
-    .trim()
-    .min(1)
-    .max(200)
-    .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/),
+  model: modelNameSchema,
 });
 export type ProviderSelection = z.infer<typeof providerSelectionSchema>;
 
@@ -27,6 +30,24 @@ export const coachRequestSchema = z
   })
   .refine((request) => request.messages.at(-1)?.role === "user");
 export type CoachRequest = z.infer<typeof coachRequestSchema>;
+
+export const tutorHelpSchema = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.literal("CONCEPTUAL_HINT"), hintLevel: z.number().int().min(1).max(3) }),
+  z.strictObject({
+    type: z.enum(["CLARIFICATION", "DEBUGGING", "OPTIMIZATION", "SOLUTION_REVIEW"]),
+  }),
+]);
+export type TutorHelp = z.infer<typeof tutorHelpSchema>;
+export const tutorRequestSchema = z
+  .strictObject({
+    selection: providerSelectionSchema,
+    apiKey: z.string().regex(/^[\x21-\x7e]{1,4096}$/),
+    attemptId: z.uuid(),
+    help: tutorHelpSchema,
+    messages: contextRequestSchema.shape.messages.unwrap().min(1).max(12),
+  })
+  .refine((request) => request.messages.at(-1)?.role === "user");
+export type TutorRequest = z.infer<typeof tutorRequestSchema>;
 
 export const coachEventSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("text"), text: z.string() }),
@@ -63,6 +84,7 @@ const wholeDaysSchema = z.number().int().min(1).max(90);
 
 export const practiceSettingsSchema = z
   .strictObject({
+    defaultAiModel: z.enum(openAiModels),
     dailyTarget: z.number().int().min(1).max(10),
     redoIntervals: z.strictObject({
       high: wholeDaysSchema,

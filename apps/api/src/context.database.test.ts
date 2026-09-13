@@ -5,6 +5,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "./generated/prisma/client.js";
 import { createPrismaContextAssembler } from "./context.js";
+import { createPrismaTutorStore } from "./tutor.js";
 
 const databaseUrl = process.env.LEARNER_CONTEXT_TEST_DATABASE_URL;
 const schema = `context_test_${randomUUID().replaceAll("-", "")}`;
@@ -224,6 +225,60 @@ describe.skipIf(databaseUrl === undefined)("context relational queries", () => {
       ),
     ).rejects.toMatchObject({ statusCode: 404 });
     expect(await db.assistanceEvent.count({ where: { attemptId: activeId } })).toBe(0);
+  });
+
+  it("records integrated help with ownership, sequential hints and solution-review provenance", async () => {
+    const store = createPrismaTutorStore(db);
+    const hint = { type: "CONCEPTUAL_HINT", hintLevel: 1 } as const;
+    await expect(store.check(otherUserId, activeId, hint, now, true)).rejects.toMatchObject({
+      statusCode: 404,
+    });
+    await db.attempt.update({ where: { id: activeId }, data: { timerSkippedAt: now } });
+    await expect(
+      store.check(userId, activeId, { type: "CONCEPTUAL_HINT", hintLevel: 2 }, now, true),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    await store.check(userId, activeId, hint, now, false);
+    expect(await db.assistanceEvent.count({ where: { attemptId: activeId } })).toBe(0);
+    for (const hintLevel of [1, 2, 3])
+      await store.check(userId, activeId, { type: "CONCEPTUAL_HINT", hintLevel }, now, true);
+    await store.check(userId, activeId, { type: "DEBUGGING" }, now, true);
+    const packet = await assembler.assemble(
+      userId,
+      {
+        policy: {
+          mode: "ATTEMPT_TUTOR",
+          attemptId: activeId,
+          phase: "HELP",
+          help: "CONCEPTUAL_HINT",
+          hintLevel: 3,
+        },
+        messages: [],
+      },
+      now,
+    );
+    expect(packet.current.attempt?.assistance).toHaveLength(4);
+    expect(
+      packet.current.attempt?.assistance.every((event) => event.source === "INTEGRATED_AI"),
+    ).toBe(true);
+    await expect(
+      store.check(userId, activeId, { type: "SOLUTION_REVIEW" }, now, true),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    await db.attempt.update({ where: { id: activeId }, data: { outcome: "GAVE_UP" } });
+    await store.check(userId, activeId, { type: "SOLUTION_REVIEW" }, now, true);
+    expect(await db.attempt.findUnique({ where: { id: activeId } })).toMatchObject({
+      outcome: "GAVE_UP",
+      solutionReviewedAt: now,
+    });
+    expect(
+      await db.assistanceEvent.findMany({
+        where: { attemptId: activeId, type: "SOLUTION_REVIEW" },
+      }),
+    ).toMatchObject([{ source: "INTEGRATED_AI", hintLevel: null }]);
+    await db.attempt.update({ where: { id: activeId }, data: { confirmedAt: now } });
+    await expect(
+      store.check(userId, activeId, { type: "SOLUTION_REVIEW" }, now, true),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    await db.attempt.update({ where: { id: activeId }, data: { confirmedAt: null } });
   });
 
   it("stops including a revoked memory on the next request", async () => {

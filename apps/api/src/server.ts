@@ -1,5 +1,6 @@
 import { createPrismaDailyPlanStore } from "./dailyPlan.js";
 import { createPrismaContextAssembler } from "./context.js";
+import { createPrismaTutorStore } from "./tutor.js";
 import { createProviderAdapter } from "./providers.js";
 import { createApp } from "./app.js";
 import { createPrismaAttemptStore } from "./attempts.js";
@@ -18,6 +19,11 @@ const logger = createLogger();
 const database = createDatabase(config.databaseUrl);
 const app = createApp({
   authentication: {
+    tutor: {
+      assembler: createPrismaContextAssembler(database),
+      provider: createProviderAdapter(),
+      store: createPrismaTutorStore(database),
+    },
     coach: { assembler: createPrismaContextAssembler(database), provider: createProviderAdapter() },
     dailyPlanStore: createPrismaDailyPlanStore(database),
     attemptStore: createPrismaAttemptStore(database),

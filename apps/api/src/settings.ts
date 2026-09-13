@@ -9,6 +9,7 @@ import { HttpError } from "./errors.js";
 import { getApplicationProfile } from "./profile.js";
 
 interface PracticeSettingsRecord {
+  readonly defaultAiModel: string;
   readonly dailyTarget: number;
   readonly highIntervalDays: number;
   readonly lowIntervalDays: number;
@@ -82,7 +83,8 @@ export function createSettingsRouter(store: SettingsStore): Router {
 }
 
 function toPracticeSettings(record: PracticeSettingsRecord): PracticeSettings {
-  return {
+  return practiceSettingsSchema.parse({
+    defaultAiModel: record.defaultAiModel,
     dailyTarget: record.dailyTarget,
     redoIntervals: {
       high: record.highIntervalDays,
@@ -91,11 +93,12 @@ function toPracticeSettings(record: PracticeSettingsRecord): PracticeSettings {
     },
     resetTime: formatResetTime(record.resetMinutes),
     timeZone: record.timeZone,
-  };
+  });
 }
 
 function toPracticeSettingsRecord(settings: PracticeSettings): PracticeSettingsRecord {
   return {
+    defaultAiModel: settings.defaultAiModel,
     dailyTarget: settings.dailyTarget,
     highIntervalDays: settings.redoIntervals.high,
     lowIntervalDays: settings.redoIntervals.low,

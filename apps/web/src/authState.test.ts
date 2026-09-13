@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   authErrorState,
+  authenticatedUserId,
   getAuthCallbackError,
   getAuthCallbackUrl,
   resolveAuthState,
@@ -14,6 +15,21 @@ describe("authentication helpers", () => {
 
     expect(resolveAuthState(session)).toEqual({ status: "authenticated", session });
     expect(resolveAuthState(null)).toEqual({ status: "unauthenticated" });
+  });
+
+  it("keeps the settings-load identity stable when a user's token refreshes", () => {
+    const first = {
+      access_token: "first-token",
+      user: { id: "user-1" },
+    } as Session;
+    const refreshed = {
+      access_token: "refreshed-token",
+      user: { id: "user-1" },
+    } as Session;
+
+    expect(authenticatedUserId(resolveAuthState(first))).toBe("user-1");
+    expect(authenticatedUserId(resolveAuthState(refreshed))).toBe("user-1");
+    expect(authenticatedUserId({ status: "unauthenticated" })).toBeNull();
   });
 
   it("keeps session restoration errors recoverable", () => {

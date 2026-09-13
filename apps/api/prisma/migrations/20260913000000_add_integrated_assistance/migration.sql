@@ -1,0 +1,1 @@
+ALTER TYPE "AssistanceSource" ADD VALUE 'INTEGRATED_AI';

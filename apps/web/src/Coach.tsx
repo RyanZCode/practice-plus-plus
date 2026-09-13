@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } fro
 import { coachRequestSchema, type CoachRequest } from "@practice-plus-plus/contracts";
 import { useAuth } from "./auth";
 import { recentCoachMessages, streamCoach } from "./coachApi";
+import { MarkdownMessage } from "./MarkdownMessage";
+import { OpenAIModelSelect } from "./OpenAIModelSelect";
 
 interface Message {
   role: "user" | "assistant";
@@ -13,14 +15,17 @@ export function Coach({
   apiUrl,
   token,
   userId,
+  defaultModel,
 }: {
   apiUrl: string;
   token: string;
   userId: string;
+  defaultModel: string;
 }) {
   const { browserKey } = useAuth();
   const keyState = useSyncExternalStore(browserKey.subscribe, browserKey.getSnapshot);
-  const [model, setModel] = useState("");
+  const [model, setModel] = useState(defaultModel);
+  useEffect(() => setModel(defaultModel), [defaultModel]);
   const [purpose, setPurpose] = useState<CoachRequest["purpose"]>("GENERAL");
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -110,28 +115,7 @@ export function Coach({
         <p role="status">Add your OpenAI API key in Practice settings to chat.</p>
       ) : null}
       <form className="settings-form" onSubmit={(event) => void send(event)}>
-        <label>
-          OpenAI model
-          <input
-            value={model}
-            maxLength={200}
-            required
-            disabled={busy}
-            onChange={(event) => setModel(event.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-            placeholder="e.g. gpt-4.1-mini"
-            aria-describedby="coach-model-help"
-          />
-        </label>
-        <p className="settings-help" id="coach-model-help">
-          Examples: <code>gpt-4.1-mini</code> or <code>gpt-4.1</code>. You can enter another model
-          that supports streaming chat and is available to your API account.{" "}
-          <a href="https://developers.openai.com/api/docs/models" target="_blank" rel="noreferrer">
-            Browse OpenAI models
-          </a>
-          .
-        </p>
+        <OpenAIModelSelect value={model} disabled={busy} onChange={setModel} />
         <label>
           Conversation focus
           <select
@@ -152,7 +136,13 @@ export function Coach({
           {messages.map((message, index) => (
             <li key={index}>
               <strong>{message.role === "user" ? "You" : "Coach"}</strong>
-              <p>{message.content || (busy ? "Thinking…" : "No response received.")}</p>
+              {message.role === "assistant" ? (
+                <MarkdownMessage>
+                  {message.content || (busy ? "Thinking…" : "No response received.")}
+                </MarkdownMessage>
+              ) : (
+                <p className="plain-message">{message.content}</p>
+              )}
               {message.role === "assistant" && !message.complete && !busy ? (
                 <small>Incomplete response</small>
               ) : null}

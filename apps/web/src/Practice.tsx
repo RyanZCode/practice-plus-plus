@@ -14,14 +14,26 @@ import {
 } from "./attemptsApi";
 import { AttemptOutcomeForm } from "./AttemptOutcomeForm";
 import { eligibleProblems, remainingSeconds } from "./attemptState";
+import { AttemptTutor } from "./AttemptTutor";
 
-export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
+export function Practice({
+  apiUrl,
+  token,
+  userId,
+  defaultModel,
+}: {
+  apiUrl: string;
+  token: string;
+  userId: string;
+  defaultModel: string;
+}) {
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [problems, setProblems] = useState<CatalogProblem[]>([]);
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [hidePaid, setHidePaid] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [tutorBusy, setTutorBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [reload, setReload] = useState(0);
   const [now, setNow] = useState(Date.now());
@@ -106,7 +118,11 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
           <p className="auth-message" role="alert">
             {error}
           </p>
-          <button type="button" disabled={busy} onClick={() => setReload((value) => value + 1)}>
+          <button
+            type="button"
+            disabled={busy || tutorBusy}
+            onClick={() => setReload((value) => value + 1)}
+          >
             Reload practice
           </button>
         </div>
@@ -133,6 +149,16 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
               >
                 Review LeetCode solutions ↗
               </a>
+            </p>
+          ) : attempt.outcome === "GAVE_UP" ? (
+            <p>
+              <button
+                type="button"
+                disabled={busy || tutorBusy}
+                onClick={() => void update(() => reviewSolution(apiUrl, token, attempt.id))}
+              >
+                Review LeetCode solutions
+              </button>
             </p>
           ) : attempt.outcome !== null ? null : seconds > 0 ? (
             <div>
@@ -163,17 +189,38 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
                 Reading an editorial or solution is a less-recommended fallback after explicitly
                 giving up.
               </p>
-              <p className="settings-help">
-                Integrated hints are not available yet. You can record help received elsewhere.
-              </p>
             </div>
           )}
+          {attempt.outcome === null || attempt.outcome === "GAVE_UP" ? (
+            <AttemptTutor
+              key={attempt.id}
+              apiUrl={apiUrl}
+              token={token}
+              userId={userId}
+              defaultModel={defaultModel}
+              attempt={attempt}
+              hintsAvailable={seconds === 0}
+              disabled={busy}
+              onBusy={setTutorBusy}
+              onRefresh={async () => {
+                try {
+                  setAttempt(await loadActiveAttempt(apiUrl, token));
+                } catch {
+                  setError("Reload practice to refresh recorded assistance before confirming.");
+                }
+              }}
+            />
+          ) : null}
           {attempt.solutionReviewedAt === null && attempt.outcome === null ? (
             <p>
               <button
                 type="button"
-                disabled={busy}
-                onClick={() => void update(() => reviewSolution(apiUrl, token, attempt.id))}
+                disabled={busy || tutorBusy}
+                onClick={() =>
+                  void update(() =>
+                    reportAttempt(apiUrl, token, attempt.id, { outcome: "GAVE_UP" }),
+                  )
+                }
               >
                 Give up and review a solution
               </button>
@@ -183,7 +230,7 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
             <AttemptOutcomeForm
               key={`${attempt.id}-${attempt.solutionReviewedAt ?? "solving"}`}
               attempt={attempt}
-              busy={busy}
+              busy={busy || tutorBusy}
               onReport={(input) => update(() => reportAttempt(apiUrl, token, attempt.id, input))}
               onConfirm={async (input) => {
                 setBusy(true);
@@ -202,7 +249,7 @@ export function Practice({ apiUrl, token }: { apiUrl: string; token: string }) {
               }}
             />
           ) : (
-            <button type="button" disabled={busy} onClick={() => setClassifying(true)}>
+            <button type="button" disabled={busy || tutorBusy} onClick={() => setClassifying(true)}>
               Record outcome
             </button>
           )}

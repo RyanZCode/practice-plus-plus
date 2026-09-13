@@ -58,6 +58,7 @@ model UserProfile {
 
 model PracticeSettings {
   userProfileId      String      @id @map("user_profile_id") @db.Uuid
+  defaultAiModel     String      @default("gpt-5.4-mini") @map("default_ai_model") @db.VarChar(200)
   timeZone           String      @map("time_zone") @db.VarChar(100)
   resetMinutes       Int         @map("reset_minutes") @db.SmallInt
   dailyTarget        Int         @map("daily_target") @db.SmallInt
@@ -182,6 +183,7 @@ enum AssistanceType {
 enum AssistanceSource {
   SELF_REPORTED
   LEETCODE_SOLUTION
+  INTEGRATED_AI
 }
 
 model Attempt {
