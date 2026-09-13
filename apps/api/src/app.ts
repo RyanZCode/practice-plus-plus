@@ -16,9 +16,11 @@ import { createLogger } from "./logger.js";
 import { getApplicationProfile, resolveApplicationProfile, type ProfileStore } from "./profile.js";
 import { getProviders } from "./providers.js";
 import { createCoachRouter, type CoachOptions } from "./coach.js";
+import { createTutorRouter, type TutorOptions } from "./tutor.js";
 import { createSettingsRouter, type SettingsStore } from "./settings.js";
 
 interface AuthenticationOptions {
+  readonly tutor?: TutorOptions;
   readonly coach?: CoachOptions;
   readonly dailyPlanStore?: DailyPlanStore;
   readonly attemptStore?: AttemptStore;
@@ -52,6 +54,14 @@ export function createApp(options: AppOptions = {}): Express {
     const authenticate = requireAuthentication(options.authentication.verifier);
     const resolveProfile = resolveApplicationProfile(options.authentication.profileStore);
 
+    if (options.authentication.tutor !== undefined) {
+      app.use(
+        "/ai/tutor",
+        authenticate,
+        resolveProfile,
+        createTutorRouter(options.authentication.tutor),
+      );
+    }
     if (options.authentication.coach !== undefined) {
       app.use(
         "/ai/coach",

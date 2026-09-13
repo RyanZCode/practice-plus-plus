@@ -13,7 +13,8 @@
     "@practice-plus-plus/contracts": "workspace:*",
     "@supabase/supabase-js": "2.114.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "react-markdown": "10.1.0"
   },
   "devDependencies": {
     "@practice-plus-plus/config": "workspace:*",

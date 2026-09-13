@@ -127,6 +127,7 @@ describe("API", () => {
 
   it("loads and saves only the authenticated user's settings", async () => {
     const settings = {
+      defaultAiModel: "gpt-5.4-mini",
       dailyTarget: 2,
       redoIntervals: { high: 1, low: 7, medium: 3 },
       resetTime: "04:00",

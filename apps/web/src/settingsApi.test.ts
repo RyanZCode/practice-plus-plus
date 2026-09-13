@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadPracticeSettings, savePracticeSettings } from "./settingsApi";
 
 const settings = {
+  defaultAiModel: "gpt-5.4-mini" as const,
   dailyTarget: 2,
   redoIntervals: { high: 1, low: 7, medium: 3 },
   resetTime: "04:00",

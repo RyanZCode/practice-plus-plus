@@ -1,5 +1,5 @@
 import { practiceSettingsSchema, type PracticeSettings } from "@practice-plus-plus/contracts";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { useAuth } from "./auth";
 import { BrowserKeySettings } from "./BrowserKeySettings";
@@ -8,12 +8,15 @@ import { ProtectedRoute } from "./ProtectedRoute";
 import { Practice } from "./Practice";
 import { AttemptHistory } from "./AttemptHistory";
 import { loadPracticeSettings, savePracticeSettings } from "./settingsApi";
+import { authenticatedUserId } from "./authState";
+import { OpenAIModelSelect } from "./OpenAIModelSelect";
 
 interface AppProps {
   readonly apiUrl: string;
 }
 
 interface SettingsDraft {
+  readonly defaultAiModel: string;
   readonly dailyTarget: string;
   readonly highInterval: string;
   readonly lowInterval: string;
@@ -32,7 +35,12 @@ export function App({ apiUrl }: AppProps) {
 
 function AccountPage({ apiUrl }: AppProps) {
   const { signOut, state } = useAuth();
+  const userId = authenticatedUserId(state);
+  const accessToken = state.status === "authenticated" ? state.session.access_token : null;
+  const accessTokenRef = useRef(accessToken);
+  accessTokenRef.current = accessToken;
   const [draft, setDraft] = useState<SettingsDraft>(() => defaultDraft());
+  const [savedSettings, setSavedSettings] = useState<PracticeSettings | null>(null);
   const [error, setError] = useState<string>();
   const [loadFailed, setLoadFailed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,7 +60,7 @@ function AccountPage({ apiUrl }: AppProps) {
   }, []);
 
   useEffect(() => {
-    if (state.status !== "authenticated") {
+    if (userId === null) {
       return;
     }
 
@@ -61,13 +69,17 @@ function AccountPage({ apiUrl }: AppProps) {
     setLoadFailed(false);
     setIsLoading(true);
 
-    void loadPracticeSettings(apiUrl, state.session.access_token)
+    const currentAccessToken = accessTokenRef.current;
+    if (currentAccessToken === null) return;
+
+    void loadPracticeSettings(apiUrl, currentAccessToken)
       .then((settings) => {
         if (!active) {
           return;
         }
 
         setIsOnboarding(settings === null);
+        setSavedSettings(settings);
         setDraft(settings === null ? defaultDraft() : toDraft(settings));
       })
       .catch((loadError: unknown) => {
@@ -85,7 +97,7 @@ function AccountPage({ apiUrl }: AppProps) {
     return () => {
       active = false;
     };
-  }, [apiUrl, reloadCount, state]);
+  }, [apiUrl, reloadCount, userId]);
 
   if (state.status !== "authenticated") {
     return null;
@@ -100,6 +112,7 @@ function AccountPage({ apiUrl }: AppProps) {
     setSaved(false);
 
     const result = practiceSettingsSchema.safeParse({
+      defaultAiModel: draft.defaultAiModel,
       dailyTarget: Number(draft.dailyTarget),
       redoIntervals: {
         high: Number(draft.highInterval),
@@ -120,6 +133,7 @@ function AccountPage({ apiUrl }: AppProps) {
     try {
       const settings = await savePracticeSettings(apiUrl, session.access_token, result.data);
       setDraft(toDraft(settings));
+      setSavedSettings(settings);
       setIsOnboarding(false);
       setSaved(true);
     } catch (saveError) {
@@ -141,12 +155,31 @@ function AccountPage({ apiUrl }: AppProps) {
     }
   }
 
+  const showPractice = !showCoach && !showHistory && !showSettings;
+
+  function openPractice(): void {
+    setShowCoach(false);
+    setShowHistory(false);
+    setShowSettings(false);
+  }
+
   return (
     <main className="app-shell">
       <section className="account-card">
         <div className="account-heading">
           <div>
-            <h1>Practice++</h1>
+            <h1>
+              <button
+                className="brand-button"
+                type="button"
+                aria-current={
+                  !isLoading && !loadFailed && !isOnboarding && showPractice ? "page" : undefined
+                }
+                onClick={openPractice}
+              >
+                Practice++
+              </button>
+            </h1>
             <p className="account-email">
               {session.user.email === undefined ? "You’re signed in." : session.user.email}
             </p>
@@ -156,43 +189,43 @@ function AccountPage({ apiUrl }: AppProps) {
               <button
                 className="text-button"
                 type="button"
-                aria-expanded={showCoach}
+                aria-current={showCoach ? "page" : undefined}
                 onClick={() => {
-                  setShowCoach((show) => !show);
+                  setShowCoach(true);
                   setShowSettings(false);
                   setShowHistory(false);
                 }}
               >
-                {showCoach ? "Back to practice" : "Coach"}
+                Coach
               </button>
             ) : null}
             {!isLoading && !loadFailed && !isOnboarding ? (
               <button
                 className="text-button"
                 type="button"
-                aria-expanded={showHistory}
+                aria-current={showHistory ? "page" : undefined}
                 onClick={() => {
-                  setShowHistory((show) => !show);
+                  setShowHistory(true);
                   setShowSettings(false);
                   setShowCoach(false);
                 }}
               >
-                {showHistory ? "Back to practice" : "Attempt history"}
+                Attempt history
               </button>
             ) : null}
             {!isLoading && !loadFailed && !isOnboarding ? (
               <button
                 className="text-button"
                 type="button"
-                aria-expanded={showSettings}
+                aria-current={showSettings ? "page" : undefined}
                 aria-controls="practice-settings"
                 onClick={() => {
-                  setShowSettings((show) => !show);
+                  setShowSettings(true);
                   setShowHistory(false);
                   setShowCoach(false);
                 }}
               >
-                {showSettings ? "Back to practice" : "Practice settings"}
+                Practice settings
               </button>
             ) : null}
             <button
@@ -225,7 +258,13 @@ function AccountPage({ apiUrl }: AppProps) {
 
         {!isLoading && !loadFailed && !isOnboarding ? (
           <div hidden={showSettings || showHistory || showCoach}>
-            <Practice apiUrl={apiUrl} token={session.access_token} />
+            <Practice
+              key={session.user.id}
+              apiUrl={apiUrl}
+              token={session.access_token}
+              userId={session.user.id}
+              defaultModel={savedSettings?.defaultAiModel ?? "gpt-5.4-mini"}
+            />
           </div>
         ) : null}
 
@@ -235,6 +274,7 @@ function AccountPage({ apiUrl }: AppProps) {
             apiUrl={apiUrl}
             token={session.access_token}
             userId={session.user.id}
+            defaultModel={savedSettings?.defaultAiModel ?? "gpt-5.4-mini"}
           />
         </div>
 
@@ -290,6 +330,14 @@ function AccountPage({ apiUrl }: AppProps) {
                 onChange={(event) => setDraft({ ...draft, dailyTarget: event.target.value })}
               />
             </label>
+
+            <OpenAIModelSelect
+              value={draft.defaultAiModel}
+              disabled={isSaving}
+              onChange={(defaultAiModel) => setDraft({ ...draft, defaultAiModel })}
+              label="Default OpenAI model"
+              help="Used when you open Coach or Attempt tutor. Availability depends on your OpenAI API account."
+            />
 
             <fieldset>
               <legend>Redo intervals</legend>
@@ -360,6 +408,7 @@ function AccountPage({ apiUrl }: AppProps) {
 
 function defaultDraft(): SettingsDraft {
   return {
+    defaultAiModel: "gpt-5.4-mini",
     dailyTarget: "2",
     highInterval: "1",
     lowInterval: "7",
@@ -371,6 +420,7 @@ function defaultDraft(): SettingsDraft {
 
 function toDraft(settings: PracticeSettings): SettingsDraft {
   return {
+    defaultAiModel: settings.defaultAiModel,
     dailyTarget: String(settings.dailyTarget),
     highInterval: String(settings.redoIntervals.high),
     lowInterval: String(settings.redoIntervals.low),

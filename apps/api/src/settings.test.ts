@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createPrismaSettingsStore } from "./settings.js";
 
 const settings = {
+  defaultAiModel: "gpt-5.4-mini" as const,
   dailyTarget: 2,
   redoIntervals: { high: 1, low: 7, medium: 3 },
   resetTime: "04:30",
@@ -10,6 +11,7 @@ const settings = {
 };
 
 const settingsRecord = {
+  defaultAiModel: "gpt-5.4-mini",
   dailyTarget: 2,
   highIntervalDays: 1,
   lowIntervalDays: 7,

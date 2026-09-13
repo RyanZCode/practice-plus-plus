@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { type CoachRequest } from "@practice-plus-plus/contracts";
-import { recentCoachMessages, streamCoach } from "./coachApi";
+import { recentCoachMessages, streamCoach, streamTutor } from "./coachApi";
 
 const input: CoachRequest = {
   selection: { providerId: "openai", model: "test-model" },
@@ -20,6 +20,30 @@ function response(text: string) {
   );
 }
 describe("coach streaming client", () => {
+  it("sends tutor help and transient code to the tutor endpoint", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        response('{"type":"text","text":"Check the boundary"}\n{"type":"done"}\n'),
+      );
+    const onText = vi.fn();
+    await streamTutor(
+      "https://api.example.com",
+      "token",
+      {
+        selection: input.selection,
+        apiKey: input.apiKey,
+        messages: [{ role: "user", content: "temporary code" }],
+        attemptId: "10000000-0000-4000-8000-000000000001",
+        help: { type: "DEBUGGING" },
+      },
+      new AbortController().signal,
+      onText,
+      fetcher,
+    );
+    expect(fetcher.mock.calls[0]?.[0]).toBe("https://api.example.com/ai/tutor");
+    expect(onText).toHaveBeenCalledWith("Check the boundary");
+  });
   it("decodes fragmented Unicode and sends credentials only with the active request", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

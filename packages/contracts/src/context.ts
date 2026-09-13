@@ -32,7 +32,7 @@ export const contextPolicySchema = z.discriminatedUnion("mode", [
       attemptId: z.uuid(),
       phase: z.enum(["INDEPENDENT", "HELP", "SOLUTION_REVIEW", "RESULT"]),
       help: z.enum(["CLARIFICATION", "CONCEPTUAL_HINT", "DEBUGGING", "OPTIMIZATION"]).optional(),
-      hintLevel: z.number().int().positive().max(32767).optional(),
+      hintLevel: z.number().int().min(1).max(3).optional(),
     })
     .superRefine((policy, ctx) => {
       if ((policy.phase === "HELP") !== (policy.help !== undefined))
@@ -67,7 +67,7 @@ const assistanceSchema = z.strictObject({
     "SOLUTION_REVIEW",
   ]),
   hintLevel: z.number().int().nullable(),
-  source: z.enum(["SELF_REPORTED", "LEETCODE_SOLUTION"]),
+  source: z.enum(["SELF_REPORTED", "LEETCODE_SOLUTION", "INTEGRATED_AI"]),
 });
 const factSchema = z.strictObject({
   id: z.uuid(),

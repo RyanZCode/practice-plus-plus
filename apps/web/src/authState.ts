@@ -12,6 +12,10 @@ export function resolveAuthState(session: Session | null): AuthState {
   return session === null ? { status: "unauthenticated" } : { status: "authenticated", session };
 }
 
+export function authenticatedUserId(state: AuthState): string | null {
+  return state.status === "authenticated" ? state.session.user.id : null;
+}
+
 export function authErrorState(error: unknown): AuthState {
   const message = error instanceof Error ? error.message : "The session could not be restored.";
 

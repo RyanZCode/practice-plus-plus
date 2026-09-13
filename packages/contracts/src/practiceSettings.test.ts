@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { practiceSettingsSchema } from "./index.js";
 
 const validSettings = {
+  defaultAiModel: "gpt-5.4-mini",
   dailyTarget: 2,
   redoIntervals: { high: 1, low: 7, medium: 3 },
   resetTime: "04:00",
@@ -18,6 +19,7 @@ describe("practice settings contract", () => {
     { ...validSettings, dailyTarget: 0 },
     { ...validSettings, dailyTarget: 2.5 },
     { ...validSettings, dailyTarget: 11 },
+    { ...validSettings, defaultAiModel: "unlisted-model" },
     { ...validSettings, resetTime: "24:00" },
     { ...validSettings, timeZone: "Toronto" },
     { ...validSettings, redoIntervals: { high: 0, low: 7, medium: 3 } },
