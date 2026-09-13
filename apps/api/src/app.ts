@@ -15,9 +15,11 @@ import { createHealthRouter, type ReadinessCheck } from "./health.js";
 import { createLogger } from "./logger.js";
 import { getApplicationProfile, resolveApplicationProfile, type ProfileStore } from "./profile.js";
 import { getProviders } from "./providers.js";
+import { createCoachRouter, type CoachOptions } from "./coach.js";
 import { createSettingsRouter, type SettingsStore } from "./settings.js";
 
 interface AuthenticationOptions {
+  readonly coach?: CoachOptions;
   readonly dailyPlanStore?: DailyPlanStore;
   readonly attemptStore?: AttemptStore;
   readonly catalogStore?: CatalogStore;
@@ -49,6 +51,15 @@ export function createApp(options: AppOptions = {}): Express {
   if (options.authentication !== undefined) {
     const authenticate = requireAuthentication(options.authentication.verifier);
     const resolveProfile = resolveApplicationProfile(options.authentication.profileStore);
+
+    if (options.authentication.coach !== undefined) {
+      app.use(
+        "/ai/coach",
+        authenticate,
+        resolveProfile,
+        createCoachRouter(options.authentication.coach),
+      );
+    }
 
     if (
       options.authentication.attemptStore !== undefined ||

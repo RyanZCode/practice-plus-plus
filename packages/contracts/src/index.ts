@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { contextRequestSchema } from "./context.js";
 
 export * from "./learnerContext.js";
 export * from "./context.js";
@@ -16,6 +17,23 @@ export const providerSelectionSchema = z.strictObject({
     .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/),
 });
 export type ProviderSelection = z.infer<typeof providerSelectionSchema>;
+
+export const coachRequestSchema = z
+  .strictObject({
+    selection: providerSelectionSchema,
+    apiKey: z.string().regex(/^[\x21-\x7e]{1,4096}$/),
+    purpose: z.enum(["GENERAL", "PLANNING"]),
+    messages: contextRequestSchema.shape.messages.unwrap().min(1).max(12),
+  })
+  .refine((request) => request.messages.at(-1)?.role === "user");
+export type CoachRequest = z.infer<typeof coachRequestSchema>;
+
+export const coachEventSchema = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.literal("text"), text: z.string() }),
+  z.strictObject({ type: z.literal("done") }),
+  z.strictObject({ type: z.literal("error"), error: z.string().max(200) }),
+]);
+export type CoachEvent = z.infer<typeof coachEventSchema>;
 
 export const providersResponseSchema = z.strictObject({
   providers: z.array(z.strictObject({ id: providerIdSchema, name: z.string() })),

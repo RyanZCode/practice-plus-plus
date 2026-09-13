@@ -396,3 +396,30 @@ summary:focus-visible {
 .daily-plan {
   margin-bottom: 2rem;
 }
+
+.coach-messages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 28rem;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+.coach-messages li {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #dce1e9;
+}
+
+.coach-messages p {
+  white-space: pre-wrap;
+}
+
+.coach textarea,
+.coach select {
+  width: 100%;
+  padding: 0.75rem;
+  font: inherit;
+  border: 1px solid #b9c2d0;
+  border-radius: 0.5rem;
+}

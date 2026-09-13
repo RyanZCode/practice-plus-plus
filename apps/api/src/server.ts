@@ -1,4 +1,6 @@
 import { createPrismaDailyPlanStore } from "./dailyPlan.js";
+import { createPrismaContextAssembler } from "./context.js";
+import { createProviderAdapter } from "./providers.js";
 import { createApp } from "./app.js";
 import { createPrismaAttemptStore } from "./attempts.js";
 import { createSupabaseAccessTokenVerifier } from "./auth.js";
@@ -16,6 +18,7 @@ const logger = createLogger();
 const database = createDatabase(config.databaseUrl);
 const app = createApp({
   authentication: {
+    coach: { assembler: createPrismaContextAssembler(database), provider: createProviderAdapter() },
     dailyPlanStore: createPrismaDailyPlanStore(database),
     attemptStore: createPrismaAttemptStore(database),
     catalogStore: createPrismaCatalogStore(database),
