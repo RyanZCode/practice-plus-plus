@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { useAuth } from "./auth";
 import { BrowserKeySettings } from "./BrowserKeySettings";
+import { Coach } from "./Coach";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { Practice } from "./Practice";
 import { AttemptHistory } from "./AttemptHistory";
@@ -41,6 +42,7 @@ function AccountPage({ apiUrl }: AppProps) {
   const [saved, setSaved] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showCoach, setShowCoach] = useState(false);
   const [reloadCount, setReloadCount] = useState(0);
 
   useEffect(() => {
@@ -154,10 +156,25 @@ function AccountPage({ apiUrl }: AppProps) {
               <button
                 className="text-button"
                 type="button"
+                aria-expanded={showCoach}
+                onClick={() => {
+                  setShowCoach((show) => !show);
+                  setShowSettings(false);
+                  setShowHistory(false);
+                }}
+              >
+                {showCoach ? "Back to practice" : "Coach"}
+              </button>
+            ) : null}
+            {!isLoading && !loadFailed && !isOnboarding ? (
+              <button
+                className="text-button"
+                type="button"
                 aria-expanded={showHistory}
                 onClick={() => {
                   setShowHistory((show) => !show);
                   setShowSettings(false);
+                  setShowCoach(false);
                 }}
               >
                 {showHistory ? "Back to practice" : "Attempt history"}
@@ -172,6 +189,7 @@ function AccountPage({ apiUrl }: AppProps) {
                 onClick={() => {
                   setShowSettings((show) => !show);
                   setShowHistory(false);
+                  setShowCoach(false);
                 }}
               >
                 {showSettings ? "Back to practice" : "Practice settings"}
@@ -206,10 +224,19 @@ function AccountPage({ apiUrl }: AppProps) {
         ) : null}
 
         {!isLoading && !loadFailed && !isOnboarding ? (
-          <div hidden={showSettings || showHistory}>
+          <div hidden={showSettings || showHistory || showCoach}>
             <Practice apiUrl={apiUrl} token={session.access_token} />
           </div>
         ) : null}
+
+        <div hidden={isLoading || loadFailed || isOnboarding || !showCoach}>
+          <Coach
+            key={session.user.id}
+            apiUrl={apiUrl}
+            token={session.access_token}
+            userId={session.user.id}
+          />
+        </div>
 
         {!isLoading && !loadFailed && !isOnboarding && showHistory ? (
           <AttemptHistory apiUrl={apiUrl} token={session.access_token} />
