@@ -28,4 +28,25 @@ describe("logger", () => {
     expect(log).not.toContain("api-key-secret");
     expect(log.match(/\[Redacted\]/g)).toHaveLength(3);
   });
+
+  it("does not serialize error messages or stacks that may contain private content", () => {
+    const output: string[] = [];
+    const logger = createLogger(
+      new Writable({
+        write(chunk, _encoding, callback) {
+          output.push(chunk.toString());
+          callback();
+        },
+      }),
+    );
+
+    logger.error(
+      { err: new Error("private prompt, response, code, and credential") },
+      "Unhandled request error",
+    );
+
+    const record = JSON.parse(output.join(""));
+    expect(record.err).toEqual({ type: "Error" });
+    expect(output.join("")).not.toContain("private prompt");
+  });
 });
