@@ -14,6 +14,7 @@ import { createLogger } from "./logger.js";
 import { createPrismaProfileStore } from "./profile.js";
 import { createPrismaSettingsStore } from "./settings.js";
 import { createPrismaSummaryStore } from "./summaries.js";
+import { createPrismaLearningContextStore } from "./learningContext.js";
 
 const config = readConfig();
 const logger = createLogger();
@@ -40,6 +41,7 @@ const app = createApp({
     catalogReviewStore: createPrismaCatalogReviewStore(database),
     profileStore: createPrismaProfileStore(database),
     settingsStore: createPrismaSettingsStore(database),
+    learningContextStore: createPrismaLearningContextStore(database),
     verifier: createSupabaseAccessTokenVerifier(config.supabaseUrl, config.supabasePublishableKey),
   },
   logger,

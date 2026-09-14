@@ -137,3 +137,92 @@ export const rejectedMemorySuggestionSchema = memorySuggestionSchema.extend({
   reviewedAt: z.iso.datetime(),
 });
 export type RejectedMemorySuggestion = z.infer<typeof rejectedMemorySuggestionSchema>;
+
+export const learningContextEvidenceSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("LEARNER_GOAL"),
+    id: z.uuid(),
+    label: learningTextSchema,
+  }),
+  z.strictObject({
+    type: z.literal("TEACHING_PREFERENCE"),
+    id: z.uuid(),
+    label: learningTextSchema,
+  }),
+  z.strictObject({
+    type: z.literal("ATTEMPT"),
+    id: z.uuid(),
+    label: learningTextSchema,
+    occurredAt: z.iso.datetime(),
+  }),
+  z.strictObject({
+    type: z.literal("ASSISTANCE_EVENT"),
+    id: z.uuid(),
+    attemptId: z.uuid(),
+    label: learningTextSchema,
+    occurredAt: z.iso.datetime(),
+  }),
+  z.strictObject({
+    type: z.literal("ATTEMPT_SUMMARY"),
+    id: z.uuid(),
+    label: learningTextSchema,
+    occurredAt: z.iso.datetime(),
+  }),
+  z.strictObject({
+    type: z.literal("CONVERSATION_SUMMARY"),
+    id: z.uuid(),
+    label: learningTextSchema,
+    occurredAt: z.iso.datetime(),
+  }),
+]);
+export type LearningContextEvidence = z.infer<typeof learningContextEvidenceSchema>;
+
+export const learningContextInferenceSchema = z.strictObject({
+  ...memoryFields,
+  id: z.uuid(),
+  approvalState: z.enum(["PENDING", "APPROVED", "REJECTED"]),
+  reviewedAt: z.iso.datetime().nullable(),
+  evidence: z.array(learningContextEvidenceSchema),
+});
+export type LearningContextInference = z.infer<typeof learningContextInferenceSchema>;
+
+export const observedAttemptSchema = z.strictObject({
+  id: z.uuid(),
+  problemTitle: learningTextSchema,
+  practiceDate: z.iso.date(),
+  confirmedAt: z.iso.datetime(),
+  outcome: z.enum(["INDEPENDENT", "ASSISTED", "GAVE_UP", "INCOMPLETE"]),
+  assistance: z.array(
+    z.enum(["CLARIFICATION", "CONCEPTUAL_HINT", "DEBUGGING", "OPTIMIZATION", "SOLUTION_REVIEW"]),
+  ),
+});
+export type ObservedAttempt = z.infer<typeof observedAttemptSchema>;
+
+export const learningContextResponseSchema = z.strictObject({
+  userSupplied: z.strictObject({
+    goals: z.array(learnerGoalSchema),
+    teachingPreferences: z.array(teachingPreferenceSchema),
+  }),
+  observed: z.strictObject({
+    attempts: z.array(observedAttemptSchema),
+    summaries: z.array(conversationSummarySchema),
+  }),
+  inferred: z.array(learningContextInferenceSchema),
+  exportedAt: z.iso.datetime(),
+});
+export type LearningContextResponse = z.infer<typeof learningContextResponseSchema>;
+
+export const memoryCorrectionSchema = z.strictObject({
+  category: memorySuggestionDraftSchema.shape.category,
+  content: memorySuggestionDraftSchema.shape.content,
+  confidence: memorySuggestionDraftSchema.shape.confidence,
+  lifecycleState: memorySuggestionDraftSchema.shape.lifecycleState,
+});
+export type MemoryCorrection = z.infer<typeof memoryCorrectionSchema>;
+
+export const memoryReviewSchema = z.discriminatedUnion("action", [
+  z.strictObject({ action: z.literal("APPROVE") }),
+  z.strictObject({ action: z.literal("REJECT") }),
+  z.strictObject({ action: z.literal("CORRECT"), correction: memoryCorrectionSchema }),
+]);
+export type MemoryReview = z.infer<typeof memoryReviewSchema>;
