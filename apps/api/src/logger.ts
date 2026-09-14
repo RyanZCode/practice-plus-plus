@@ -17,6 +17,18 @@ const options: LoggerOptions = {
     ],
     censor: "[Redacted]",
   },
+  serializers: {
+    err(error: unknown) {
+      return {
+        type:
+          error instanceof Error
+            ? error.name
+            : typeof error === "object" && error !== null
+              ? "UnknownError"
+              : typeof error,
+      };
+    },
+  },
 };
 
 export function createLogger(destination?: DestinationStream): Logger {

@@ -4,10 +4,11 @@ import type {
   ContextPacket,
   MemorySuggestion,
 } from "@practice-plus-plus/contracts";
-import pino from "pino";
+import { Writable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
 import type { PrismaClient } from "./generated/prisma/client.js";
+import { createLogger } from "./logger.js";
 import type { ProviderAdapter, ProviderRequest } from "./providers.js";
 import { createPrismaSummaryStore, summaryMessages, type SummaryStore } from "./summaries.js";
 
@@ -65,6 +66,7 @@ afterEach(async () => {
 });
 
 async function setup(provider: ProviderAdapter, store: SummaryStore) {
+  let logs = "";
   const assembler = {
     assemble: vi.fn().mockImplementation(
       async (_userId, request) =>
@@ -77,7 +79,14 @@ async function setup(provider: ProviderAdapter, store: SummaryStore) {
   };
   const server = createServer(
     createApp({
-      logger: pino({ level: "silent" }),
+      logger: createLogger(
+        new Writable({
+          write(chunk, _encoding, callback) {
+            logs += String(chunk);
+            callback();
+          },
+        }),
+      ),
       authentication: {
         verifier: { verify: vi.fn().mockResolvedValue({ subject: "subject" }) },
         profileStore: { resolveByAuthSubject: vi.fn().mockResolvedValue({ id: userId }) },
@@ -91,6 +100,7 @@ async function setup(provider: ProviderAdapter, store: SummaryStore) {
   if (!address || typeof address === "string") throw new Error("No test address");
   return {
     assembler,
+    logs: () => logs,
     url: `http://127.0.0.1:${address.port}/ai`,
   };
 }
@@ -124,7 +134,15 @@ describe("learning checkpoints", () => {
       { policy: { mode: "COACH", purpose: "GENERAL" }, messages: input.messages },
       expect.any(Date),
     );
-    expect(store.save).toHaveBeenCalledWith(userId, input, output, expect.any(Date));
+    expect(store.save).toHaveBeenCalledWith(
+      userId,
+      { mode: "COACH", attemptId: null },
+      output,
+      expect.any(Date),
+    );
+    expect(JSON.stringify(vi.mocked(store.save).mock.calls)).not.toMatch(
+      /private-key|I keep rushing|Pause to state an invariant/,
+    );
     expect(providerRequest?.apiKey).toBe("private-key");
     expect(providerRequest?.messages[0]?.content).toContain("Never quote messages");
   });
@@ -154,6 +172,54 @@ describe("learning checkpoints", () => {
       expect(result.status).toBe(502);
       expect(store.save).not.toHaveBeenCalled();
     }
+  });
+
+  it.each(["provider failure", "interrupted output"])(
+    "keeps credentials and raw content out of persistence and logs after %s",
+    async (failure) => {
+      const store: SummaryStore = {
+        save: vi.fn(),
+        pending: vi.fn().mockResolvedValue([]),
+      };
+      const { url, logs } = await setup(
+        {
+          async *streamText() {
+            if (failure === "interrupted output") yield '{"summary":';
+            throw new Error("private-key I keep rushing private-provider-content");
+          },
+        },
+        store,
+      );
+      const result = await fetch(`${url}/checkpoints`, {
+        method: "POST",
+        headers: { authorization: "Bearer private-token", "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      expect(result.status).toBe(500);
+      expect(store.save).not.toHaveBeenCalled();
+      expect((await result.text()) + logs()).not.toMatch(
+        /private-key|private-token|I keep rushing|private-provider-content/,
+      );
+    },
+  );
+
+  it("rejects content-bearing validation failures before generation or persistence", async () => {
+    const provider = { streamText: vi.fn<ProviderAdapter["streamText"]>() };
+    const store: SummaryStore = {
+      save: vi.fn(),
+      pending: vi.fn().mockResolvedValue([]),
+    };
+    const { url, assembler, logs } = await setup(provider, store);
+    const result = await fetch(`${url}/checkpoints`, {
+      method: "POST",
+      headers: { authorization: "Bearer private-token", "content-type": "application/json" },
+      body: JSON.stringify({ ...input, rawPrompt: "private-validation-content" }),
+    });
+    expect(result.status).toBe(400);
+    expect(assembler.assemble).not.toHaveBeenCalled();
+    expect(provider.streamText).not.toHaveBeenCalled();
+    expect(store.save).not.toHaveBeenCalled();
+    expect((await result.text()) + logs()).not.toMatch(/private-token|private-validation-content/);
   });
 
   it("returns the pending memory-review queue without accepting owner input", async () => {
@@ -202,6 +268,8 @@ it("builds a checkpoint prompt that forbids transcript and code persistence", ()
   );
   expect(messages[0]?.content).toContain("Never quote messages");
   expect(messages[0]?.content).toContain("reproduce code");
+  expect(messages[0]?.content).toContain("hidden pattern tags");
+  expect(messages[0]?.content).toContain("help already requested");
   expect(messages[1]?.content).toContain("I keep rushing");
 });
 
@@ -266,7 +334,7 @@ it("persists only structured tutor output with pending, user-scoped provenance",
   };
   await createPrismaSummaryStore(client).save(
     userId,
-    { ...input, mode: "ATTEMPT_TUTOR", attemptId },
+    { mode: "ATTEMPT_TUTOR", attemptId },
     tutorOutput,
     now,
   );
