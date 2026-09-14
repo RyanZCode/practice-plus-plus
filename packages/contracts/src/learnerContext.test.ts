@@ -4,6 +4,8 @@ import {
   conversationSummaryInputSchema,
   learnerGoalInputSchema,
   learnerMemorySchema,
+  learningContextResponseSchema,
+  memoryReviewSchema,
   memoryEvidenceSchema,
   memorySuggestionInputSchema,
   memorySuggestionSchema,
@@ -203,6 +205,56 @@ describe("learner context contracts", () => {
     ).toBe(false);
     expect(
       memoryEvidenceSchema.safeParse({ type: "ASSISTANCE_EVENT", assistanceEventId: id }).success,
+    ).toBe(false);
+  });
+
+  it("validates the separated learning-context view and inference review actions", () => {
+    const context = {
+      userSupplied: {
+        goals: [{ id, target: "Prepare for interviews", priority: 0, state: "ACTIVE" }],
+        teachingPreferences: [{ id, preference: "Ask one question at a time." }],
+      },
+      observed: {
+        attempts: [
+          {
+            id,
+            problemTitle: "Two Sum",
+            practiceDate: "2026-09-11",
+            confirmedAt: observedAt,
+            outcome: "INDEPENDENT",
+            assistance: [],
+          },
+        ],
+        summaries: [],
+      },
+      inferred: [
+        {
+          ...suggestion,
+          id,
+          approvalState: "PENDING",
+          reviewedAt: null,
+          evidence: [
+            { type: "ATTEMPT", id, label: "Two Sum, independent", occurredAt: observedAt },
+          ],
+        },
+      ],
+      exportedAt: observedAt,
+    };
+    expect(learningContextResponseSchema.safeParse(context).success).toBe(true);
+    expect(memoryReviewSchema.safeParse({ action: "APPROVE" }).success).toBe(true);
+    expect(
+      memoryReviewSchema.safeParse({
+        action: "CORRECT",
+        correction: {
+          category: suggestion.category,
+          content: suggestion.content,
+          confidence: 0.8,
+          lifecycleState: "IMPROVING",
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      memoryReviewSchema.safeParse({ action: "CORRECT", content: "missing wrapper" }).success,
     ).toBe(false);
   });
 });

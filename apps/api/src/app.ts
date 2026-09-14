@@ -19,6 +19,7 @@ import { createCoachRouter, type CoachOptions } from "./coach.js";
 import { createTutorRouter, type TutorOptions } from "./tutor.js";
 import { createSettingsRouter, type SettingsStore } from "./settings.js";
 import { createSummaryRouter, type SummaryOptions } from "./summaries.js";
+import { createLearningContextRouter, type LearningContextStore } from "./learningContext.js";
 
 interface AuthenticationOptions {
   readonly tutor?: TutorOptions;
@@ -31,6 +32,7 @@ interface AuthenticationOptions {
   readonly profileStore: ProfileStore;
   readonly settingsStore?: SettingsStore;
   readonly summaries?: SummaryOptions;
+  readonly learningContextStore?: LearningContextStore;
   readonly verifier: AccessTokenVerifier;
 }
 
@@ -86,7 +88,8 @@ export function createApp(options: AppOptions = {}): Express {
       options.authentication.catalogStore !== undefined ||
       options.authentication.settingsStore !== undefined ||
       options.authentication.catalogImportStore !== undefined ||
-      options.authentication.catalogReviewStore !== undefined
+      options.authentication.catalogReviewStore !== undefined ||
+      options.authentication.learningContextStore !== undefined
     ) {
       app.use(express.json());
     }
@@ -132,6 +135,15 @@ export function createApp(options: AppOptions = {}): Express {
         authenticate,
         resolveProfile,
         createSettingsRouter(options.authentication.settingsStore),
+      );
+    }
+
+    if (options.authentication.learningContextStore !== undefined) {
+      app.use(
+        "/learning-context",
+        authenticate,
+        resolveProfile,
+        createLearningContextRouter(options.authentication.learningContextStore),
       );
     }
 

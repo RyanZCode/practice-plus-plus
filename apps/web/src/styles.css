@@ -523,3 +523,167 @@ summary:focus-visible {
   border: 1px solid #b9c2d0;
   border-radius: 0.5rem;
 }
+
+.learning-context {
+  margin-top: 2rem;
+  border-top: 1px solid #dce1e9;
+  padding-top: 1.5rem;
+  line-height: 1.5;
+}
+
+.learning-context h2,
+.learning-context h3,
+.learning-context h4 {
+  margin: 0;
+}
+
+.learning-context h3,
+.learning-context h4 {
+  margin-top: 1.5rem;
+}
+
+.learning-context-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.learning-context-heading > button {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.context-section + .context-section {
+  margin-top: 2rem;
+  border-top: 1px solid #dce1e9;
+  padding-top: 0.5rem;
+}
+
+.context-list {
+  list-style: none;
+  margin: 0.75rem 0;
+  padding: 0;
+}
+
+.context-list > li {
+  padding: 1rem 0;
+  border-bottom: 1px solid #e5e9ef;
+}
+
+.compact-context-form,
+.inference-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.compact-context-form {
+  grid-template-columns: minmax(0, 1fr) 6rem 9rem auto;
+  align-items: end;
+}
+
+.compact-context-form.preference-form {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.compact-context-form label,
+.inference-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 650;
+}
+
+.compact-context-form :is(input, select),
+.inference-form :is(input, select, textarea) {
+  min-width: 0;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #b8c0cc;
+  border-radius: 0.5rem;
+  color: inherit;
+  background: #ffffff;
+  font: inherit;
+  font-weight: 400;
+}
+
+.compact-context-form :is(input, select):focus-visible,
+.inference-form :is(input, select, textarea):focus-visible {
+  outline: 3px solid #c7d2fe;
+  outline-offset: 1px;
+}
+
+.context-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.context-actions button {
+  min-height: 2.5rem;
+  margin: 0;
+}
+
+.danger-button {
+  border-color: #fecdd3;
+  color: #9f1239;
+  background: #fff1f2;
+}
+
+.danger-button:hover:not(:disabled) {
+  background: #ffe4e6;
+}
+
+.observed-list li {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.observed-list small,
+.inference-meta {
+  color: #5f6b7d;
+}
+
+.inference-list > li {
+  padding: 1.25rem 0;
+}
+
+.inference-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  font-size: 0.875rem;
+}
+
+.inference-fields {
+  display: grid;
+  grid-template-columns: 8rem minmax(10rem, 1fr);
+  gap: 0.75rem;
+}
+
+.inference-form summary {
+  cursor: pointer;
+  color: #3730a3;
+  font-weight: 600;
+}
+
+.inference-form details ul {
+  margin-bottom: 0;
+}
+
+@media (max-width: 48rem) {
+  .compact-context-form,
+  .compact-context-form.preference-form {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 32rem) {
+  .learning-context-heading {
+    flex-direction: column;
+  }
+
+  .inference-fields {
+    grid-template-columns: 1fr;
+  }
+}
