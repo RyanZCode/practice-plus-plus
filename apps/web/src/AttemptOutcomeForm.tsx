@@ -4,6 +4,7 @@ import {
   type Assistance,
   type Attempt,
   type ConfirmAttempt,
+  type MemorySuggestion,
   type ReportAttempt,
 } from "@practice-plus-plus/contracts";
 import { useState } from "react";
@@ -21,9 +22,11 @@ export function AttemptOutcomeForm({
   busy,
   onConfirm,
   onReport,
+  memorySuggestions,
 }: {
   attempt: Attempt;
   busy: boolean;
+  memorySuggestions: MemorySuggestion[];
   onConfirm: (input: ConfirmAttempt) => Promise<void>;
   onReport: (input: ReportAttempt) => Promise<void>;
 }) {
@@ -33,9 +36,18 @@ export function AttemptOutcomeForm({
   const [assistance, setAssistance] = useState<Assistance[]>([]);
   const [reproduced, setReproduced] = useState<boolean | null>(null);
   const [selectedAction, setSelectedAction] = useState<string>();
+  const [summary, setSummary] = useState({
+    approach: attempt.summary?.approach ?? "",
+    stuckPoint: attempt.summary?.stuckPoint ?? "",
+    misconception: attempt.summary?.misconception ?? "",
+    assistance: attempt.summary?.assistance ?? "",
+    progressTrigger: attempt.summary?.progressTrigger ?? "",
+    finalUnderstanding: attempt.summary?.finalUnderstanding ?? "",
+    nextTeachingAction: attempt.summary?.nextTeachingAction ?? "",
+  });
   const successfulRedo =
     attempt.type === "REDO" && (outcome === "INDEPENDENT" || outcome === "ASSISTED");
-  const nextActionType = selectedAction ?? (outcome === "ASSISTED" ? "REPEAT" : "");
+  const nextActionType = selectedAction ?? "";
   const required = suggestedOutcome([...attempt.assistance, ...assistance]);
   const reviewed = required === "GAVE_UP";
   const canConfirm = outcome === "INCOMPLETE" || attempt.outcome !== null;
@@ -55,12 +67,15 @@ export function AttemptOutcomeForm({
       className="outcome-form"
       onSubmit={(event) => {
         event.preventDefault();
-        if (outcome === "" || !canConfirm || (reviewed && reproduced === null)) return;
+        if (outcome === "" || !canConfirm) return;
         const data = new FormData(event.currentTarget);
         const text = (name: string) => String(data.get(name) ?? "").trim() || null;
         const minutes = text("minutes");
+        const reviewedSummary = Object.fromEntries(
+          Object.entries(summary).map(([key, value]) => [key, value.trim() || null]),
+        ) as NonNullable<ConfirmAttempt["summary"]>;
         void onConfirm({
-          ...(successfulRedo
+          ...(successfulRedo && nextActionType !== ""
             ? {
                 nextAction: redoNextActionSchema.parse({
                   type: nextActionType,
@@ -80,85 +95,14 @@ export function AttemptOutcomeForm({
           approach: text("approach"),
           notes: text("notes"),
           reproducedFromMemory: reviewed ? reproduced : null,
+          summary: Object.values(reviewedSummary).every((value) => value === null)
+            ? null
+            : reviewedSummary,
         });
       }}
     >
       <fieldset disabled={busy}>
         <legend>Confirm attempt outcome</legend>
-        {attempt.assistance.length > 0 ? (
-          <p>
-            Recorded help:{" "}
-            {attempt.assistance
-              .map(
-                (event) =>
-                  `${assistanceOptions.find((option) => option.type === event.type)?.label}${event.hintLevel === null ? "" : ` (level ${event.hintLevel})`}`,
-              )
-              .join(", ")}
-          </p>
-        ) : null}
-        <fieldset>
-          <legend>Other help received (optional)</legend>
-          {assistanceOptions
-            .filter((option) => !attempt.assistance.some((event) => event.type === option.type))
-            .map(({ type, label }) => (
-              <label key={type}>
-                <input
-                  type="checkbox"
-                  checked={assistance.some((event) => event.type === type)}
-                  onChange={(event) => toggleHelp(type, event.target.checked)}
-                />{" "}
-                {label}
-              </label>
-            ))}
-          {assistance.some((event) => event.type === "CONCEPTUAL_HINT") ? (
-            <label>
-              Highest hint level (optional)
-              <input
-                type="number"
-                min="1"
-                max="32767"
-                step="1"
-                onChange={(event) => {
-                  const level = event.target.value === "" ? null : Number(event.target.value);
-                  setAssistance((current) =>
-                    current.map((help) =>
-                      help.type === "CONCEPTUAL_HINT" ? { ...help, hintLevel: level } : help,
-                    ),
-                  );
-                }}
-              />
-            </label>
-          ) : null}
-        </fieldset>
-        {reviewed ? (
-          <fieldset>
-            <legend>Try the solution from memory</legend>
-            <p>
-              Close the reference and try coding the solution without looking. Either result keeps
-              the outcome gave up.
-            </p>
-            <label>
-              <input
-                type="radio"
-                name="reproduction"
-                required
-                checked={reproduced === true}
-                onChange={() => setReproduced(true)}
-              />{" "}
-              I reproduced it from memory
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="reproduction"
-                required
-                checked={reproduced === false}
-                onChange={() => setReproduced(false)}
-              />{" "}
-              I could not reproduce it
-            </label>
-          </fieldset>
-        ) : null}
         <label>
           Outcome
           <select
@@ -199,29 +143,100 @@ export function AttemptOutcomeForm({
         ) : null}
         {attempt.outcome !== null ? (
           <p>
-            Result reported. You can review the details before confirming. This attempt can no
-            longer be incomplete.
+            Result reported. You can review the optional details before confirming. This attempt can
+            no longer be incomplete.
           </p>
+        ) : null}
+        {attempt.assistance.length > 0 ? (
+          <p>
+            Recorded help:{" "}
+            {attempt.assistance
+              .map(
+                (event) =>
+                  `${assistanceOptions.find((option) => option.type === event.type)?.label}${event.hintLevel === null ? "" : ` (level ${event.hintLevel})`}`,
+              )
+              .join(", ")}
+          </p>
+        ) : null}
+        <details>
+          <summary>Other help received (optional)</summary>
+          {assistanceOptions
+            .filter((option) => !attempt.assistance.some((event) => event.type === option.type))
+            .map(({ type, label }) => (
+              <label key={type}>
+                <input
+                  type="checkbox"
+                  checked={assistance.some((event) => event.type === type)}
+                  onChange={(event) => toggleHelp(type, event.target.checked)}
+                />{" "}
+                {label}
+              </label>
+            ))}
+          {assistance.some((event) => event.type === "CONCEPTUAL_HINT") ? (
+            <label>
+              Highest hint level (optional)
+              <input
+                type="number"
+                min="1"
+                max="32767"
+                step="1"
+                onChange={(event) => {
+                  const level = event.target.value === "" ? null : Number(event.target.value);
+                  setAssistance((current) =>
+                    current.map((help) =>
+                      help.type === "CONCEPTUAL_HINT" ? { ...help, hintLevel: level } : help,
+                    ),
+                  );
+                }}
+              />
+            </label>
+          ) : null}
+        </details>
+        {reviewed ? (
+          <details>
+            <summary>Try the solution from memory (optional)</summary>
+            <p>
+              Close the reference and try coding the solution without looking. Either result keeps
+              the outcome gave up, or you can leave this unanswered.
+            </p>
+            <label>
+              <input
+                type="radio"
+                name="reproduction"
+                checked={reproduced === true}
+                onChange={() => setReproduced(true)}
+              />{" "}
+              I reproduced it from memory
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="reproduction"
+                checked={reproduced === false}
+                onChange={() => setReproduced(false)}
+              />{" "}
+              I could not reproduce it
+            </label>
+          </details>
         ) : null}
         {canConfirm && successfulRedo ? (
           <fieldset>
-            <legend>Next action</legend>
+            <legend>Next action (optional)</legend>
             {outcome === "ASSISTED" ? (
               <p>
-                Repeating the problem is suggested after an assisted solve. You can choose another
+                Leave this unchanged to schedule the normal assisted review, or choose another
                 action.
               </p>
-            ) : null}
+            ) : (
+              <p>Leave this unchanged to complete the redo without another follow-up.</p>
+            )}
             <label>
               After this redo
               <select
-                required
                 value={nextActionType}
                 onChange={(event) => setSelectedAction(event.target.value)}
               >
-                <option value="" disabled>
-                  Select a next action
-                </option>
+                <option value="">Use automatic follow-up</option>
                 <option value="REPEAT">Repeat this problem using my review interval</option>
                 <option value="TRANSFER">Practice a fresh problem with the same pattern</option>
                 <option value="COMPLETE">Complete with no follow-up</option>
@@ -297,10 +312,53 @@ export function AttemptOutcomeForm({
           </details>
         ) : null}
         {canConfirm ? (
-          <button
-            type="submit"
-            disabled={busy || outcome === "" || (reviewed && reproduced === null)}
-          >
+          <details>
+            <summary>Learning summary (optional)</summary>
+            <p className="settings-help">
+              Review or edit this structured summary if useful. Keep it concise and do not include
+              source code.
+            </p>
+            {(
+              [
+                ["approach", "Approach"],
+                ["stuckPoint", "Where I got stuck"],
+                ["misconception", "Misconception"],
+                ["assistance", "Assistance"],
+                ["progressTrigger", "What unlocked progress"],
+                ["finalUnderstanding", "Final understanding"],
+                ["nextTeachingAction", "Next teaching action"],
+              ] as const
+            ).map(([field, label]) => (
+              <label key={field}>
+                {label}
+                <textarea
+                  rows={2}
+                  maxLength={1000}
+                  value={summary[field]}
+                  onChange={(event) => setSummary({ ...summary, [field]: event.target.value })}
+                />
+              </label>
+            ))}
+          </details>
+        ) : null}
+        {canConfirm && memorySuggestions.length > 0 ? (
+          <fieldset>
+            <legend>Pending memory suggestions</legend>
+            <p className="settings-help">
+              These subjective inferences need separate approval and are not used in future AI
+              context yet.
+            </p>
+            <ul>
+              {memorySuggestions.map((suggestion) => (
+                <li key={suggestion.id}>
+                  <strong>{suggestion.category}</strong>: {suggestion.content}
+                </li>
+              ))}
+            </ul>
+          </fieldset>
+        ) : null}
+        {canConfirm ? (
+          <button type="submit" disabled={busy || outcome === ""}>
             {successfulRedo ? "Confirm outcome and next action" : "Confirm outcome"}
           </button>
         ) : null}

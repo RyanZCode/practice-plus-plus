@@ -7,6 +7,7 @@ import {
   memoryEvidenceSchema,
   memorySuggestionInputSchema,
   memorySuggestionSchema,
+  rollingSummaryOutputSchema,
   rejectedMemorySuggestionSchema,
   teachingPreferenceInputSchema,
 } from "./index.js";
@@ -74,6 +75,29 @@ describe("learner context contracts", () => {
     expect(
       memorySuggestionInputSchema.safeParse({ ...suggestion, content: "~~~python\npass\n~~~" })
         .success,
+    ).toBe(false);
+  });
+
+  it("validates bounded structured checkpoint output without transcript fields", () => {
+    const output = {
+      summary: { topics: "Practice pacing", learningProgress: null, nextSteps: null },
+      attemptSummary: null,
+      memorySuggestions: [
+        {
+          category: "Practice habit",
+          content: "May benefit from pausing before implementation.",
+          confidence: 0.7,
+          lifecycleState: "ACTIVE",
+        },
+      ],
+    };
+    expect(rollingSummaryOutputSchema.safeParse(output).success).toBe(true);
+    expect(rollingSummaryOutputSchema.safeParse({ ...output, transcript: [] }).success).toBe(false);
+    expect(
+      rollingSummaryOutputSchema.safeParse({
+        ...output,
+        summary: { ...output.summary, topics: "`return result`" },
+      }).success,
     ).toBe(false);
   });
 

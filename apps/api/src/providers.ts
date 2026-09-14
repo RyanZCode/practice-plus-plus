@@ -45,6 +45,8 @@ export interface ProviderRequest {
   readonly selection: ProviderSelection;
   readonly apiKey: string;
   readonly messages: readonly ProviderMessage[];
+  readonly format?:
+    "json" | { readonly name: string; readonly schema: Readonly<Record<string, unknown>> };
   readonly signal?: AbortSignal;
 }
 
@@ -83,6 +85,20 @@ export function createProviderAdapter(fetcher: typeof fetch = fetch): ProviderAd
         stream: true,
         store: false,
         max_completion_tokens: 4096,
+        ...(request.format === "json"
+          ? { response_format: { type: "json_object" } }
+          : request.format === undefined
+            ? {}
+            : {
+                response_format: {
+                  type: "json_schema",
+                  json_schema: {
+                    name: request.format.name,
+                    strict: true,
+                    schema: request.format.schema,
+                  },
+                },
+              }),
       });
       if (Buffer.byteLength(body) > maxRequestBytes) {
         throw new ProviderError("invalid_request");

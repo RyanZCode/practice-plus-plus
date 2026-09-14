@@ -2,6 +2,24 @@ import { describe, expect, it } from "vitest";
 import { confirmAttemptSchema, suggestedOutcome } from "./index.js";
 
 describe("attempt confirmation", () => {
+  it("accepts an editable structured summary but rejects raw transcript fields", () => {
+    const summary = {
+      approach: "Tracked seen values.",
+      stuckPoint: null,
+      misconception: null,
+      assistance: null,
+      progressTrigger: null,
+      finalUnderstanding: "Explained the lookup invariant.",
+      nextTeachingAction: null,
+    };
+    expect(confirmAttemptSchema.safeParse({ outcome: "INDEPENDENT", summary }).success).toBe(true);
+    expect(
+      confirmAttemptSchema.safeParse({
+        outcome: "INDEPENDENT",
+        summary: { ...summary, transcript: [] },
+      }).success,
+    ).toBe(false);
+  });
   it.each([
     { type: "CUSTOM_DATE" },
     { type: "CUSTOM_DATE", dueDate: "2026-02-30" },

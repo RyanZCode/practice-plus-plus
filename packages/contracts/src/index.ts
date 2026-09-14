@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { contextRequestSchema } from "./context.js";
+import {
+  attemptSummaryInputSchema,
+  conversationSummarySchema,
+  memorySuggestionSchema,
+} from "./learnerContext.js";
 
 export * from "./learnerContext.js";
 export * from "./context.js";
@@ -55,6 +60,29 @@ export const coachEventSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("error"), error: z.string().max(200) }),
 ]);
 export type CoachEvent = z.infer<typeof coachEventSchema>;
+
+const checkpointFields = {
+  selection: providerSelectionSchema,
+  apiKey: z.string().regex(/^[\x21-\x7e]{1,4096}$/),
+  messages: contextRequestSchema.shape.messages.unwrap().min(2).max(12),
+};
+export const checkpointRequestSchema = z.discriminatedUnion("mode", [
+  z.strictObject({ ...checkpointFields, mode: z.literal("COACH"), attemptId: z.null() }),
+  z.strictObject({ ...checkpointFields, mode: z.literal("ATTEMPT_TUTOR"), attemptId: z.uuid() }),
+]);
+export type CheckpointRequest = z.infer<typeof checkpointRequestSchema>;
+
+export const checkpointResponseSchema = z.strictObject({
+  summary: conversationSummarySchema,
+  attemptSummary: attemptSummaryInputSchema.nullable(),
+  memorySuggestions: z.array(memorySuggestionSchema).max(5),
+});
+export type CheckpointResponse = z.infer<typeof checkpointResponseSchema>;
+
+export const memorySuggestionListResponseSchema = z.strictObject({
+  memorySuggestions: z.array(memorySuggestionSchema).max(50),
+});
+export type MemorySuggestionListResponse = z.infer<typeof memorySuggestionListResponseSchema>;
 
 export const providersResponseSchema = z.strictObject({
   providers: z.array(z.strictObject({ id: providerIdSchema, name: z.string() })),
@@ -319,6 +347,7 @@ export const confirmAttemptSchema = z.strictObject({
   approach: z.string().trim().max(1000).nullable().default(null),
   notes: z.string().trim().max(5000).nullable().default(null),
   reproducedFromMemory: z.boolean().nullable().default(null),
+  summary: attemptSummaryInputSchema.nullable().optional(),
 });
 export type ConfirmAttempt = z.infer<typeof confirmAttemptSchema>;
 export type Assistance = z.infer<typeof assistanceSchema>;
@@ -353,6 +382,10 @@ export const attemptSchema = z.strictObject({
   approach: confirmAttemptSchema.shape.approach,
   notes: confirmAttemptSchema.shape.notes,
   reproducedFromMemory: confirmAttemptSchema.shape.reproducedFromMemory,
+  summary: attemptSummaryInputSchema
+    .extend({ reviewedAt: z.string().datetime().nullable() })
+    .nullable()
+    .optional(),
   assistance: z.array(assistanceSchema),
 });
 export const activeAttemptResponseSchema = z.strictObject({ attempt: attemptSchema.nullable() });

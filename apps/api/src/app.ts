@@ -18,6 +18,7 @@ import { getProviders } from "./providers.js";
 import { createCoachRouter, type CoachOptions } from "./coach.js";
 import { createTutorRouter, type TutorOptions } from "./tutor.js";
 import { createSettingsRouter, type SettingsStore } from "./settings.js";
+import { createSummaryRouter, type SummaryOptions } from "./summaries.js";
 
 interface AuthenticationOptions {
   readonly tutor?: TutorOptions;
@@ -29,6 +30,7 @@ interface AuthenticationOptions {
   readonly catalogReviewStore?: CatalogReviewStore;
   readonly profileStore: ProfileStore;
   readonly settingsStore?: SettingsStore;
+  readonly summaries?: SummaryOptions;
   readonly verifier: AccessTokenVerifier;
 }
 
@@ -68,6 +70,14 @@ export function createApp(options: AppOptions = {}): Express {
         authenticate,
         resolveProfile,
         createCoachRouter(options.authentication.coach),
+      );
+    }
+    if (options.authentication.summaries !== undefined) {
+      app.use(
+        "/ai",
+        authenticate,
+        resolveProfile,
+        createSummaryRouter(options.authentication.summaries),
       );
     }
 

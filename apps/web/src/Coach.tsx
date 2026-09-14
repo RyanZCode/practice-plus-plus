@@ -1,9 +1,20 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
-import { coachRequestSchema, type CoachRequest } from "@practice-plus-plus/contracts";
+import {
+  coachRequestSchema,
+  type CoachRequest,
+  type ConversationSummary,
+  type MemorySuggestion,
+} from "@practice-plus-plus/contracts";
 import { useAuth } from "./auth";
 import { recentCoachMessages, streamCoach } from "./coachApi";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { OpenAIModelSelect } from "./OpenAIModelSelect";
+import {
+  checkpointMessages,
+  loadMemorySuggestions,
+  needsCheckpoint,
+  saveCheckpoint,
+} from "./summaryApi";
 
 interface Message {
   role: "user" | "assistant";
@@ -30,6 +41,11 @@ export function Coach({
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
+  const [checkpointBusy, setCheckpointBusy] = useState(false);
+  const [checkpointIndex, setCheckpointIndex] = useState(0);
+  const [summary, setSummary] = useState<ConversationSummary | null>(null);
+  const [suggestions, setSuggestions] = useState<MemorySuggestion[]>([]);
+  const [checkpointError, setCheckpointError] = useState<string>();
   const [error, setError] = useState<string>();
   const active = useRef<AbortController | null>(null);
   useEffect(
@@ -40,16 +56,65 @@ export function Coach({
     [],
   );
 
+  useEffect(() => {
+    let active = true;
+    void loadMemorySuggestions(apiUrl, token)
+      .then((items) => {
+        if (active) setSuggestions(items);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [apiUrl, token]);
+
+  async function checkpoint(source: Message[], endIndex: number): Promise<boolean> {
+    const complete = source.filter((message) => message.complete);
+    if (complete.length < 2 || checkpointBusy) return false;
+    setCheckpointBusy(true);
+    setCheckpointError(undefined);
+    try {
+      const result = await saveCheckpoint(apiUrl, token, {
+        selection: { providerId: "openai", model },
+        apiKey: browserKey.getKey(userId) ?? "",
+        mode: "COACH",
+        attemptId: null,
+        messages: recentCoachMessages(checkpointMessages(complete)),
+      });
+      setSummary(result.summary);
+      setSuggestions((current) => [
+        ...result.memorySuggestions,
+        ...current.filter(
+          (item) => !result.memorySuggestions.some((created) => created.id === item.id),
+        ),
+      ]);
+      setCheckpointIndex(endIndex);
+      return true;
+    } catch {
+      setCheckpointError(
+        "The checkpoint could not be saved. No messages were stored, and this conversation remains available in this tab.",
+      );
+      return false;
+    } finally {
+      setCheckpointBusy(false);
+    }
+  }
+
   async function send(event: FormEvent) {
     event.preventDefault();
-    if (active.current) return;
+    if (active.current || checkpointBusy) return;
     const user: Message = { role: "user", content: draft.trim(), complete: true };
+    let contextMessages = messages.slice(checkpointIndex).filter((message) => message.complete);
+    if (needsCheckpoint([...contextMessages, user])) {
+      const saved = await checkpoint(contextMessages, messages.length);
+      if (saved) contextMessages = [];
+    }
     const input = coachRequestSchema.safeParse({
       selection: { providerId: "openai", model },
       apiKey: browserKey.getKey(userId),
       purpose,
       messages: recentCoachMessages(
-        [...messages.filter((message) => message.complete), user].map(({ role, content }) => ({
+        [...contextMessages, user].map(({ role, content }) => ({
           role,
           content,
         })),
@@ -108,19 +173,19 @@ export function Coach({
       <h2>Coach</h2>
       <p className="settings-help">
         Discuss your practice plan, progress, goals, or reflections. This conversation clears when
-        you refresh, close the tab, or sign out. Advice does not change your saved plan or learning
-        records.
+        you refresh, close the tab, or sign out. Learning checkpoints save a compact summary, never
+        the transcript.
       </p>
       {!keyState.hasKey ? (
         <p role="status">Add your OpenAI API key in Practice settings to chat.</p>
       ) : null}
       <form className="settings-form" onSubmit={(event) => void send(event)}>
-        <OpenAIModelSelect value={model} disabled={busy} onChange={setModel} />
+        <OpenAIModelSelect value={model} disabled={busy || checkpointBusy} onChange={setModel} />
         <label>
           Conversation focus
           <select
             value={purpose}
-            disabled={busy}
+            disabled={busy || checkpointBusy}
             onChange={(event) => setPurpose(event.target.value as CoachRequest["purpose"])}
           >
             <option value="GENERAL">General coaching</option>
@@ -165,9 +230,49 @@ export function Coach({
             {error}
           </p>
         ) : null}
+        {checkpointError ? (
+          <p className="auth-message" role="alert">
+            {checkpointError}
+          </p>
+        ) : null}
+        {summary ? (
+          <div role="status">
+            <strong>Latest learning checkpoint</strong>
+            <p>{summary.topics}</p>
+          </div>
+        ) : null}
+        {suggestions.length > 0 ? (
+          <section aria-label="Memory review queue">
+            <h3>Memory suggestions to review</h3>
+            <p className="settings-help">
+              These inferences are pending and are not used in future coaching until you approve
+              them.
+            </p>
+            <ul>
+              {suggestions.map((suggestion) => (
+                <li key={suggestion.id}>
+                  <strong>{suggestion.category}</strong>: {suggestion.content}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         <div className="account-actions">
-          <button type="submit" disabled={busy || !keyState.hasKey}>
+          <button type="submit" disabled={busy || checkpointBusy || !keyState.hasKey}>
             {busy ? "Responding…" : "Send"}
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={
+              busy ||
+              checkpointBusy ||
+              !keyState.hasKey ||
+              messages.slice(checkpointIndex).filter((message) => message.complete).length < 2
+            }
+            onClick={() => void checkpoint(messages.slice(checkpointIndex), messages.length)}
+          >
+            {checkpointBusy ? "Saving checkpoint…" : "Save learning checkpoint"}
           </button>
           {busy ? (
             <button
@@ -181,9 +286,10 @@ export function Coach({
           <button
             type="button"
             className="secondary-button"
-            disabled={busy}
+            disabled={busy || checkpointBusy}
             onClick={() => {
               setMessages([]);
+              setCheckpointIndex(0);
               setError(undefined);
               setDraft("");
             }}

@@ -1,9 +1,20 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { tutorRequestSchema, type Attempt, type TutorHelp } from "@practice-plus-plus/contracts";
+import {
+  tutorRequestSchema,
+  type Attempt,
+  type MemorySuggestion,
+  type TutorHelp,
+} from "@practice-plus-plus/contracts";
 import { useAuth } from "./auth";
 import { recentCoachMessages, streamTutor } from "./coachApi";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { OpenAIModelSelect } from "./OpenAIModelSelect";
+import {
+  checkpointMessages,
+  loadMemorySuggestions,
+  needsCheckpoint,
+  saveCheckpoint,
+} from "./summaryApi";
 
 const levels = ["Small nudge", "Key idea", "Approach outline"];
 const actions = ["Get a small nudge", "Show me the key idea", "Outline the approach"];
@@ -43,6 +54,11 @@ export function AttemptTutor({
   const [messages, setMessages] = useState<Message[]>([]);
   const [help, setHelp] = useState<TutorHelp>({ type: "CLARIFICATION" });
   const [busy, setBusy] = useState(false);
+  const [checkpointBusy, setCheckpointBusy] = useState(false);
+  const [checkpointIndex, setCheckpointIndex] = useState(0);
+  const [suggestions, setSuggestions] = useState<MemorySuggestion[]>([]);
+  const [checkpointSaved, setCheckpointSaved] = useState(false);
+  const [checkpointError, setCheckpointError] = useState<string>();
   const [error, setError] = useState<string>();
   const active = useRef<AbortController | null>(null);
   useEffect(
@@ -52,6 +68,17 @@ export function AttemptTutor({
     },
     [],
   );
+  useEffect(() => {
+    let active = true;
+    void loadMemorySuggestions(apiUrl, token, attempt.id)
+      .then((items) => {
+        if (active) setSuggestions(items);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [apiUrl, token, attempt.id]);
   const highest = Math.min(
     3,
     Math.max(
@@ -63,8 +90,43 @@ export function AttemptTutor({
   );
   const gaveUp = attempt.outcome === "GAVE_UP";
 
+  async function checkpoint(source: Message[], endIndex: number): Promise<boolean> {
+    const complete = source.filter((message) => message.complete);
+    if (complete.length < 2 || checkpointBusy) return false;
+    setCheckpointBusy(true);
+    onBusy(true);
+    setCheckpointError(undefined);
+    try {
+      const result = await saveCheckpoint(apiUrl, token, {
+        selection: { providerId: "openai", model },
+        apiKey: browserKey.getKey(userId) ?? "",
+        mode: "ATTEMPT_TUTOR",
+        attemptId: attempt.id,
+        messages: recentCoachMessages(checkpointMessages(complete)),
+      });
+      setSuggestions((current) => [
+        ...result.memorySuggestions,
+        ...current.filter(
+          (item) => !result.memorySuggestions.some((created) => created.id === item.id),
+        ),
+      ]);
+      setCheckpointIndex(endIndex);
+      setCheckpointSaved(true);
+      await onRefresh();
+      return true;
+    } catch {
+      setCheckpointError(
+        "The checkpoint could not be saved. No messages or code were stored, and this conversation remains available in this tab.",
+      );
+      return false;
+    } finally {
+      setCheckpointBusy(false);
+      onBusy(false);
+    }
+  }
+
   async function send(requested: TutorHelp, defaultMessage?: string) {
-    if (active.current || disabled) return;
+    if (active.current || disabled || checkpointBusy) return;
     const label =
       requested.type === "CONCEPTUAL_HINT"
         ? levels[requested.hintLevel - 1]!
@@ -81,13 +143,18 @@ export function AttemptTutor({
       complete: true,
       label,
     };
+    let contextMessages = messages.slice(checkpointIndex).filter((message) => message.complete);
+    if (needsCheckpoint([...contextMessages, user])) {
+      const saved = await checkpoint(contextMessages, messages.length);
+      if (saved) contextMessages = [];
+    }
     const input = tutorRequestSchema.safeParse({
       selection: { providerId: "openai", model },
       apiKey: browserKey.getKey(userId),
       attemptId: attempt.id,
       help: requested,
       messages: recentCoachMessages(
-        [...messages.filter((message) => message.complete), user].map(({ role, content }) => ({
+        [...contextMessages, user].map(({ role, content }) => ({
           role,
           content,
         })),
@@ -157,7 +224,11 @@ export function AttemptTutor({
         <p role="status">Add your OpenAI API key in Practice settings to use the tutor.</p>
       ) : null}
       <div className="settings-form">
-        <OpenAIModelSelect value={model} disabled={busy || disabled} onChange={setModel} />
+        <OpenAIModelSelect
+          value={model}
+          disabled={busy || checkpointBusy || disabled}
+          onChange={setModel}
+        />
         {!gaveUp && hintsAvailable ? (
           <div>
             <p>Start with a small nudge, then request more help only if needed.</p>
@@ -241,18 +312,65 @@ export function AttemptTutor({
             {error}
           </p>
         ) : null}
+        {checkpointError ? (
+          <p className="auth-message" role="alert">
+            {checkpointError}
+          </p>
+        ) : null}
+        {checkpointSaved ? <p role="status">Learning checkpoint saved.</p> : null}
+        {suggestions.length > 0 ? (
+          <div>
+            <strong>Pending memory suggestions</strong>
+            <p className="settings-help">
+              Review these during confirmation. They are not used as learner memory until approved.
+            </p>
+            <ul>
+              {suggestions.map((suggestion) => (
+                <li key={suggestion.id}>{suggestion.content}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div className="account-actions">
           <button
             type="button"
-            disabled={busy || disabled || !keyState.hasKey}
-            onClick={() =>
-              void send(
-                gaveUp ? { type: "SOLUTION_REVIEW" } : help,
-                gaveUp ? "Explain the solution, then help me try coding from memory." : undefined,
-              )
+            disabled={
+              busy || checkpointBusy || disabled || !keyState.hasKey || draft.trim().length === 0
             }
+            onClick={() => void send(gaveUp ? { type: "SOLUTION_REVIEW" } : help)}
           >
-            {gaveUp ? "Ask AI for the solution" : "Send"}
+            Send message
+          </button>
+          {gaveUp ? (
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={
+                busy || checkpointBusy || disabled || !keyState.hasKey || draft.trim().length > 0
+              }
+              onClick={() =>
+                void send(
+                  { type: "SOLUTION_REVIEW" },
+                  "Explain the solution, then help me try coding from memory.",
+                )
+              }
+            >
+              Ask AI for the solution
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={
+              busy ||
+              checkpointBusy ||
+              disabled ||
+              !keyState.hasKey ||
+              messages.slice(checkpointIndex).filter((message) => message.complete).length < 2
+            }
+            onClick={() => void checkpoint(messages.slice(checkpointIndex), messages.length)}
+          >
+            {checkpointBusy ? "Saving checkpoint…" : "Save learning checkpoint"}
           </button>
           {busy ? (
             <button type="button" onClick={() => active.current?.abort()}>
@@ -261,9 +379,11 @@ export function AttemptTutor({
           ) : null}
           <button
             type="button"
-            disabled={busy}
+            className="secondary-button"
+            disabled={busy || checkpointBusy}
             onClick={() => {
               setMessages([]);
+              setCheckpointIndex(0);
               setDraft("");
               setError(undefined);
             }}
@@ -274,7 +394,7 @@ export function AttemptTutor({
         {gaveUp ? (
           <p>
             After reviewing, clear the conversation and close the reference. Try coding from memory,
-            then record whether you could reproduce it below.
+            then optionally record whether you could reproduce it below.
           </p>
         ) : null}
       </div>

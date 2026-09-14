@@ -44,6 +44,18 @@ const select = {
   approach: true,
   notes: true,
   reproducedFromMemory: true,
+  summary: {
+    select: {
+      approach: true,
+      stuckPoint: true,
+      misconception: true,
+      assistance: true,
+      progressTrigger: true,
+      finalUnderstanding: true,
+      nextTeachingAction: true,
+      reviewedAt: true,
+    },
+  },
   review: { select: { generatedDueDate: true, manualDueDate: true } },
   assistance: { select: { type: true, hintLevel: true }, orderBy: { recordedAt: "asc" } },
   problem: { select: catalogProblemSelect },
@@ -228,9 +240,6 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
             "Recorded assistance is inconsistent with an independent solve.",
           );
         }
-        if (required === "GAVE_UP" && input.reproducedFromMemory === null) {
-          throw new HttpError(409, "Report whether you could reproduce the solution from memory.");
-        }
         if (required !== "GAVE_UP" && input.reproducedFromMemory !== null) {
           throw new HttpError(400, "Reproduction applies only after solution review.");
         }
@@ -250,13 +259,10 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
           }
           return record;
         }
-        const { assistance, nextAction, ...details } = input;
+        const { assistance, nextAction, summary, ...details } = input;
         const successfulRedo =
           record.type === "REDO" &&
           (input.outcome === "INDEPENDENT" || input.outcome === "ASSISTED");
-        if (successfulRedo && nextAction === undefined) {
-          throw new HttpError(400, "Accept a next action before confirming this redo.");
-        }
         if (!successfulRedo && nextAction !== undefined) {
           throw new HttpError(400, "Next actions apply only to successful redos.");
         }
@@ -339,6 +345,20 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
             ...(transfer === undefined ? {} : { transfersCreated: transfer }),
             confirmedAt: now,
             ...(review === undefined ? {} : { review }),
+            ...(summary === undefined
+              ? {}
+              : summary === null
+                ? record.summary == null
+                  ? {}
+                  : { summary: { delete: true } }
+                : {
+                    summary: {
+                      upsert: {
+                        create: { userProfileId, ...summary, reviewedAt: now },
+                        update: { ...summary, reviewedAt: now },
+                      },
+                    },
+                  }),
             assistance: {
               create: assistance.map((event) => ({
                 ...event,
@@ -557,6 +577,20 @@ function toAttempt(record: AttemptRecord): Attempt {
     approach: record.approach,
     notes: record.notes,
     reproducedFromMemory: record.reproducedFromMemory,
+    ...(record.summary == null
+      ? {}
+      : {
+          summary: {
+            approach: record.summary.approach,
+            stuckPoint: record.summary.stuckPoint,
+            misconception: record.summary.misconception,
+            assistance: record.summary.assistance,
+            progressTrigger: record.summary.progressTrigger,
+            finalUnderstanding: record.summary.finalUnderstanding,
+            nextTeachingAction: record.summary.nextTeachingAction,
+            reviewedAt: record.summary.reviewedAt?.toISOString() ?? null,
+          },
+        }),
     assistance: record.assistance,
   });
 }
