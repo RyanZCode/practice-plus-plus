@@ -13,18 +13,26 @@ import { createDatabase } from "./database.js";
 import { createLogger } from "./logger.js";
 import { createPrismaProfileStore } from "./profile.js";
 import { createPrismaSettingsStore } from "./settings.js";
+import { createPrismaSummaryStore } from "./summaries.js";
 
 const config = readConfig();
 const logger = createLogger();
 const database = createDatabase(config.databaseUrl);
+const contextAssembler = createPrismaContextAssembler(database);
+const provider = createProviderAdapter();
 const app = createApp({
   authentication: {
     tutor: {
-      assembler: createPrismaContextAssembler(database),
-      provider: createProviderAdapter(),
+      assembler: contextAssembler,
+      provider,
       store: createPrismaTutorStore(database),
     },
-    coach: { assembler: createPrismaContextAssembler(database), provider: createProviderAdapter() },
+    coach: { assembler: contextAssembler, provider },
+    summaries: {
+      assembler: contextAssembler,
+      provider,
+      store: createPrismaSummaryStore(database),
+    },
     dailyPlanStore: createPrismaDailyPlanStore(database),
     attemptStore: createPrismaAttemptStore(database),
     catalogStore: createPrismaCatalogStore(database),

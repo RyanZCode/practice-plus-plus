@@ -5,7 +5,11 @@ const learningTextSchema = z
   .trim()
   .min(1)
   .max(1000)
-  .refine((text) => !/```|~~~/u.test(text), { message: "Use a summary without code excerpts" });
+  .refine(
+    (text) =>
+      !/`|~~~|(?:^|\n)\s*(?:function|class|const|let|var|def|import|return)\b|=>/u.test(text),
+    { message: "Use a summary without code excerpts" },
+  );
 
 export const learnerGoalInputSchema = z.strictObject({
   target: learningTextSchema,
@@ -57,6 +61,30 @@ export const conversationSummarySchema = z.discriminatedUnion("mode", [
   conversationSummaryInputSchema.options[1].extend({ id: z.uuid(), updatedAt: z.iso.datetime() }),
 ]);
 export type ConversationSummary = z.infer<typeof conversationSummarySchema>;
+
+export const memorySuggestionDraftSchema = z.strictObject({
+  category: learningTextSchema.max(100),
+  content: learningTextSchema,
+  confidence: z.number().min(0).max(1),
+  lifecycleState: z.enum(["ACTIVE", "IMPROVING", "RESOLVED"]),
+});
+export type MemorySuggestionDraft = z.infer<typeof memorySuggestionDraftSchema>;
+
+export const rollingSummaryOutputSchema = z
+  .strictObject({
+    summary: z.strictObject(conversationFields),
+    attemptSummary: attemptSummaryInputSchema.nullable(),
+    memorySuggestions: z.array(memorySuggestionDraftSchema).max(5),
+  })
+  .superRefine((value, context) => {
+    if (value.memorySuggestions.some((suggestion) => suggestion.content === value.summary.topics)) {
+      context.addIssue({
+        code: "custom",
+        message: "Suggestions must be distinct from the summary",
+      });
+    }
+  });
+export type RollingSummaryOutput = z.infer<typeof rollingSummaryOutputSchema>;
 
 export const memoryEvidenceSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("LEARNER_GOAL"), learnerGoalId: z.uuid() }),

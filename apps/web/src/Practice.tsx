@@ -1,4 +1,9 @@
-import type { Attempt, CatalogProblem, DailyPlan } from "@practice-plus-plus/contracts";
+import type {
+  Attempt,
+  CatalogProblem,
+  DailyPlan,
+  MemorySuggestion,
+} from "@practice-plus-plus/contracts";
 import { useEffect, useState } from "react";
 import {
   loadDailyPlan,
@@ -15,6 +20,7 @@ import {
 import { AttemptOutcomeForm } from "./AttemptOutcomeForm";
 import { eligibleProblems, remainingSeconds } from "./attemptState";
 import { AttemptTutor } from "./AttemptTutor";
+import { loadMemorySuggestions } from "./summaryApi";
 
 export function Practice({
   apiUrl,
@@ -39,6 +45,7 @@ export function Practice({
   const [now, setNow] = useState(Date.now());
   const [classifying, setClassifying] = useState(false);
   const [saved, setSaved] = useState<Attempt | null>(null);
+  const [memorySuggestions, setMemorySuggestions] = useState<MemorySuggestion[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -68,6 +75,24 @@ export function Practice({
       active = false;
     };
   }, [apiUrl, token, reload]);
+
+  useEffect(() => {
+    if (attempt === null) {
+      setMemorySuggestions([]);
+      return;
+    }
+    let active = true;
+    void loadMemorySuggestions(apiUrl, token, attempt.id)
+      .then((items) => {
+        if (active) setMemorySuggestions(items);
+      })
+      .catch(() => {
+        if (active) setMemorySuggestions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [apiUrl, token, attempt?.id, attempt?.summary]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -228,8 +253,9 @@ export function Practice({
           ) : null}
           {classifying || attempt.outcome !== null ? (
             <AttemptOutcomeForm
-              key={`${attempt.id}-${attempt.solutionReviewedAt ?? "solving"}`}
+              key={`${attempt.id}-${attempt.solutionReviewedAt ?? "solving"}-${JSON.stringify(attempt.summary)}`}
               attempt={attempt}
+              memorySuggestions={memorySuggestions}
               busy={busy || tutorBusy}
               onReport={(input) => update(() => reportAttempt(apiUrl, token, attempt.id, input))}
               onConfirm={async (input) => {

@@ -80,6 +80,27 @@ describe("provider adapter", () => {
     },
   );
 
+  it("requests JSON output only for structured generation", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(streamResponse(complete));
+    await collect(fetcher, { ...request, format: "json" });
+    const body = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body));
+    expect(body.response_format).toEqual({ type: "json_object" });
+  });
+
+  it("sends a server-owned strict JSON Schema for structured output", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(streamResponse(complete));
+    const schema = { type: "object", additionalProperties: false };
+    await collect(fetcher, {
+      ...request,
+      format: { name: "checkpoint", schema },
+    });
+    const body = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body));
+    expect(body.response_format).toEqual({
+      type: "json_schema",
+      json_schema: { name: "checkpoint", strict: true, schema },
+    });
+  });
+
   it.each([
     { ...request, selection: { ...request.selection, baseUrl: "http://127.0.0.1" } },
     { ...request, selection: { ...request.selection, providerId: "constructor" } },

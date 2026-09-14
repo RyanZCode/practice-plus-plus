@@ -332,15 +332,23 @@ function database() {
 }
 describe("attempt persistence", () => {
   it.each(["INDEPENDENT", "ASSISTED"])(
-    "requires an accepted action for a %s redo",
+    "uses automatic follow-up when a %s redo has no selected next action",
     async (outcome) => {
       const { tx, store } = database();
       tx.attempt.findFirst.mockResolvedValue({ ...record, type: "REDO" });
-      await expect(
-        store.confirm(userId, attempt.id, confirmAttemptSchema.parse({ outcome }), new Date()),
-      ).rejects.toThrow("Accept a next action");
-      expect(tx.attempt.update).not.toHaveBeenCalled();
-      expect(tx.reviewObligation.updateMany).not.toHaveBeenCalled();
+      const now = new Date("2026-09-10T12:00:00Z");
+      await store.confirm(userId, attempt.id, confirmAttemptSchema.parse({ outcome }), now);
+      const data = tx.attempt.update.mock.calls[0]?.[0].data;
+      expect(data).toMatchObject({ outcome, confirmedAt: now });
+      expect(data.nextAction).toBeUndefined();
+      if (outcome === "ASSISTED") {
+        expect(data.review.create).toEqual({
+          urgency: "MEDIUM",
+          generatedDueDate: new Date("2026-09-09T00:00:00Z"),
+        });
+      } else {
+        expect(data.review).toBeUndefined();
+      }
     },
   );
   it.each(["INDEPENDENT", "ASSISTED"])(
@@ -889,20 +897,20 @@ describe("attempt persistence", () => {
       expect(tx.attempt.update).toHaveBeenCalledTimes(1);
     },
   );
-  it("requires a reproduction report and rejects one without solution review", async () => {
+  it("allows an omitted reproduction report and rejects one without solution review", async () => {
     const { tx, store } = database();
     tx.attempt.findFirst.mockResolvedValue({
       ...record,
       assistance: [{ type: "SOLUTION_REVIEW", hintLevel: null }],
     });
-    await expect(
-      store.confirm(
-        userId,
-        attempt.id,
-        confirmAttemptSchema.parse({ outcome: "GAVE_UP" }),
-        new Date(),
-      ),
-    ).rejects.toThrow("reproduce");
+    await store.confirm(
+      userId,
+      attempt.id,
+      confirmAttemptSchema.parse({ outcome: "GAVE_UP" }),
+      new Date(),
+    );
+    expect(tx.attempt.update.mock.calls[0]?.[0].data.reproducedFromMemory).toBeNull();
+    tx.attempt.update.mockClear();
     tx.attempt.findFirst.mockResolvedValue(record);
     await expect(
       store.confirm(
