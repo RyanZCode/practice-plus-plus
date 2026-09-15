@@ -515,13 +515,26 @@ summary:focus-visible {
 }
 
 .coach textarea,
-.coach select {
+.coach select,
+.external-ai textarea,
+.external-ai select {
   width: 100%;
   padding: 0.75rem;
   font: inherit;
   font-weight: 400;
   border: 1px solid #b9c2d0;
   border-radius: 0.5rem;
+}
+
+.external-ai {
+  margin-top: 2rem;
+  border-top: 1px solid #dce1e9;
+  padding-top: 1.5rem;
+  line-height: 1.5;
+}
+
+.external-ai h2 {
+  margin: 0;
 }
 
 .learning-context {

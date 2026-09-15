@@ -40,6 +40,7 @@ const app = createApp({
       provider,
       store: createPrismaAssessmentStore(database),
     },
+    externalAiExport: { assembler: contextAssembler },
     dailyPlanStore: createPrismaDailyPlanStore(database),
     attemptStore: createPrismaAttemptStore(database),
     catalogStore: createPrismaCatalogStore(database),
