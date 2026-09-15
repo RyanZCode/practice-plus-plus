@@ -79,6 +79,38 @@ export const checkpointResponseSchema = z.strictObject({
 });
 export type CheckpointResponse = z.infer<typeof checkpointResponseSchema>;
 
+export const externalAiExportRequestSchema = z
+  .strictObject({
+    policy: contextRequestSchema.shape.policy,
+    currentCode: z.string().min(1).max(16000).optional(),
+  })
+  .superRefine((request, context) => {
+    if (
+      request.currentCode !== undefined &&
+      !(
+        request.policy.mode === "ATTEMPT_TUTOR" &&
+        request.policy.phase === "HELP" &&
+        request.policy.help === "DEBUGGING"
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Current code is available only for an intentional debugging export",
+        path: ["currentCode"],
+      });
+    }
+  });
+export type ExternalAiExportRequest = z.infer<typeof externalAiExportRequestSchema>;
+
+export const externalAiExportResponseSchema = z.strictObject({
+  filename: z.string().regex(/^practice-plus-plus-context-\d{4}-\d{2}-\d{2}\.md$/),
+  markdown: z
+    .string()
+    .min(1)
+    .max(128 * 1024),
+});
+export type ExternalAiExportResponse = z.infer<typeof externalAiExportResponseSchema>;
+
 const assessmentTextSchema = z
   .string()
   .trim()

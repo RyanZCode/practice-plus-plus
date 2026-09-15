@@ -12,6 +12,7 @@ import { authenticatedUserId } from "./authState";
 import { OpenAIModelSelect } from "./OpenAIModelSelect";
 import { LearningContext } from "./LearningContext";
 import { clearTutorConversationsForUser } from "./tutorConversationStorage";
+import { ExternalAiExport } from "./ExternalAiExport";
 
 interface AppProps {
   readonly apiUrl: string;
@@ -55,6 +56,7 @@ function AccountPage({ apiUrl }: AppProps) {
   const [showHistory, setShowHistory] = useState(false);
   const [showCoach, setShowCoach] = useState(false);
   const [showLearningContext, setShowLearningContext] = useState(false);
+  const [showExternalAi, setShowExternalAi] = useState(false);
   const [reloadCount, setReloadCount] = useState(0);
 
   useEffect(() => {
@@ -161,12 +163,14 @@ function AccountPage({ apiUrl }: AppProps) {
     }
   }
 
-  const showPractice = !showCoach && !showHistory && !showLearningContext && !showSettings;
+  const showPractice =
+    !showCoach && !showHistory && !showLearningContext && !showExternalAi && !showSettings;
 
   function openPractice(): void {
     setShowCoach(false);
     setShowHistory(false);
     setShowLearningContext(false);
+    setShowExternalAi(false);
     setShowSettings(false);
   }
 
@@ -196,12 +200,29 @@ function AccountPage({ apiUrl }: AppProps) {
               <button
                 className="text-button"
                 type="button"
+                aria-current={showExternalAi ? "page" : undefined}
+                onClick={() => {
+                  setShowExternalAi(true);
+                  setShowCoach(false);
+                  setShowSettings(false);
+                  setShowHistory(false);
+                  setShowLearningContext(false);
+                }}
+              >
+                External AI
+              </button>
+            ) : null}
+            {!isLoading && !loadFailed && !isOnboarding ? (
+              <button
+                className="text-button"
+                type="button"
                 aria-current={showCoach ? "page" : undefined}
                 onClick={() => {
                   setShowCoach(true);
                   setShowSettings(false);
                   setShowHistory(false);
                   setShowLearningContext(false);
+                  setShowExternalAi(false);
                 }}
               >
                 Coach
@@ -216,6 +237,7 @@ function AccountPage({ apiUrl }: AppProps) {
                   setShowHistory(true);
                   setShowSettings(false);
                   setShowCoach(false);
+                  setShowExternalAi(false);
                   setShowLearningContext(false);
                 }}
               >
@@ -232,6 +254,7 @@ function AccountPage({ apiUrl }: AppProps) {
                   setShowSettings(false);
                   setShowHistory(false);
                   setShowCoach(false);
+                  setShowExternalAi(false);
                 }}
               >
                 What Practice++ knows
@@ -248,6 +271,7 @@ function AccountPage({ apiUrl }: AppProps) {
                   setShowHistory(false);
                   setShowCoach(false);
                   setShowLearningContext(false);
+                  setShowExternalAi(false);
                 }}
               >
                 Practice settings
@@ -282,7 +306,11 @@ function AccountPage({ apiUrl }: AppProps) {
         ) : null}
 
         {!isLoading && !loadFailed && !isOnboarding ? (
-          <div hidden={showSettings || showHistory || showCoach || showLearningContext}>
+          <div
+            hidden={
+              showSettings || showHistory || showCoach || showLearningContext || showExternalAi
+            }
+          >
             <Practice
               key={session.user.id}
               apiUrl={apiUrl}
@@ -293,7 +321,16 @@ function AccountPage({ apiUrl }: AppProps) {
           </div>
         ) : null}
 
-        <div hidden={isLoading || loadFailed || isOnboarding || !showCoach || showLearningContext}>
+        <div
+          hidden={
+            isLoading ||
+            loadFailed ||
+            isOnboarding ||
+            !showCoach ||
+            showLearningContext ||
+            showExternalAi
+          }
+        >
           <Coach
             key={session.user.id}
             apiUrl={apiUrl}
@@ -311,18 +348,27 @@ function AccountPage({ apiUrl }: AppProps) {
           <LearningContext apiUrl={apiUrl} token={session.access_token} />
         ) : null}
 
+        {!isLoading && !loadFailed && !isOnboarding && showExternalAi ? (
+          <ExternalAiExport apiUrl={apiUrl} token={session.access_token} />
+        ) : null}
+
         {!isLoading &&
         !loadFailed &&
         !isOnboarding &&
         !showSettings &&
         !showLearningContext &&
+        !showExternalAi &&
         error !== undefined ? (
           <p className="auth-message" role="alert">
             {error}
           </p>
         ) : null}
 
-        {!isLoading && !loadFailed && (isOnboarding || showSettings) && !showLearningContext ? (
+        {!isLoading &&
+        !loadFailed &&
+        (isOnboarding || showSettings) &&
+        !showLearningContext &&
+        !showExternalAi ? (
           <form
             id="practice-settings"
             className="settings-form"
