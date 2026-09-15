@@ -15,15 +15,15 @@ import {
   needsCheckpoint,
   saveCheckpoint,
 } from "./summaryApi";
+import {
+  loadTutorConversation,
+  saveTutorConversation,
+  type StoredTutorMessage,
+} from "./tutorConversationStorage";
 
 const levels = ["Small nudge", "Key idea", "Approach outline"];
 const actions = ["Get a small nudge", "Show me the key idea", "Outline the approach"];
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-  complete: boolean;
-  label: string;
-}
+type Message = StoredTutorMessage;
 
 export function AttemptTutor({
   apiUrl,
@@ -51,11 +51,12 @@ export function AttemptTutor({
   const [model, setModel] = useState(defaultModel);
   useEffect(() => setModel(defaultModel), [defaultModel]);
   const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const stored = useRef(loadTutorConversation(window.sessionStorage, userId, attempt.id));
+  const [messages, setMessages] = useState<Message[]>(stored.current.messages);
   const [help, setHelp] = useState<TutorHelp>({ type: "CLARIFICATION" });
   const [busy, setBusy] = useState(false);
   const [checkpointBusy, setCheckpointBusy] = useState(false);
-  const [checkpointIndex, setCheckpointIndex] = useState(0);
+  const [checkpointIndex, setCheckpointIndex] = useState(stored.current.checkpointIndex);
   const [suggestions, setSuggestions] = useState<MemorySuggestion[]>([]);
   const [checkpointSaved, setCheckpointSaved] = useState(false);
   const [checkpointError, setCheckpointError] = useState<string>();
@@ -68,6 +69,12 @@ export function AttemptTutor({
     },
     [],
   );
+  useEffect(() => {
+    saveTutorConversation(window.sessionStorage, userId, attempt.id, {
+      messages,
+      checkpointIndex,
+    });
+  }, [attempt.id, checkpointIndex, messages, userId]);
   useEffect(() => {
     let active = true;
     void loadMemorySuggestions(apiUrl, token, attempt.id)
@@ -217,8 +224,9 @@ export function AttemptTutor({
       <h3>Attempt tutor</h3>
       <p className="settings-help">
         Messages and intentionally pasted code are sent to OpenAI. Practice++ keeps this
-        conversation only in page memory; refreshing, closing the tab, or signing out clears it.
-        Only the help category and hint level are saved.
+        conversation in this tab's browser session, so refreshing keeps it. Closing the tab, signing
+        out, or clearing the conversation removes it. Only the help category and hint level are
+        saved to the database.
       </p>
       {!keyState.hasKey ? (
         <p role="status">Add your OpenAI API key in Practice settings to use the tutor.</p>
@@ -234,19 +242,51 @@ export function AttemptTutor({
             <p>Start with a small nudge, then request more help only if needed.</p>
             <p>Highest hint level: {highest === 0 ? "None" : levels[highest - 1]}</p>
             {highest < 3 ? (
-              <button
-                type="button"
-                disabled={busy || disabled || !keyState.hasKey}
-                onClick={() =>
-                  void send({ type: "CONCEPTUAL_HINT", hintLevel: highest + 1 }, actions[highest])
-                }
-              >
-                {actions[highest]}
-              </button>
+              <div className="account-actions">
+                <button
+                  type="button"
+                  disabled={busy || disabled || !keyState.hasKey}
+                  onClick={() =>
+                    void send({ type: "CONCEPTUAL_HINT", hintLevel: highest + 1 }, actions[highest])
+                  }
+                >
+                  {actions[highest]}
+                </button>
+                {highest > 0 ? (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={busy || disabled || !keyState.hasKey}
+                    onClick={() =>
+                      void send(
+                        { type: "CONCEPTUAL_HINT", hintLevel: highest },
+                        `Give me another ${levels[highest - 1]!.toLowerCase()} without revealing more.`,
+                      )
+                    }
+                  >
+                    Ask for another {levels[highest - 1]!.toLowerCase()}
+                  </button>
+                ) : null}
+              </div>
             ) : (
-              <p>
-                Keep working independently, discuss the outline, or use the give-up action below.
-              </p>
+              <div>
+                <p>
+                  Keep working independently, discuss the outline, or use the give-up action below.
+                </p>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={busy || disabled || !keyState.hasKey}
+                  onClick={() =>
+                    void send(
+                      { type: "CONCEPTUAL_HINT", hintLevel: highest },
+                      "Give me another approach outline without revealing more.",
+                    )
+                  }
+                >
+                  Ask for another approach outline
+                </button>
+              </div>
             )}
           </div>
         ) : null}

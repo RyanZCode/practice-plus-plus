@@ -3,6 +3,7 @@ import {
   redoNextActionSchema,
   type Assistance,
   type Attempt,
+  type AttemptAssessmentDraft,
   type ConfirmAttempt,
   type MemorySuggestion,
   type ReportAttempt,
@@ -23,27 +24,38 @@ export function AttemptOutcomeForm({
   onConfirm,
   onReport,
   memorySuggestions,
+  assessmentDraft,
+  canDraftAssessment,
+  onDraftAssessment,
 }: {
   attempt: Attempt;
   busy: boolean;
   memorySuggestions: MemorySuggestion[];
+  assessmentDraft: AttemptAssessmentDraft | null;
+  canDraftAssessment: boolean;
+  onDraftAssessment: () => Promise<void>;
   onConfirm: (input: ConfirmAttempt) => Promise<void>;
   onReport: (input: ReportAttempt) => Promise<void>;
 }) {
   const [outcome, setOutcome] = useState<ConfirmAttempt["outcome"] | "">(
-    attempt.outcome ?? suggestedOutcome(attempt.assistance) ?? "",
+    assessmentDraft?.outcome ?? attempt.outcome ?? suggestedOutcome(attempt.assistance) ?? "",
   );
   const [assistance, setAssistance] = useState<Assistance[]>([]);
-  const [reproduced, setReproduced] = useState<boolean | null>(null);
+  const [reproduced, setReproduced] = useState<boolean | null>(
+    assessmentDraft?.reproducedFromMemory ?? null,
+  );
   const [selectedAction, setSelectedAction] = useState<string>();
   const [summary, setSummary] = useState({
-    approach: attempt.summary?.approach ?? "",
-    stuckPoint: attempt.summary?.stuckPoint ?? "",
-    misconception: attempt.summary?.misconception ?? "",
-    assistance: attempt.summary?.assistance ?? "",
-    progressTrigger: attempt.summary?.progressTrigger ?? "",
-    finalUnderstanding: attempt.summary?.finalUnderstanding ?? "",
-    nextTeachingAction: attempt.summary?.nextTeachingAction ?? "",
+    approach: assessmentDraft?.summary?.approach ?? attempt.summary?.approach ?? "",
+    stuckPoint: assessmentDraft?.summary?.stuckPoint ?? attempt.summary?.stuckPoint ?? "",
+    misconception: assessmentDraft?.summary?.misconception ?? attempt.summary?.misconception ?? "",
+    assistance: assessmentDraft?.summary?.assistance ?? attempt.summary?.assistance ?? "",
+    progressTrigger:
+      assessmentDraft?.summary?.progressTrigger ?? attempt.summary?.progressTrigger ?? "",
+    finalUnderstanding:
+      assessmentDraft?.summary?.finalUnderstanding ?? attempt.summary?.finalUnderstanding ?? "",
+    nextTeachingAction:
+      assessmentDraft?.summary?.nextTeachingAction ?? attempt.summary?.nextTeachingAction ?? "",
   });
   const successfulRedo =
     attempt.type === "REDO" && (outcome === "INDEPENDENT" || outcome === "ASSISTED");
@@ -146,6 +158,30 @@ export function AttemptOutcomeForm({
             Result reported. You can review the optional details before confirming. This attempt can
             no longer be incomplete.
           </p>
+        ) : null}
+        {attempt.outcome !== null ? (
+          <div>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={busy || !canDraftAssessment}
+              onClick={() => void onDraftAssessment()}
+            >
+              {assessmentDraft === null ? "Draft assessment with AI" : "Regenerate AI draft"}
+            </button>
+            {!canDraftAssessment ? (
+              <p className="settings-help">Add your OpenAI API key in Practice settings first.</p>
+            ) : null}
+            {assessmentDraft !== null ? (
+              <p role="status">
+                AI draft applied below. Review and edit every field before confirming. Based on:{" "}
+                {assessmentDraft.evidence
+                  .map((item) => item.toLowerCase().replaceAll("_", " "))
+                  .join(", ")}
+                .
+              </p>
+            ) : null}
+          </div>
         ) : null}
         {attempt.assistance.length > 0 ? (
           <p>
@@ -282,7 +318,7 @@ export function AttemptOutcomeForm({
             <summary>Optional details</summary>
             <label>
               Confidence
-              <select name="confidence" defaultValue="">
+              <select name="confidence" defaultValue={assessmentDraft?.confidence ?? ""}>
                 <option value="">Not specified</option>
                 <option value="CONFIDENT">Confident</option>
                 <option value="SHAKY">Shaky</option>
@@ -290,7 +326,7 @@ export function AttemptOutcomeForm({
             </label>
             <label>
               Solution quality
-              <select name="optimality" defaultValue="">
+              <select name="optimality" defaultValue={assessmentDraft?.optimality ?? ""}>
                 <option value="">Not specified</option>
                 <option value="OPTIMAL">Optimal</option>
                 <option value="SUBOPTIMAL">Suboptimal</option>
@@ -299,15 +335,36 @@ export function AttemptOutcomeForm({
             </label>
             <label>
               Time spent (minutes)
-              <input name="minutes" type="number" min="0" max="35791394" step="0.1" />
+              <input
+                name="minutes"
+                type="number"
+                min="0"
+                max="35791394"
+                step="0.1"
+                defaultValue={
+                  assessmentDraft?.timeSpentSeconds == null
+                    ? ""
+                    : assessmentDraft.timeSpentSeconds / 60
+                }
+              />
             </label>
             <label>
               Approach (brief description, no source code)
-              <textarea name="approach" maxLength={1000} rows={2} />
+              <textarea
+                name="approach"
+                maxLength={1000}
+                rows={2}
+                defaultValue={assessmentDraft?.approach ?? ""}
+              />
             </label>
             <label>
               Notes (no source code)
-              <textarea name="notes" maxLength={5000} rows={3} />
+              <textarea
+                name="notes"
+                maxLength={5000}
+                rows={3}
+                defaultValue={assessmentDraft?.notes ?? ""}
+              />
             </label>
           </details>
         ) : null}

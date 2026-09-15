@@ -78,6 +78,7 @@ describe.skipIf(databaseUrl === undefined)("context relational queries", () => {
         type: "FRESH",
         practiceDate: new Date("2026-07-01"),
         startedAt: new Date("2026-07-01T12:00:00Z"),
+        timerEndsAt: new Date("2026-07-01T12:30:00Z"),
         confirmedAt: new Date("2026-07-01T13:00:00Z"),
         outcome: "ASSISTED",
       },
@@ -90,6 +91,7 @@ describe.skipIf(databaseUrl === undefined)("context relational queries", () => {
         type: "FRESH",
         practiceDate: new Date("2026-09-12"),
         startedAt: now,
+        timerEndsAt: new Date(now.getTime() + 30 * 60_000),
       },
     });
     activeId = active.id;
@@ -100,6 +102,7 @@ describe.skipIf(databaseUrl === undefined)("context relational queries", () => {
         type: "FRESH",
         practiceDate: new Date("2026-09-12"),
         startedAt: now,
+        timerEndsAt: new Date(now.getTime() + 30 * 60_000),
         confirmedAt: now,
         outcome: "ASSISTED",
       },

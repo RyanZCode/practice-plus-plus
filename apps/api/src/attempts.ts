@@ -34,6 +34,8 @@ const select = {
   type: true,
   practiceDate: true,
   startedAt: true,
+  timerEndsAt: true,
+  timerPausedAt: true,
   timerSkippedAt: true,
   confirmedAt: true,
   solutionReviewedAt: true,
@@ -73,6 +75,8 @@ export interface AttemptStore {
   active(userProfileId: string): Promise<Attempt | null>;
   start(userProfileId: string, problemId: string, now: Date): Promise<Attempt>;
   skip(userProfileId: string, attemptId: string, now: Date): Promise<Attempt>;
+  pause(userProfileId: string, attemptId: string, now: Date): Promise<Attempt>;
+  resume(userProfileId: string, attemptId: string, now: Date): Promise<Attempt>;
   reviewSolution(userProfileId: string, attemptId: string, now: Date): Promise<Attempt>;
   confirm(
     userProfileId: string,
@@ -354,7 +358,7 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
                 : {
                     summary: {
                       upsert: {
-                        create: { userProfileId, ...summary, reviewedAt: now },
+                        create: { ...summary, reviewedAt: now },
                         update: { ...summary, reviewedAt: now },
                       },
                     },
@@ -416,6 +420,7 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
               `${getPracticeDate(now, settings.timeZone, resetTime)}T00:00:00.000Z`,
             ),
             startedAt: now,
+            timerEndsAt: new Date(now.getTime() + settings.attemptTimerMinutes * 60_000),
           },
           select,
         });
@@ -455,7 +460,7 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
       return client.$transaction(async (tx) => {
         await tx.attempt.updateMany({
           where: { id: attemptId, userProfileId, confirmedAt: null, timerSkippedAt: null },
-          data: { timerSkippedAt: now },
+          data: { timerSkippedAt: now, timerPausedAt: null },
         });
         const record = await tx.attempt.findFirst({
           where: { id: attemptId, userProfileId, confirmedAt: null },
@@ -463,6 +468,35 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
         });
         if (record === null) throw new HttpError(404, "Active attempt not found.");
         return present(tx, userProfileId, record);
+      });
+    },
+    async pause(userProfileId, attemptId, now) {
+      return change(userProfileId, attemptId, async (tx, record) => {
+        if (record.confirmedAt !== null)
+          throw new HttpError(409, "This attempt is already confirmed.");
+        if (record.timerSkippedAt !== null || record.timerPausedAt !== null) return record;
+        return tx.attempt.update({
+          where: { id: attemptId, userProfileId },
+          data: { timerPausedAt: now },
+          select,
+        });
+      });
+    },
+    async resume(userProfileId, attemptId, now) {
+      return change(userProfileId, attemptId, async (tx, record) => {
+        if (record.confirmedAt !== null)
+          throw new HttpError(409, "This attempt is already confirmed.");
+        if (record.timerSkippedAt !== null || record.timerPausedAt === null) return record;
+        return tx.attempt.update({
+          where: { id: attemptId, userProfileId },
+          data: {
+            timerEndsAt: new Date(
+              record.timerEndsAt.getTime() + now.getTime() - record.timerPausedAt.getTime(),
+            ),
+            timerPausedAt: null,
+          },
+          select,
+        });
       });
     },
   };
@@ -528,6 +562,24 @@ export function createAttemptRouter(store: AttemptStore, clock = () => new Date(
       ),
     );
   });
+  router.post("/:attemptId/pause-timer", async (request, response) => {
+    const parsed = attemptSchema.shape.id.safeParse(request.params.attemptId);
+    if (!parsed.success) throw new HttpError(400, "Invalid attempt identifier.");
+    response.json(
+      attemptSchema.parse(
+        await store.pause(getApplicationProfile(request).id, parsed.data, clock()),
+      ),
+    );
+  });
+  router.post("/:attemptId/resume-timer", async (request, response) => {
+    const parsed = attemptSchema.shape.id.safeParse(request.params.attemptId);
+    if (!parsed.success) throw new HttpError(400, "Invalid attempt identifier.");
+    response.json(
+      attemptSchema.parse(
+        await store.resume(getApplicationProfile(request).id, parsed.data, clock()),
+      ),
+    );
+  });
   router.post("/:attemptId/review-solution", async (request, response) => {
     const id = attemptSchema.shape.id.safeParse(request.params.attemptId);
     if (!id.success || request.body?.giveUp !== true || Object.keys(request.body).length !== 1) {
@@ -567,6 +619,8 @@ function toAttempt(record: AttemptRecord): Attempt {
     type: record.type,
     practiceDate: record.practiceDate.toISOString().slice(0, 10),
     startedAt: record.startedAt.toISOString(),
+    timerEndsAt: record.timerEndsAt.toISOString(),
+    timerPausedAt: record.timerPausedAt?.toISOString() ?? null,
     timerSkippedAt: record.timerSkippedAt?.toISOString() ?? null,
     confirmedAt: record.confirmedAt?.toISOString() ?? null,
     solutionReviewedAt: record.solutionReviewedAt?.toISOString() ?? null,

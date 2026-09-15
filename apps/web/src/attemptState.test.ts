@@ -43,6 +43,14 @@ describe("attempt timer", () => {
     expect(remainingSeconds(skipped, Date.parse(attempt.startedAt))).toBe(0);
     expect(skipped.type).toBe("FRESH");
   });
+  it("keeps the remaining time fixed while paused", () => {
+    const paused = {
+      ...attempt,
+      timerEndsAt: "2026-09-07T03:30:00.000Z",
+      timerPausedAt: "2026-09-07T03:10:00.000Z",
+    };
+    expect(remainingSeconds(paused, Date.parse("2026-09-07T04:00:00.000Z"))).toBe(1200);
+  });
 });
 it("allows paid problems unless filtered and always excludes unavailable ones", () => {
   const paid = { ...attempt.problem, availability: "PAID_ONLY" as const };

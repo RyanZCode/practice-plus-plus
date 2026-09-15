@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { confirmAttemptSchema, suggestedOutcome } from "./index.js";
+import {
+  attemptAssessmentDraftInputSchema,
+  confirmAttemptSchema,
+  suggestedOutcome,
+} from "./index.js";
 
 describe("attempt confirmation", () => {
   it("accepts an editable structured summary but rejects raw transcript fields", () => {
@@ -63,5 +67,34 @@ describe("attempt confirmation", () => {
         { type: "SOLUTION_REVIEW", hintLevel: null },
       ]),
     ).toBe("GAVE_UP");
+  });
+});
+
+describe("attempt assessment draft", () => {
+  const draft = {
+    outcome: "ASSISTED",
+    confidence: null,
+    optimality: null,
+    timeSpentSeconds: null,
+    approach: "Tracked a moving frontier.",
+    notes: null,
+    reproducedFromMemory: null,
+    summary: null,
+    evidence: ["ATTEMPT", "ASSISTANCE_EVENTS"],
+  };
+
+  it("accepts bounded structured evidence", () => {
+    expect(attemptAssessmentDraftInputSchema.parse(draft)).toEqual(draft);
+  });
+
+  it.each([
+    { ...draft, transcript: [] },
+    { ...draft, sourceCode: "private" },
+    { ...draft, approach: "`const privateCode = true`" },
+    { ...draft, evidence: [] },
+    { ...draft, evidence: ["RAW_MESSAGES"] },
+    { ...draft, evidence: ["ATTEMPT", "ATTEMPT"] },
+  ])("rejects content or evidence outside the draft contract", (input) => {
+    expect(attemptAssessmentDraftInputSchema.safeParse(input).success).toBe(false);
   });
 });

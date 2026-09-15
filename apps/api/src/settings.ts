@@ -10,6 +10,7 @@ import { getApplicationProfile } from "./profile.js";
 
 interface PracticeSettingsRecord {
   readonly defaultAiModel: string;
+  readonly attemptTimerMinutes: number;
   readonly dailyTarget: number;
   readonly highIntervalDays: number;
   readonly lowIntervalDays: number;
@@ -85,6 +86,7 @@ export function createSettingsRouter(store: SettingsStore): Router {
 function toPracticeSettings(record: PracticeSettingsRecord): PracticeSettings {
   return practiceSettingsSchema.parse({
     defaultAiModel: record.defaultAiModel,
+    attemptTimerMinutes: record.attemptTimerMinutes,
     dailyTarget: record.dailyTarget,
     redoIntervals: {
       high: record.highIntervalDays,
@@ -99,6 +101,7 @@ function toPracticeSettings(record: PracticeSettingsRecord): PracticeSettings {
 function toPracticeSettingsRecord(settings: PracticeSettings): PracticeSettingsRecord {
   return {
     defaultAiModel: settings.defaultAiModel,
+    attemptTimerMinutes: settings.attemptTimerMinutes,
     dailyTarget: settings.dailyTarget,
     highIntervalDays: settings.redoIntervals.high,
     lowIntervalDays: settings.redoIntervals.low,

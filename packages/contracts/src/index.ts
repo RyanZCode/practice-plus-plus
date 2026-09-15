@@ -79,6 +79,60 @@ export const checkpointResponseSchema = z.strictObject({
 });
 export type CheckpointResponse = z.infer<typeof checkpointResponseSchema>;
 
+const assessmentTextSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(1000)
+  .refine(
+    (text) =>
+      !/`|~~~|(?:^|\n)\s*(?:function|class|const|let|var|def|import|return)\b|=>/u.test(text),
+    { message: "Use an assessment without code excerpts" },
+  );
+
+export const assessmentEvidenceSchema = z.enum([
+  "ATTEMPT",
+  "ASSISTANCE_EVENTS",
+  "ATTEMPT_SUMMARY",
+  "CONVERSATION_SUMMARY",
+]);
+export const attemptAssessmentDraftInputSchema = z.strictObject({
+  outcome: z.enum(["INDEPENDENT", "ASSISTED", "GAVE_UP", "INCOMPLETE"]),
+  confidence: z.enum(["CONFIDENT", "SHAKY"]).nullable(),
+  optimality: z.enum(["OPTIMAL", "SUBOPTIMAL", "UNKNOWN"]).nullable(),
+  timeSpentSeconds: z.number().int().nonnegative().max(2147483647).nullable(),
+  approach: assessmentTextSchema.nullable(),
+  notes: assessmentTextSchema.nullable(),
+  reproducedFromMemory: z.boolean().nullable(),
+  summary: attemptSummaryInputSchema.nullable(),
+  evidence: z
+    .array(assessmentEvidenceSchema)
+    .min(1)
+    .max(4)
+    .refine((evidence) => new Set(evidence).size === evidence.length, {
+      message: "Evidence categories must be unique",
+    }),
+});
+export type AttemptAssessmentDraftInput = z.infer<typeof attemptAssessmentDraftInputSchema>;
+
+export const attemptAssessmentRequestSchema = z.strictObject({
+  selection: providerSelectionSchema,
+  apiKey: z.string().regex(/^[\x21-\x7e]{1,4096}$/),
+  attemptId: z.uuid(),
+});
+export type AttemptAssessmentRequest = z.infer<typeof attemptAssessmentRequestSchema>;
+
+export const attemptAssessmentDraftSchema = attemptAssessmentDraftInputSchema.extend({
+  id: z.uuid(),
+  attemptId: z.uuid(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type AttemptAssessmentDraft = z.infer<typeof attemptAssessmentDraftSchema>;
+export const attemptAssessmentDraftResponseSchema = z.strictObject({
+  draft: attemptAssessmentDraftSchema.nullable(),
+});
+
 export const memorySuggestionListResponseSchema = z.strictObject({
   memorySuggestions: z.array(memorySuggestionSchema).max(50),
 });
@@ -113,6 +167,7 @@ const wholeDaysSchema = z.number().int().min(1).max(90);
 export const practiceSettingsSchema = z
   .strictObject({
     defaultAiModel: z.enum(openAiModels),
+    attemptTimerMinutes: z.number().int().min(1).max(180),
     dailyTarget: z.number().int().min(1).max(10),
     redoIntervals: z.strictObject({
       high: wholeDaysSchema,
@@ -372,6 +427,8 @@ export const attemptSchema = z.strictObject({
   type: z.enum(["FRESH", "REDO"]),
   practiceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   startedAt: z.string().datetime(),
+  timerEndsAt: z.string().datetime().optional(),
+  timerPausedAt: z.string().datetime().nullable().optional(),
   timerSkippedAt: z.string().datetime().nullable(),
   confirmedAt: z.string().datetime().nullable(),
   solutionReviewedAt: z.string().datetime().nullable(),

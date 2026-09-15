@@ -59,8 +59,8 @@ describe.skipIf(databaseUrl === undefined)("learner context database", () => {
       [ids.teaching_preference_id, owner],
     );
     await client.query(
-      `INSERT INTO attempts (id, user_profile_id, problem_id, type, practice_date, started_at, confirmed_at, outcome)
-       VALUES ($1, $2, $3, 'FRESH', '2026-09-11', now(), now(), 'ASSISTED')`,
+      `INSERT INTO attempts (id, user_profile_id, problem_id, type, practice_date, started_at, timer_ends_at, confirmed_at, outcome)
+       VALUES ($1, $2, $3, 'FRESH', '2026-09-11', now(), now() + INTERVAL '30 minutes', now(), 'ASSISTED')`,
       [ids.attempt_id, owner, problemId],
     );
     await client.query(

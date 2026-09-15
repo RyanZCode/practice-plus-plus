@@ -20,6 +20,7 @@ import { createTutorRouter, type TutorOptions } from "./tutor.js";
 import { createSettingsRouter, type SettingsStore } from "./settings.js";
 import { createSummaryRouter, type SummaryOptions } from "./summaries.js";
 import { createLearningContextRouter, type LearningContextStore } from "./learningContext.js";
+import { createAssessmentRouter, type AssessmentOptions } from "./assessments.js";
 
 interface AuthenticationOptions {
   readonly tutor?: TutorOptions;
@@ -33,6 +34,7 @@ interface AuthenticationOptions {
   readonly settingsStore?: SettingsStore;
   readonly summaries?: SummaryOptions;
   readonly learningContextStore?: LearningContextStore;
+  readonly assessments?: AssessmentOptions;
   readonly verifier: AccessTokenVerifier;
 }
 
@@ -72,6 +74,14 @@ export function createApp(options: AppOptions = {}): Express {
         authenticate,
         resolveProfile,
         createCoachRouter(options.authentication.coach),
+      );
+    }
+    if (options.authentication.assessments !== undefined) {
+      app.use(
+        "/ai/assessment-drafts",
+        authenticate,
+        resolveProfile,
+        createAssessmentRouter(options.authentication.assessments),
       );
     }
     if (options.authentication.summaries !== undefined) {
