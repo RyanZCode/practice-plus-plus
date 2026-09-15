@@ -11,12 +11,14 @@ import { loadPracticeSettings, savePracticeSettings } from "./settingsApi";
 import { authenticatedUserId } from "./authState";
 import { OpenAIModelSelect } from "./OpenAIModelSelect";
 import { LearningContext } from "./LearningContext";
+import { clearTutorConversationsForUser } from "./tutorConversationStorage";
 
 interface AppProps {
   readonly apiUrl: string;
 }
 
 interface SettingsDraft {
+  readonly attemptTimerMinutes: string;
   readonly defaultAiModel: string;
   readonly dailyTarget: string;
   readonly highInterval: string;
@@ -115,6 +117,7 @@ function AccountPage({ apiUrl }: AppProps) {
 
     const result = practiceSettingsSchema.safeParse({
       defaultAiModel: draft.defaultAiModel,
+      attemptTimerMinutes: Number(draft.attemptTimerMinutes),
       dailyTarget: Number(draft.dailyTarget),
       redoIntervals: {
         high: Number(draft.highInterval),
@@ -126,7 +129,7 @@ function AccountPage({ apiUrl }: AppProps) {
     });
 
     if (!result.success) {
-      setError("Check the timezone, reset time, target, and review interval order.");
+      setError("Check the timezone, reset time, timer, target, and review interval order.");
       return;
     }
 
@@ -150,6 +153,7 @@ function AccountPage({ apiUrl }: AppProps) {
     setIsSigningOut(true);
 
     try {
+      if (userId !== null) clearTutorConversationsForUser(window.sessionStorage, userId);
       await signOut();
     } catch (signOutError) {
       setError(errorMessage(signOutError));
@@ -361,6 +365,21 @@ function AccountPage({ apiUrl }: AppProps) {
               />
             </label>
 
+            <label>
+              Default attempt timer
+              <span className="settings-help">Minutes for newly started attempts.</span>
+              <input
+                max="180"
+                min="1"
+                step="1"
+                type="number"
+                value={draft.attemptTimerMinutes}
+                onChange={(event) =>
+                  setDraft({ ...draft, attemptTimerMinutes: event.target.value })
+                }
+              />
+            </label>
+
             <OpenAIModelSelect
               value={draft.defaultAiModel}
               disabled={isSaving}
@@ -439,6 +458,7 @@ function AccountPage({ apiUrl }: AppProps) {
 function defaultDraft(): SettingsDraft {
   return {
     defaultAiModel: "gpt-5.4-mini",
+    attemptTimerMinutes: "30",
     dailyTarget: "2",
     highInterval: "1",
     lowInterval: "7",
@@ -451,6 +471,7 @@ function defaultDraft(): SettingsDraft {
 function toDraft(settings: PracticeSettings): SettingsDraft {
   return {
     defaultAiModel: settings.defaultAiModel,
+    attemptTimerMinutes: String(settings.attemptTimerMinutes),
     dailyTarget: String(settings.dailyTarget),
     highInterval: String(settings.redoIntervals.high),
     lowInterval: String(settings.redoIntervals.low),

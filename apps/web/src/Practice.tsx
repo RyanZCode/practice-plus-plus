@@ -1,16 +1,19 @@
 import type {
   Attempt,
+  AttemptAssessmentDraft,
   CatalogProblem,
   DailyPlan,
   MemorySuggestion,
 } from "@practice-plus-plus/contracts";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   loadDailyPlan,
   loadActiveAttempt,
   loadProblems,
   loadCatalogPreferences,
   saveCatalogPreferences,
+  pauseTimer,
+  resumeTimer,
   skipTimer,
   startAttempt,
   reviewSolution,
@@ -21,6 +24,8 @@ import { AttemptOutcomeForm } from "./AttemptOutcomeForm";
 import { eligibleProblems, remainingSeconds } from "./attemptState";
 import { AttemptTutor } from "./AttemptTutor";
 import { loadMemorySuggestions } from "./summaryApi";
+import { generateAssessmentDraft, loadAssessmentDraft } from "./assessmentApi";
+import { useAuth } from "./auth";
 
 export function Practice({
   apiUrl,
@@ -33,6 +38,8 @@ export function Practice({
   userId: string;
   defaultModel: string;
 }) {
+  const { browserKey } = useAuth();
+  const keyState = useSyncExternalStore(browserKey.subscribe, browserKey.getSnapshot);
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [problems, setProblems] = useState<CatalogProblem[]>([]);
   const [attempt, setAttempt] = useState<Attempt | null>(null);
@@ -46,6 +53,8 @@ export function Practice({
   const [classifying, setClassifying] = useState(false);
   const [saved, setSaved] = useState<Attempt | null>(null);
   const [memorySuggestions, setMemorySuggestions] = useState<MemorySuggestion[]>([]);
+  const [assessmentDraft, setAssessmentDraft] = useState<AttemptAssessmentDraft | null>(null);
+  const [assessmentLoadedFor, setAssessmentLoadedFor] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -93,6 +102,30 @@ export function Practice({
       active = false;
     };
   }, [apiUrl, token, attempt?.id, attempt?.summary]);
+
+  useEffect(() => {
+    if (attempt === null) {
+      setAssessmentDraft(null);
+      setAssessmentLoadedFor(null);
+      return;
+    }
+    const attemptId = attempt.id;
+    let active = true;
+    setAssessmentLoadedFor(null);
+    void loadAssessmentDraft(apiUrl, token, attemptId)
+      .then((draft) => {
+        if (active) setAssessmentDraft(draft);
+      })
+      .catch(() => {
+        if (active) setAssessmentDraft(null);
+      })
+      .finally(() => {
+        if (active) setAssessmentLoadedFor(attemptId);
+      });
+    return () => {
+      active = false;
+    };
+  }, [apiUrl, token, attempt?.id]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -194,14 +227,33 @@ export function Practice({
               >
                 {Math.floor(seconds / 60)}:{(seconds % 60).toString().padStart(2, "0")}
               </p>
-              <p>Work independently before seeking help.</p>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void update(() => skipTimer(apiUrl, token, attempt.id))}
-              >
-                Skip timer
-              </button>
+              <p>
+                {attempt.timerPausedAt == null
+                  ? "Work independently before seeking help."
+                  : "Timer paused."}
+              </p>
+              <div className="account-actions">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void update(() =>
+                      attempt.timerPausedAt == null
+                        ? pauseTimer(apiUrl, token, attempt.id)
+                        : resumeTimer(apiUrl, token, attempt.id),
+                    )
+                  }
+                >
+                  {attempt.timerPausedAt == null ? "Pause timer" : "Resume timer"}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void update(() => skipTimer(apiUrl, token, attempt.id))}
+                >
+                  Skip timer
+                </button>
+              </div>
             </div>
           ) : (
             <div className="attempt-guidance" role="status">
@@ -251,11 +303,32 @@ export function Practice({
               </button>
             </p>
           ) : null}
-          {classifying || attempt.outcome !== null ? (
+          {(classifying || attempt.outcome !== null) && assessmentLoadedFor !== attempt.id ? (
+            <p role="status">Loading assessment draft…</p>
+          ) : classifying || attempt.outcome !== null ? (
             <AttemptOutcomeForm
-              key={`${attempt.id}-${attempt.solutionReviewedAt ?? "solving"}-${JSON.stringify(attempt.summary)}`}
+              key={`${attempt.id}-${attempt.solutionReviewedAt ?? "solving"}-${JSON.stringify(attempt.summary)}-${assessmentDraft?.updatedAt ?? "no-draft"}`}
               attempt={attempt}
               memorySuggestions={memorySuggestions}
+              assessmentDraft={assessmentDraft}
+              canDraftAssessment={keyState.hasKey}
+              onDraftAssessment={async () => {
+                setBusy(true);
+                setError(undefined);
+                try {
+                  setAssessmentDraft(
+                    await generateAssessmentDraft(apiUrl, token, {
+                      selection: { providerId: "openai", model: defaultModel },
+                      apiKey: browserKey.getKey(userId) ?? "",
+                      attemptId: attempt.id,
+                    }),
+                  );
+                } catch (reason) {
+                  setError(message(reason));
+                } finally {
+                  setBusy(false);
+                }
+              }}
               busy={busy || tutorBusy}
               onReport={(input) => update(() => reportAttempt(apiUrl, token, attempt.id, input))}
               onConfirm={async (input) => {

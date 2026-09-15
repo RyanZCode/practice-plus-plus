@@ -4,6 +4,7 @@ import { practiceSettingsSchema } from "./index.js";
 
 const validSettings = {
   defaultAiModel: "gpt-5.4-mini",
+  attemptTimerMinutes: 30,
   dailyTarget: 2,
   redoIntervals: { high: 1, low: 7, medium: 3 },
   resetTime: "04:00",
@@ -17,6 +18,8 @@ describe("practice settings contract", () => {
 
   it.each([
     { ...validSettings, dailyTarget: 0 },
+    { ...validSettings, attemptTimerMinutes: 0 },
+    { ...validSettings, attemptTimerMinutes: 181 },
     { ...validSettings, dailyTarget: 2.5 },
     { ...validSettings, dailyTarget: 11 },
     { ...validSettings, defaultAiModel: "unlisted-model" },

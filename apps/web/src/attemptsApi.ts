@@ -87,6 +87,26 @@ export async function skipTimer(
   return attemptSchema.parse(await request(apiUrl, token, `/attempts/${attemptId}/skip-timer`, {}));
 }
 
+export async function pauseTimer(
+  apiUrl: string,
+  token: string,
+  attemptId: string,
+): Promise<Attempt> {
+  return attemptSchema.parse(
+    await request(apiUrl, token, `/attempts/${attemptId}/pause-timer`, {}),
+  );
+}
+
+export async function resumeTimer(
+  apiUrl: string,
+  token: string,
+  attemptId: string,
+): Promise<Attempt> {
+  return attemptSchema.parse(
+    await request(apiUrl, token, `/attempts/${attemptId}/resume-timer`, {}),
+  );
+}
+
 export async function reviewSolution(
   apiUrl: string,
   token: string,

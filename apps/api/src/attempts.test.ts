@@ -14,6 +14,8 @@ const attempt: Attempt = {
   type: "FRESH",
   practiceDate: "2026-09-06",
   startedAt: "2026-09-07T03:00:00.000Z",
+  timerEndsAt: "2026-09-07T03:30:00.000Z",
+  timerPausedAt: null,
   timerSkippedAt: null,
   confirmedAt: null,
   solutionReviewedAt: null,
@@ -39,6 +41,7 @@ const record = {
   ...attempt,
   practiceDate: new Date("2026-09-06T00:00:00Z"),
   startedAt: new Date(attempt.startedAt),
+  timerEndsAt: new Date(attempt.timerEndsAt!),
 };
 const servers: Server[] = [];
 afterEach(async () => {
@@ -150,6 +153,8 @@ describe("attempt routes", () => {
       active: vi.fn(),
       start: vi.fn(),
       skip: vi.fn(),
+      pause: vi.fn(),
+      resume: vi.fn(),
       report: vi.fn().mockResolvedValue(attempt),
       reviewSolution: vi.fn().mockResolvedValue(attempt),
       confirm: vi.fn().mockResolvedValue(attempt),
@@ -232,6 +237,8 @@ describe("attempt routes", () => {
       active: vi.fn().mockResolvedValue(attempt),
       start: vi.fn().mockResolvedValue(attempt),
       skip: vi.fn().mockResolvedValue(attempt),
+      pause: vi.fn().mockResolvedValue(attempt),
+      resume: vi.fn().mockResolvedValue(attempt),
       report: vi.fn().mockResolvedValue(attempt),
       reviewSolution: vi.fn().mockResolvedValue(attempt),
       confirm: vi.fn().mockResolvedValue(attempt),
@@ -250,6 +257,9 @@ describe("attempt routes", () => {
     expect(
       (await fetch(`${url}/attempts/${attempt.id}/skip-timer`, { method: "POST" })).status,
     ).toBe(401);
+    expect(
+      (await fetch(`${url}/attempts/${attempt.id}/pause-timer`, { method: "POST" })).status,
+    ).toBe(401);
     const active = await fetch(`${url}/attempts/active`, { headers });
     expect(await active.json()).toEqual({ attempt });
     const started = await fetch(`${url}/attempts`, {
@@ -259,9 +269,13 @@ describe("attempt routes", () => {
     });
     expect(await started.json()).toEqual(attempt);
     await fetch(`${url}/attempts/${attempt.id}/skip-timer`, { method: "POST", headers });
+    await fetch(`${url}/attempts/${attempt.id}/pause-timer`, { method: "POST", headers });
+    await fetch(`${url}/attempts/${attempt.id}/resume-timer`, { method: "POST", headers });
     expect(store.active).toHaveBeenCalledExactlyOnceWith(userId);
     expect(store.start).toHaveBeenCalledWith(userId, problemId, expect.any(Date));
     expect(store.skip).toHaveBeenCalledWith(userId, attempt.id, expect.any(Date));
+    expect(store.pause).toHaveBeenCalledWith(userId, attempt.id, expect.any(Date));
+    expect(store.resume).toHaveBeenCalledWith(userId, attempt.id, expect.any(Date));
   });
   it("rejects client-supplied ownership, type, practice date, and invalid identifiers", async () => {
     const store = {
@@ -270,6 +284,8 @@ describe("attempt routes", () => {
       active: vi.fn(),
       start: vi.fn(),
       skip: vi.fn(),
+      pause: vi.fn(),
+      resume: vi.fn(),
       report: vi.fn().mockResolvedValue(attempt),
       reviewSolution: vi.fn(),
       confirm: vi.fn(),
@@ -321,6 +337,7 @@ function database() {
         highIntervalDays: 1,
         mediumIntervalDays: 3,
         lowIntervalDays: 7,
+        attemptTimerMinutes: 45,
       }),
     },
   };
@@ -998,6 +1015,51 @@ describe("attempt persistence", () => {
       }),
     );
   });
+  it("confirms an attempt with an existing unreviewed learning summary", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue({
+      ...record,
+      outcome: "INDEPENDENT",
+      summary: {
+        approach: null,
+        stuckPoint: "Needed to identify the invariant.",
+        misconception: null,
+        assistance: "Used clarification.",
+        progressTrigger: "Restated the conditions.",
+        finalUnderstanding: null,
+        nextTeachingAction: "Ask for the invariant.",
+        reviewedAt: null,
+      },
+    });
+    const summary = {
+      approach: null,
+      stuckPoint: "Needed to identify the invariant.",
+      misconception: null,
+      assistance: "Used clarification.",
+      progressTrigger: "Restated the conditions.",
+      finalUnderstanding: null,
+      nextTeachingAction: "Ask for the invariant.",
+    };
+    const now = new Date();
+    await store.confirm(
+      userId,
+      attempt.id,
+      confirmAttemptSchema.parse({ outcome: "INDEPENDENT", summary }),
+      now,
+    );
+    expect(tx.attempt.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          summary: {
+            upsert: {
+              create: { ...summary, reviewedAt: now },
+              update: { ...summary, reviewedAt: now },
+            },
+          },
+        }),
+      }),
+    );
+  });
   it("does not expose or change another user's attempt by identifier", async () => {
     const { tx, store } = database();
     for (const action of [
@@ -1043,6 +1105,7 @@ describe("attempt persistence", () => {
             type: previous ? "REDO" : "FRESH",
             practiceDate: new Date("2026-09-06T00:00:00Z"),
             startedAt: new Date(attempt.startedAt),
+            timerEndsAt: new Date("2026-09-07T03:45:00.000Z"),
           },
         }),
       );
@@ -1079,6 +1142,35 @@ describe("attempt persistence", () => {
     expect(tx.attempt.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: attempt.id, userProfileId: userId, confirmedAt: null, timerSkippedAt: null },
+      }),
+    );
+  });
+  it("pauses and resumes without consuming paused time", async () => {
+    const { tx, store } = database();
+    const pausedAt = new Date("2026-09-07T03:10:00.000Z");
+    const resumedAt = new Date("2026-09-07T03:15:00.000Z");
+    const pausedRecord = { ...record, timerPausedAt: pausedAt };
+    tx.attempt.findFirst.mockResolvedValueOnce(record);
+    tx.attempt.update.mockResolvedValueOnce(pausedRecord);
+    await expect(store.pause(userId, attempt.id, pausedAt)).resolves.toMatchObject({
+      timerPausedAt: pausedAt.toISOString(),
+    });
+    expect(tx.attempt.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: { timerPausedAt: pausedAt } }),
+    );
+
+    tx.attempt.findFirst.mockResolvedValueOnce(pausedRecord);
+    tx.attempt.update.mockResolvedValueOnce({
+      ...record,
+      timerEndsAt: new Date("2026-09-07T03:35:00.000Z"),
+    });
+    await store.resume(userId, attempt.id, resumedAt);
+    expect(tx.attempt.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: {
+          timerEndsAt: new Date("2026-09-07T03:35:00.000Z"),
+          timerPausedAt: null,
+        },
       }),
     );
   });

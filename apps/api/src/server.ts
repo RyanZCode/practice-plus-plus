@@ -15,6 +15,7 @@ import { createPrismaProfileStore } from "./profile.js";
 import { createPrismaSettingsStore } from "./settings.js";
 import { createPrismaSummaryStore } from "./summaries.js";
 import { createPrismaLearningContextStore } from "./learningContext.js";
+import { createPrismaAssessmentStore } from "./assessments.js";
 
 const config = readConfig();
 const logger = createLogger();
@@ -33,6 +34,11 @@ const app = createApp({
       assembler: contextAssembler,
       provider,
       store: createPrismaSummaryStore(database),
+    },
+    assessments: {
+      assembler: contextAssembler,
+      provider,
+      store: createPrismaAssessmentStore(database),
     },
     dailyPlanStore: createPrismaDailyPlanStore(database),
     attemptStore: createPrismaAttemptStore(database),

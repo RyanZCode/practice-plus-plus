@@ -63,6 +63,7 @@ describe.skipIf(databaseUrl === undefined)("learning context screen database", (
         type: "FRESH",
         practiceDate: new Date("2026-09-13"),
         startedAt: new Date("2026-09-13T11:00:00Z"),
+        timerEndsAt: new Date("2026-09-13T11:30:00Z"),
         confirmedAt: new Date("2026-09-13T12:00:00Z"),
         outcome: "ASSISTED",
       },

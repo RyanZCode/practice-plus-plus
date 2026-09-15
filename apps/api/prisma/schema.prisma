@@ -36,38 +36,40 @@ enum UserRole {
 }
 
 model UserProfile {
-  id                    String                @id @default(uuid()) @db.Uuid
-  authSubject           String                @unique @map("auth_subject") @db.Uuid
-  role                  UserRole              @default(USER)
-  hidePaidProblems      Boolean               @default(false) @map("hide_paid_problems")
-  createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt             DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
-  dailyPlan             DailyPlan?
-  practiceSettings      PracticeSettings?
-  attempts              Attempt[]
-  learnerGoals          LearnerGoal[]
-  teachingPreferences   TeachingPreference[]
-  conversationSummaries ConversationSummary[]
-  learnerMemories       LearnerMemory[]
-  catalogImportBatches  CatalogImportBatch[]
-  reviewedProblems      Problem[]             @relation("ProblemReviewedBy")
-  publishedProblems     Problem[]             @relation("ProblemPublishedBy")
+  id                      String                   @id @default(uuid()) @db.Uuid
+  authSubject             String                   @unique @map("auth_subject") @db.Uuid
+  role                    UserRole                 @default(USER)
+  hidePaidProblems        Boolean                  @default(false) @map("hide_paid_problems")
+  createdAt               DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  dailyPlan               DailyPlan?
+  practiceSettings        PracticeSettings?
+  attempts                Attempt[]
+  attemptAssessmentDrafts AttemptAssessmentDraft[]
+  learnerGoals            LearnerGoal[]
+  teachingPreferences     TeachingPreference[]
+  conversationSummaries   ConversationSummary[]
+  learnerMemories         LearnerMemory[]
+  catalogImportBatches    CatalogImportBatch[]
+  reviewedProblems        Problem[]                @relation("ProblemReviewedBy")
+  publishedProblems       Problem[]                @relation("ProblemPublishedBy")
 
   @@map("user_profiles")
 }
 
 model PracticeSettings {
-  userProfileId      String      @id @map("user_profile_id") @db.Uuid
-  defaultAiModel     String      @default("gpt-5.4-mini") @map("default_ai_model") @db.VarChar(200)
-  timeZone           String      @map("time_zone") @db.VarChar(100)
-  resetMinutes       Int         @map("reset_minutes") @db.SmallInt
-  dailyTarget        Int         @map("daily_target") @db.SmallInt
-  highIntervalDays   Int         @map("high_interval_days") @db.SmallInt
-  mediumIntervalDays Int         @map("medium_interval_days") @db.SmallInt
-  lowIntervalDays    Int         @map("low_interval_days") @db.SmallInt
-  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
-  userProfile        UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+  userProfileId       String      @id @map("user_profile_id") @db.Uuid
+  defaultAiModel      String      @default("gpt-5.4-mini") @map("default_ai_model") @db.VarChar(200)
+  attemptTimerMinutes Int         @default(30) @map("attempt_timer_minutes") @db.SmallInt
+  timeZone            String      @map("time_zone") @db.VarChar(100)
+  resetMinutes        Int         @map("reset_minutes") @db.SmallInt
+  dailyTarget         Int         @map("daily_target") @db.SmallInt
+  highIntervalDays    Int         @map("high_interval_days") @db.SmallInt
+  mediumIntervalDays  Int         @map("medium_interval_days") @db.SmallInt
+  lowIntervalDays     Int         @map("low_interval_days") @db.SmallInt
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  userProfile         UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
 
   @@map("practice_settings")
 }
@@ -193,6 +195,8 @@ model Attempt {
   type                     AttemptType
   practiceDate             DateTime                @map("practice_date") @db.Date
   startedAt                DateTime                @map("started_at") @db.Timestamptz(3)
+  timerEndsAt              DateTime                @map("timer_ends_at") @db.Timestamptz(3)
+  timerPausedAt            DateTime?               @map("timer_paused_at") @db.Timestamptz(3)
   timerSkippedAt           DateTime?               @map("timer_skipped_at") @db.Timestamptz(3)
   confirmedAt              DateTime?               @map("confirmed_at") @db.Timestamptz(3)
   solutionReviewedAt       DateTime?               @map("solution_reviewed_at") @db.Timestamptz(3)
@@ -210,6 +214,7 @@ model Attempt {
   assistance               AssistanceEvent[]
   review                   ReviewObligation?
   summary                  AttemptSummary?
+  assessmentDraft          AttemptAssessmentDraft?
   conversationSummaries    ConversationSummary[]
   memoryEvidence           LearnerMemoryEvidence[] @relation("AttemptEvidence")
   assistanceMemoryEvidence LearnerMemoryEvidence[] @relation("AssistanceAttemptEvidence")
@@ -378,6 +383,30 @@ model AttemptSummary {
   @@unique([attemptId, userProfileId])
   @@index([userProfileId])
   @@map("attempt_summaries")
+}
+
+model AttemptAssessmentDraft {
+  id                   String             @id @default(uuid()) @db.Uuid
+  attemptId            String             @unique @map("attempt_id") @db.Uuid
+  userProfileId        String             @map("user_profile_id") @db.Uuid
+  outcome              AttemptOutcome
+  confidence           AttemptConfidence?
+  optimality           AttemptOptimality?
+  timeSpentSeconds     Int?               @map("time_spent_seconds")
+  approach             String?            @db.VarChar(1000)
+  notes                String?            @db.VarChar(1000)
+  reproducedFromMemory Boolean?           @map("reproduced_from_memory")
+  summary              Json?
+  evidence             String[]
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  attempt              Attempt            @relation(fields: [attemptId, userProfileId], references: [id, userProfileId], onDelete: Cascade)
+  userProfile          UserProfile        @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([id, userProfileId])
+  @@unique([attemptId, userProfileId])
+  @@index([userProfileId])
+  @@map("attempt_assessment_drafts")
 }
 
 model ConversationSummary {
