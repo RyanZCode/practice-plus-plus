@@ -500,6 +500,62 @@ export const attemptHistoryResponseSchema = z.strictObject({
 });
 export type AttemptHistoryResponse = z.infer<typeof attemptHistoryResponseSchema>;
 
+const outcomeCountsSchema = z.strictObject({
+  independent: z.number().int().nonnegative(),
+  assisted: z.number().int().nonnegative(),
+  gaveUp: z.number().int().nonnegative(),
+  incomplete: z.number().int().nonnegative(),
+});
+
+const learningOutcomeCountsSchema = outcomeCountsSchema.omit({ incomplete: true });
+
+const assistanceCountsSchema = z.strictObject({
+  clarification: z.number().int().nonnegative(),
+  conceptualHint: z.number().int().nonnegative(),
+  debugging: z.number().int().nonnegative(),
+  optimization: z.number().int().nonnegative(),
+  solutionReview: z.number().int().nonnegative(),
+});
+
+export const patternEvidenceSchema = z.strictObject({
+  patternId: z.uuid(),
+  patternName: z.enum(mvpPatternNames),
+  classification: z.enum([
+    "UNTESTED",
+    "INSUFFICIENT_EVIDENCE",
+    "NEEDS_PRACTICE",
+    "NO_CURRENT_WEAKNESS_SIGNAL",
+  ]),
+  fresh: z.strictObject({
+    sampleCount: z.number().int().min(0).max(10),
+    weightedTotal: z.number().nonnegative(),
+    weightedWeakSignals: z.number().nonnegative(),
+    outcomes: learningOutcomeCountsSchema,
+  }),
+  redo: z.strictObject({
+    outcomes: outcomeCountsSchema,
+    successRate: z.number().min(0).max(1).nullable(),
+  }),
+  assistance: assistanceCountsSchema,
+  highestConceptualHintLevel: z.number().int().min(1).max(32767).nullable(),
+  optimality: z.strictObject({
+    optimal: z.number().int().nonnegative(),
+    suboptimal: z.number().int().nonnegative(),
+    unknownOrOmitted: z.number().int().nonnegative(),
+  }),
+  lastPracticed: z.iso.date().nullable(),
+  stale: z.boolean(),
+  recentExposureShare: z.number().min(0).max(1).nullable(),
+  overconcentrated: z.boolean(),
+});
+
+export const patternEvidenceResponseSchema = z.strictObject({
+  asOfPracticeDate: z.iso.date(),
+  patterns: z.array(patternEvidenceSchema),
+});
+export type PatternEvidence = z.infer<typeof patternEvidenceSchema>;
+export type PatternEvidenceResponse = z.infer<typeof patternEvidenceResponseSchema>;
+
 export const dailyPlanSchema = z
   .strictObject({
     practiceDate: z.iso.date(),
