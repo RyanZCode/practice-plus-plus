@@ -116,6 +116,7 @@ describe("external AI context export", () => {
     expect(result.markdown).toContain("Request a small nudge");
     expect(result.markdown).toContain("Give up and review a solution");
     expect(result.markdown).toContain("Record the result");
+    expect(result.markdown).toContain("Return only JSON with version 1");
   });
 
   it("includes code only when intentionally supplied and never includes a credential field", () => {

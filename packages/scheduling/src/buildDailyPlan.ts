@@ -25,16 +25,27 @@ export function buildDailyPlan(input: {
   history: readonly FreshRankingAttempt[];
   reviews: readonly (ReviewCandidate & { problemId: string })[];
   transfers: readonly TransferCandidate[];
+  freshProblemIds?: readonly string[];
 }): PlanSelection[] {
   if (!Number.isInteger(input.target) || input.target < 1 || input.target > 10) {
     throw new RangeError("Invalid daily target.");
   }
-  const fresh = rankFreshCandidates(
+  const deterministicFresh = rankFreshCandidates(
     input.candidates,
     input.history,
     input.practiceDate,
     input.hidePaidProblems,
   );
+  const preferred = new Map(input.freshProblemIds?.map((id, index) => [id, index]));
+  const fresh =
+    preferred === undefined
+      ? deterministicFresh
+      : deterministicFresh.toSorted(
+          (a, b) =>
+            (preferred.get(a.problemId) ?? Number.MAX_SAFE_INTEGER) -
+              (preferred.get(b.problemId) ?? Number.MAX_SAFE_INTEGER) ||
+            deterministicFresh.indexOf(a) - deterministicFresh.indexOf(b),
+        );
   const selected: PlanSelection[] = [];
   const used = new Set<string>();
   function add(item: PlanSelection) {

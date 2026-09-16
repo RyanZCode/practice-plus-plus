@@ -2,6 +2,8 @@ import type { Attempt, ExternalAiExportRequest } from "@practice-plus-plus/contr
 import { useEffect, useState, type FormEvent } from "react";
 import { loadActiveAttempt } from "./attemptsApi";
 import { createExternalAiExport } from "./externalAiApi";
+import type { PlanningPreview } from "@practice-plus-plus/contracts";
+import { confirmExternalPlan, validateExternalPlan } from "./planningApi";
 
 type Selection =
   | "COACH"
@@ -24,6 +26,8 @@ export function ExternalAiExport({ apiUrl, token }: { apiUrl: string; token: str
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [status, setStatus] = useState<string>();
+  const [recommendation, setRecommendation] = useState("");
+  const [preview, setPreview] = useState<PlanningPreview | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -78,6 +82,38 @@ export function ExternalAiExport({ apiUrl, token }: { apiUrl: string; token: str
     link.click();
     URL.revokeObjectURL(url);
     setStatus("Context downloaded. Downloading it does not record assistance.");
+  }
+
+  async function validateRecommendation() {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const value: unknown = JSON.parse(recommendation);
+      setPreview(await validateExternalPlan(apiUrl, token, value));
+      setStatus("Recommendation validated. Confirm it to save today’s plan.");
+    } catch (reason) {
+      setPreview(null);
+      setError(reason instanceof Error ? reason.message : "The recommendation is invalid.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmRecommendation() {
+    if (preview === null) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await confirmExternalPlan(apiUrl, token, preview.recommendation);
+      setPreview(null);
+      setRecommendation("");
+      setStatus("Today’s plan was saved. Open Practice to begin.");
+    } catch (reason) {
+      setPreview(null);
+      setError(reason instanceof Error ? reason.message : "The recommendation could not be saved.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const choices = selections(attempt);
@@ -159,6 +195,52 @@ export function ExternalAiExport({ apiUrl, token }: { apiUrl: string; token: str
           </button>
         </div>
       </form>
+      {selection === "PLANNING" && result !== null ? (
+        <section aria-label="External planning recommendation">
+          <h3>Return a recommendation</h3>
+          <p className="settings-help">
+            Paste the AI’s version 1 JSON response. Validation does not change today’s plan.
+          </p>
+          <label>
+            Recommendation JSON
+            <textarea
+              rows={7}
+              value={recommendation}
+              disabled={busy}
+              onChange={(event) => {
+                setRecommendation(event.target.value);
+                setPreview(null);
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy || recommendation.trim() === ""}
+            onClick={() => void validateRecommendation()}
+          >
+            Validate recommendation
+          </button>
+          {preview ? (
+            <div className="daily-plan">
+              <h3>Proposed fresh choices</h3>
+              <ol>
+                {preview.problems.map((problem) => (
+                  <li key={problem.id}>
+                    {problem.leetcodeId}. {problem.title} ({problem.difficulty})
+                  </li>
+                ))}
+              </ol>
+              <p className="settings-help">
+                Reviews, transfers, capacity, and the diagnostic slot are applied by Practice++ when
+                you confirm.
+              </p>
+              <button type="button" disabled={busy} onClick={() => void confirmRecommendation()}>
+                Confirm and save plan
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
     </section>
   );
 }

@@ -8,6 +8,7 @@ import type {
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   loadDailyPlan,
+  loadSavedDailyPlan,
   loadActiveAttempt,
   loadProblems,
   loadCatalogPreferences,
@@ -26,6 +27,7 @@ import { AttemptTutor } from "./AttemptTutor";
 import { loadMemorySuggestions } from "./summaryApi";
 import { generateAssessmentDraft, loadAssessmentDraft } from "./assessmentApi";
 import { useAuth } from "./auth";
+import { generateIntegratedPlan } from "./planningApi";
 
 export function Practice({
   apiUrl,
@@ -61,7 +63,7 @@ export function Practice({
     setLoading(true);
     setError(undefined);
     void Promise.all([
-      loadDailyPlan(apiUrl, token),
+      loadSavedDailyPlan(apiUrl, token),
       loadProblems(apiUrl, token),
       loadActiveAttempt(apiUrl, token),
       loadCatalogPreferences(apiUrl, token),
@@ -152,6 +154,27 @@ export function Practice({
     try {
       const preferences = await saveCatalogPreferences(apiUrl, token, value);
       setHidePaid(preferences.hidePaidProblems);
+    } catch (reason) {
+      setError(message(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function generatePlan(personalized: boolean) {
+    setBusy(true);
+    setError(undefined);
+    try {
+      setPlan(
+        personalized
+          ? await generateIntegratedPlan(
+              apiUrl,
+              token,
+              defaultModel,
+              browserKey.getKey(userId) ?? "",
+            )
+          : await loadDailyPlan(apiUrl, token),
+      );
     } catch (reason) {
       setError(message(reason));
     } finally {
@@ -356,7 +379,39 @@ export function Practice({
       ) : null}
       {!loading && error === undefined && attempt === null ? (
         <div>
-          {plan === null ? null : (
+          {plan === null ? (
+            <div className="daily-plan">
+              <h3>Create today’s plan</h3>
+              <p className="settings-help">
+                Personalization uses your bounded learning context while the server keeps review
+                priorities, eligibility, and the daily target fixed. Provider failures fall back to
+                the deterministic planner.
+              </p>
+              <div className="account-actions">
+                <button
+                  type="button"
+                  disabled={busy || !keyState.hasKey}
+                  onClick={() => void generatePlan(true)}
+                >
+                  {busy ? "Creating plan…" : "Personalize with OpenAI"}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={busy}
+                  onClick={() => void generatePlan(false)}
+                >
+                  Generate without AI
+                </button>
+              </div>
+              {!keyState.hasKey ? (
+                <p className="settings-help">
+                  Add an OpenAI API key in Practice settings, or use External AI from the navigation
+                  and return a structured recommendation.
+                </p>
+              ) : null}
+            </div>
+          ) : (
             <div className="daily-plan">
               <h3>Today’s plan · {plan.practiceDate}</h3>
               <p>
