@@ -57,6 +57,17 @@ const input = {
 };
 
 describe("daily plan assembly", () => {
+  it("uses a preferred fresh order without changing plan capacity", () => {
+    const result = buildDailyPlan({
+      ...input,
+      target: 2,
+      reviews: [],
+      transfers: [],
+      freshProblemIds: ["fresh2", "fresh1"],
+    });
+    expect(result.map((item) => item.problemId)).toEqual(["fresh2", "fresh1"]);
+    expect(result[0]?.kind).toBe("DIAGNOSTIC");
+  });
   it("reserves a diagnostic and fills in approved cross-task order", () => {
     expect(buildDailyPlan(input).map((p) => [p.problemId, p.kind])).toEqual([
       ["fresh1", "DIAGNOSTIC"],

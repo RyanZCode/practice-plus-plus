@@ -134,6 +134,14 @@ describe("daily plan persistence", () => {
     await store.current(userProfileId, now);
     expect(tx.dailyPlan.create).toHaveBeenCalledTimes(1);
   });
+  it("rejects fabricated recommended problems without changing plan state", async () => {
+    const { tx, store } = database();
+    await expect(store.recommended(userProfileId, now, [crypto.randomUUID()])).rejects.toThrow(
+      "no longer valid",
+    );
+    expect(tx.dailyPlan.deleteMany).not.toHaveBeenCalled();
+    expect(tx.dailyPlan.create).not.toHaveBeenCalled();
+  });
 });
 
 const servers: Server[] = [];
@@ -149,7 +157,11 @@ it("authenticates the plan route and uses the resolved profile", async () => {
   const app = createApp({
     logger: pino({ level: "silent" }),
     authentication: {
-      dailyPlanStore: { current },
+      dailyPlanStore: {
+        current,
+        saved: vi.fn().mockResolvedValue(null),
+        recommended: vi.fn(),
+      },
       profileStore: {
         resolveByAuthSubject: vi.fn().mockResolvedValue({ id: userProfileId, role: "USER" }),
       },

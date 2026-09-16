@@ -122,6 +122,14 @@ export function formatExternalAiMarkdown(
     "## Current transition",
     "",
     packet.transition,
+    ...(packet.policy.mode === "COACH" && packet.policy.purpose === "PLANNING"
+      ? [
+          "",
+          "## Structured planning response",
+          "",
+          `Return only JSON with version 1, planningStateId \`${packet.planningStateId}\`, and exactly ${Math.min(packet.profile.dailyTarget, packet.candidates.length)} unique freshProblemIds in preferred order. Use only IDs from the supplied candidates.`,
+        ]
+      : []),
     "",
     "## Conversation transitions",
     "",

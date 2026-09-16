@@ -518,3 +518,34 @@ export const dailyPlanSchema = z
   })
   .refine((plan) => plan.items.length <= plan.target);
 export type DailyPlan = z.infer<typeof dailyPlanSchema>;
+
+export const planningRecommendationSchema = z.strictObject({
+  version: z.literal(1),
+  planningStateId: z.string().regex(/^[a-f0-9]{64}$/),
+  freshProblemIds: z.array(z.string().uuid()).max(10),
+});
+export type PlanningRecommendation = z.infer<typeof planningRecommendationSchema>;
+
+export const integratedPlanningRequestSchema = z.strictObject({
+  selection: providerSelectionSchema,
+  apiKey: z.string().regex(/^[\x21-\x7e]{1,4096}$/),
+});
+export type IntegratedPlanningRequest = z.infer<typeof integratedPlanningRequestSchema>;
+
+export const savedDailyPlanResponseSchema = z.strictObject({ plan: dailyPlanSchema.nullable() });
+export const planningPreviewSchema = z.strictObject({
+  recommendation: planningRecommendationSchema,
+  problems: z
+    .array(
+      z.strictObject({
+        id: z.string().uuid(),
+        leetcodeId: z.number().int().positive(),
+        title: z.string().max(255),
+        url: z.string().url().max(500),
+        difficulty: z.enum(["EASY", "MEDIUM", "HARD"]),
+        availability: z.enum(["AVAILABLE", "PAID_ONLY", "UNAVAILABLE"]),
+      }),
+    )
+    .max(10),
+});
+export type PlanningPreview = z.infer<typeof planningPreviewSchema>;

@@ -1,5 +1,6 @@
 import {
   dailyPlanSchema,
+  savedDailyPlanResponseSchema,
   activeAttemptResponseSchema,
   attemptHistoryResponseSchema,
   type AttemptHistoryQuery,
@@ -150,4 +151,8 @@ export async function overrideReview(
 
 export async function loadDailyPlan(apiUrl: string, token: string) {
   return dailyPlanSchema.parse(await request(apiUrl, token, "/daily-plan"));
+}
+
+export async function loadSavedDailyPlan(apiUrl: string, token: string) {
+  return savedDailyPlanResponseSchema.parse(await request(apiUrl, token, "/daily-plan/saved")).plan;
 }
