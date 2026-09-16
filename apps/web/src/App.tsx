@@ -13,6 +13,7 @@ import { OpenAIModelSelect } from "./OpenAIModelSelect";
 import { LearningContext } from "./LearningContext";
 import { clearTutorConversationsForUser } from "./tutorConversationStorage";
 import { ExternalAiExport } from "./ExternalAiExport";
+import { loadTheme, resolveTheme, saveTheme, type ThemePreference } from "./theme";
 
 interface AppProps {
   readonly apiUrl: string;
@@ -29,15 +30,60 @@ interface SettingsDraft {
   readonly timeZone: string;
 }
 
+type ActiveView = "coach" | "external-ai" | "history" | "learning" | "practice" | "settings";
+
+const navigationItems: ReadonlyArray<{ readonly label: string; readonly view: ActiveView }> = [
+  { label: "Today", view: "practice" },
+  { label: "Coach", view: "coach" },
+  { label: "History", view: "history" },
+  { label: "Memory", view: "learning" },
+  { label: "AI Export", view: "external-ai" },
+  { label: "Settings", view: "settings" },
+];
+
 export function App({ apiUrl }: AppProps) {
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
+    loadTheme(window.localStorage),
+  );
+
+  useEffect(() => {
+    const colorSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+    function applyTheme(): void {
+      document.documentElement.dataset.theme = resolveTheme(
+        themePreference,
+        colorSchemeQuery.matches,
+      );
+    }
+
+    applyTheme();
+
+    if (themePreference !== "system") {
+      return;
+    }
+
+    colorSchemeQuery.addEventListener("change", applyTheme);
+    return () => colorSchemeQuery.removeEventListener("change", applyTheme);
+  }, [themePreference]);
+
+  function changeTheme(preference: ThemePreference): void {
+    setThemePreference(preference);
+    saveTheme(window.localStorage, preference);
+  }
+
   return (
     <ProtectedRoute>
-      <AccountPage apiUrl={apiUrl} />
+      <AccountPage apiUrl={apiUrl} themePreference={themePreference} onThemeChange={changeTheme} />
     </ProtectedRoute>
   );
 }
 
-function AccountPage({ apiUrl }: AppProps) {
+interface AccountPageProps extends AppProps {
+  readonly onThemeChange: (theme: ThemePreference) => void;
+  readonly themePreference: ThemePreference;
+}
+
+function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProps) {
   const { signOut, state } = useAuth();
   const userId = authenticatedUserId(state);
   const accessToken = state.status === "authenticated" ? state.session.access_token : null;
@@ -52,11 +98,8 @@ function AccountPage({ apiUrl }: AppProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  const [showCoach, setShowCoach] = useState(false);
-  const [showLearningContext, setShowLearningContext] = useState(false);
-  const [showExternalAi, setShowExternalAi] = useState(false);
+  const [activeView, setActiveView] = useState<ActiveView>("practice");
+  const [focusMemoryInferences, setFocusMemoryInferences] = useState(false);
   const [reloadCount, setReloadCount] = useState(0);
 
   useEffect(() => {
@@ -163,341 +206,334 @@ function AccountPage({ apiUrl }: AppProps) {
     }
   }
 
-  const showPractice =
-    !showCoach && !showHistory && !showLearningContext && !showExternalAi && !showSettings;
-
-  function openPractice(): void {
-    setShowCoach(false);
-    setShowHistory(false);
-    setShowLearningContext(false);
-    setShowExternalAi(false);
-    setShowSettings(false);
-  }
+  const showNavigation = !isLoading && !loadFailed && !isOnboarding;
 
   return (
     <main className="app-shell">
-      <section className="account-card">
-        <div className="account-heading">
-          <div>
-            <h1>
-              <button
-                className="brand-button"
-                type="button"
-                aria-current={
-                  !isLoading && !loadFailed && !isOnboarding && showPractice ? "page" : undefined
-                }
-                onClick={openPractice}
-              >
-                Practice++
-              </button>
-            </h1>
-            <p className="account-email">
-              {session.user.email === undefined ? "You’re signed in." : session.user.email}
-            </p>
-          </div>
-          <div className="account-actions">
-            {!isLoading && !loadFailed && !isOnboarding ? (
-              <button
-                className="text-button"
-                type="button"
-                aria-current={showExternalAi ? "page" : undefined}
-                onClick={() => {
-                  setShowExternalAi(true);
-                  setShowCoach(false);
-                  setShowSettings(false);
-                  setShowHistory(false);
-                  setShowLearningContext(false);
-                }}
-              >
-                External AI
-              </button>
-            ) : null}
-            {!isLoading && !loadFailed && !isOnboarding ? (
-              <button
-                className="text-button"
-                type="button"
-                aria-current={showCoach ? "page" : undefined}
-                onClick={() => {
-                  setShowCoach(true);
-                  setShowSettings(false);
-                  setShowHistory(false);
-                  setShowLearningContext(false);
-                  setShowExternalAi(false);
-                }}
-              >
-                Coach
-              </button>
-            ) : null}
-            {!isLoading && !loadFailed && !isOnboarding ? (
-              <button
-                className="text-button"
-                type="button"
-                aria-current={showHistory ? "page" : undefined}
-                onClick={() => {
-                  setShowHistory(true);
-                  setShowSettings(false);
-                  setShowCoach(false);
-                  setShowExternalAi(false);
-                  setShowLearningContext(false);
-                }}
-              >
-                Attempt history
-              </button>
-            ) : null}
-            {!isLoading && !loadFailed && !isOnboarding ? (
-              <button
-                className="text-button"
-                type="button"
-                aria-current={showLearningContext ? "page" : undefined}
-                onClick={() => {
-                  setShowLearningContext(true);
-                  setShowSettings(false);
-                  setShowHistory(false);
-                  setShowCoach(false);
-                  setShowExternalAi(false);
-                }}
-              >
-                What Practice++ knows
-              </button>
-            ) : null}
-            {!isLoading && !loadFailed && !isOnboarding ? (
-              <button
-                className="text-button"
-                type="button"
-                aria-current={showSettings ? "page" : undefined}
-                aria-controls="practice-settings"
-                onClick={() => {
-                  setShowSettings(true);
-                  setShowHistory(false);
-                  setShowCoach(false);
-                  setShowLearningContext(false);
-                  setShowExternalAi(false);
-                }}
-              >
-                Practice settings
-              </button>
-            ) : null}
-            <button
-              className="text-button"
-              type="button"
-              disabled={isSigningOut}
-              onClick={() => void handleSignOut()}
-            >
-              {isSigningOut ? "Signing out…" : "Sign out"}
-            </button>
-          </div>
+      <aside className="app-sidebar">
+        <h1 className="brand-heading">
+          <button
+            className="brand-button"
+            type="button"
+            aria-label="Practice++, open today’s practice"
+            aria-current={showNavigation && activeView === "practice" ? "page" : undefined}
+            onClick={() => setActiveView("practice")}
+          >
+            <span className="brand-mark" aria-hidden="true">
+              P++
+            </span>
+            <strong>Practice++</strong>
+          </button>
+        </h1>
+
+        {showNavigation ? <Navigation activeView={activeView} onNavigate={setActiveView} /> : null}
+
+        <div className="account-summary">
+          <p className="account-email">
+            {session.user.email === undefined ? "You’re signed in." : session.user.email}
+          </p>
+          <button
+            className="sign-out-button"
+            type="button"
+            disabled={isSigningOut}
+            onClick={() => void handleSignOut()}
+          >
+            {isSigningOut ? "Signing out…" : "Sign out"}
+          </button>
         </div>
+      </aside>
 
-        {isLoading ? <p className="settings-status">Loading practice settings…</p> : null}
-
-        {!isLoading && loadFailed && error !== undefined ? (
-          <div className="settings-status">
-            <p className="auth-message" role="alert">
-              {error}
-            </p>
+      <section className="workspace-panel">
+        <header className="mobile-header">
+          <h1 className="mobile-brand-heading">
             <button
-              className="secondary-button"
+              className="mobile-brand"
               type="button"
-              onClick={() => setReloadCount((count) => count + 1)}
+              aria-label="Practice++, open today’s practice"
+              onClick={() => setActiveView("practice")}
             >
-              Try again
+              Practice++
             </button>
+          </h1>
+          <button
+            className="mobile-sign-out"
+            type="button"
+            disabled={isSigningOut}
+            onClick={() => void handleSignOut()}
+          >
+            {isSigningOut ? "Signing out…" : "Sign out"}
+          </button>
+        </header>
+
+        {showNavigation ? (
+          <div className="mobile-navigation">
+            <Navigation activeView={activeView} onNavigate={setActiveView} />
           </div>
         ) : null}
 
-        {!isLoading && !loadFailed && !isOnboarding ? (
-          <div
-            hidden={
-              showSettings || showHistory || showCoach || showLearningContext || showExternalAi
-            }
-          >
-            <Practice
+        <div className="workspace-content">
+          {isLoading ? <p className="settings-status">Loading practice settings…</p> : null}
+
+          {!isLoading && loadFailed && error !== undefined ? (
+            <div className="settings-status">
+              <p className="auth-message" role="alert">
+                {error}
+              </p>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => setReloadCount((count) => count + 1)}
+              >
+                Try again
+              </button>
+            </div>
+          ) : null}
+
+          {!isLoading && !loadFailed && !isOnboarding ? (
+            <div hidden={activeView !== "practice"}>
+              <Practice
+                key={session.user.id}
+                apiUrl={apiUrl}
+                token={session.access_token}
+                userId={session.user.id}
+                defaultModel={savedSettings?.defaultAiModel ?? "gpt-5.4-mini"}
+              />
+            </div>
+          ) : null}
+
+          <div hidden={isLoading || loadFailed || isOnboarding || activeView !== "coach"}>
+            <Coach
               key={session.user.id}
               apiUrl={apiUrl}
               token={session.access_token}
               userId={session.user.id}
               defaultModel={savedSettings?.defaultAiModel ?? "gpt-5.4-mini"}
+              onReviewMemory={() => {
+                setFocusMemoryInferences(true);
+                setActiveView("learning");
+              }}
             />
           </div>
-        ) : null}
 
-        <div
-          hidden={
-            isLoading ||
-            loadFailed ||
-            isOnboarding ||
-            !showCoach ||
-            showLearningContext ||
-            showExternalAi
-          }
-        >
-          <Coach
-            key={session.user.id}
-            apiUrl={apiUrl}
-            token={session.access_token}
-            userId={session.user.id}
-            defaultModel={savedSettings?.defaultAiModel ?? "gpt-5.4-mini"}
-          />
-        </div>
+          {!isLoading && !loadFailed && !isOnboarding && activeView === "history" ? (
+            <AttemptHistory apiUrl={apiUrl} token={session.access_token} />
+          ) : null}
 
-        {!isLoading && !loadFailed && !isOnboarding && showHistory ? (
-          <AttemptHistory apiUrl={apiUrl} token={session.access_token} />
-        ) : null}
-
-        {!isLoading && !loadFailed && !isOnboarding && showLearningContext ? (
-          <LearningContext apiUrl={apiUrl} token={session.access_token} />
-        ) : null}
-
-        {!isLoading && !loadFailed && !isOnboarding && showExternalAi ? (
-          <ExternalAiExport apiUrl={apiUrl} token={session.access_token} />
-        ) : null}
-
-        {!isLoading &&
-        !loadFailed &&
-        !isOnboarding &&
-        !showSettings &&
-        !showLearningContext &&
-        !showExternalAi &&
-        error !== undefined ? (
-          <p className="auth-message" role="alert">
-            {error}
-          </p>
-        ) : null}
-
-        {!isLoading &&
-        !loadFailed &&
-        (isOnboarding || showSettings) &&
-        !showLearningContext &&
-        !showExternalAi ? (
-          <form
-            id="practice-settings"
-            className="settings-form"
-            onSubmit={(event) => void handleSave(event)}
-          >
-            <div>
-              <h2>{isOnboarding ? "Set up your practice" : "Practice settings"}</h2>
-              <p className="settings-help">
-                These settings determine when a practice day starts and how much work is planned.
-              </p>
-            </div>
-
-            <label>
-              Timezone
-              <input
-                autoComplete="off"
-                value={draft.timeZone}
-                onChange={(event) => setDraft({ ...draft, timeZone: event.target.value })}
-              />
-            </label>
-
-            <label>
-              Practice day resets at
-              <input
-                type="time"
-                value={draft.resetTime}
-                onChange={(event) => setDraft({ ...draft, resetTime: event.target.value })}
-              />
-            </label>
-
-            <label>
-              Daily problem target
-              <input
-                max="10"
-                min="1"
-                step="1"
-                type="number"
-                value={draft.dailyTarget}
-                onChange={(event) => setDraft({ ...draft, dailyTarget: event.target.value })}
-              />
-            </label>
-
-            <label>
-              Default attempt timer
-              <span className="settings-help">Minutes for newly started attempts.</span>
-              <input
-                max="180"
-                min="1"
-                step="1"
-                type="number"
-                value={draft.attemptTimerMinutes}
-                onChange={(event) =>
-                  setDraft({ ...draft, attemptTimerMinutes: event.target.value })
-                }
-              />
-            </label>
-
-            <OpenAIModelSelect
-              value={draft.defaultAiModel}
-              disabled={isSaving}
-              onChange={(defaultAiModel) => setDraft({ ...draft, defaultAiModel })}
-              label="Default OpenAI model"
-              help="Used when you open Coach or Attempt tutor. Availability depends on your OpenAI API account."
+          {!isLoading && !loadFailed && !isOnboarding && activeView === "learning" ? (
+            <LearningContext
+              apiUrl={apiUrl}
+              token={session.access_token}
+              focusInferences={focusMemoryInferences}
+              onFocusHandled={() => setFocusMemoryInferences(false)}
             />
+          ) : null}
 
-            <fieldset>
-              <legend>Redo intervals</legend>
-              <p className="settings-help">
-                Days until the next review, from most to least urgent.
-              </p>
-              <div className="interval-grid">
-                <label>
-                  High
-                  <input
-                    max="90"
-                    min="1"
-                    step="1"
-                    type="number"
-                    value={draft.highInterval}
-                    onChange={(event) => setDraft({ ...draft, highInterval: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Medium
-                  <input
-                    max="90"
-                    min="1"
-                    step="1"
-                    type="number"
-                    value={draft.mediumInterval}
-                    onChange={(event) => setDraft({ ...draft, mediumInterval: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Low
-                  <input
-                    max="90"
-                    min="1"
-                    step="1"
-                    type="number"
-                    value={draft.lowInterval}
-                    onChange={(event) => setDraft({ ...draft, lowInterval: event.target.value })}
-                  />
-                </label>
+          {!isLoading && !loadFailed && !isOnboarding && activeView === "external-ai" ? (
+            <ExternalAiExport apiUrl={apiUrl} token={session.access_token} />
+          ) : null}
+
+          {!isLoading &&
+          !loadFailed &&
+          !isOnboarding &&
+          activeView !== "settings" &&
+          activeView !== "learning" &&
+          activeView !== "external-ai" &&
+          error !== undefined ? (
+            <p className="auth-message" role="alert">
+              {error}
+            </p>
+          ) : null}
+
+          {!isLoading && !loadFailed && (isOnboarding || activeView === "settings") ? (
+            <form
+              id="practice-settings"
+              className="settings-form"
+              onSubmit={(event) => void handleSave(event)}
+            >
+              <div>
+                <h2>{isOnboarding ? "Set up your practice" : "Practice settings"}</h2>
+                <p className="settings-help">
+                  These settings determine when a practice day starts and how much work is planned.
+                </p>
               </div>
-            </fieldset>
 
-            {error === undefined ? null : (
-              <p className="auth-message" role="alert">
-                {error}
-              </p>
-            )}
+              <fieldset className="appearance-setting">
+                <legend>Appearance</legend>
+                <p className="settings-help">Choose how Practice++ looks on this browser.</p>
+                <div className="appearance-options">
+                  {appearanceOptions.map((option) => (
+                    <label key={option.value}>
+                      <input
+                        type="radio"
+                        name="appearance"
+                        value={option.value}
+                        checked={themePreference === option.value}
+                        onChange={() => onThemeChange(option.value)}
+                      />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
 
-            {saved ? (
-              <p className="save-message" role="status">
-                Settings saved.
-              </p>
-            ) : null}
+              <label>
+                Timezone
+                <select
+                  value={draft.timeZone}
+                  onChange={(event) => setDraft({ ...draft, timeZone: event.target.value })}
+                >
+                  {timeZoneOptions(draft.timeZone).map((timeZone) => (
+                    <option key={timeZone} value={timeZone}>
+                      {timeZone.replaceAll("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <button type="submit" disabled={isSaving}>
-              {isSaving ? "Saving…" : isOnboarding ? "Start practicing" : "Save settings"}
-            </button>
-          </form>
-        ) : null}
-        {!isLoading && !loadFailed && !isOnboarding && showSettings ? (
-          <BrowserKeySettings key={session.user.id} />
-        ) : null}
+              <label>
+                Practice day resets at
+                <input
+                  type="time"
+                  value={draft.resetTime}
+                  onChange={(event) => setDraft({ ...draft, resetTime: event.target.value })}
+                />
+              </label>
+
+              <label>
+                Daily problem target
+                <input
+                  max="10"
+                  min="1"
+                  step="1"
+                  type="number"
+                  value={draft.dailyTarget}
+                  onChange={(event) => setDraft({ ...draft, dailyTarget: event.target.value })}
+                />
+              </label>
+
+              <label>
+                Default attempt timer
+                <span className="settings-help">Minutes for newly started attempts.</span>
+                <input
+                  max="180"
+                  min="1"
+                  step="1"
+                  type="number"
+                  value={draft.attemptTimerMinutes}
+                  onChange={(event) =>
+                    setDraft({ ...draft, attemptTimerMinutes: event.target.value })
+                  }
+                />
+              </label>
+
+              <OpenAIModelSelect
+                value={draft.defaultAiModel}
+                disabled={isSaving}
+                onChange={(defaultAiModel) => setDraft({ ...draft, defaultAiModel })}
+                label="Default OpenAI model"
+                help="Used when you open Coach or Attempt tutor. Availability depends on your OpenAI API account."
+              />
+
+              <fieldset>
+                <legend>Redo intervals</legend>
+                <p className="settings-help">
+                  Days until the next review, from most to least urgent.
+                </p>
+                <div className="interval-grid">
+                  <label>
+                    High
+                    <input
+                      max="90"
+                      min="1"
+                      step="1"
+                      type="number"
+                      value={draft.highInterval}
+                      onChange={(event) => setDraft({ ...draft, highInterval: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Medium
+                    <input
+                      max="90"
+                      min="1"
+                      step="1"
+                      type="number"
+                      value={draft.mediumInterval}
+                      onChange={(event) =>
+                        setDraft({ ...draft, mediumInterval: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Low
+                    <input
+                      max="90"
+                      min="1"
+                      step="1"
+                      type="number"
+                      value={draft.lowInterval}
+                      onChange={(event) => setDraft({ ...draft, lowInterval: event.target.value })}
+                    />
+                  </label>
+                </div>
+              </fieldset>
+
+              {error === undefined ? null : (
+                <p className="auth-message" role="alert">
+                  {error}
+                </p>
+              )}
+
+              {saved ? (
+                <p className="save-message" role="status">
+                  Settings saved.
+                </p>
+              ) : null}
+
+              <button type="submit" disabled={isSaving}>
+                {isSaving ? "Saving…" : isOnboarding ? "Start practicing" : "Save settings"}
+              </button>
+            </form>
+          ) : null}
+          {!isLoading && !loadFailed && !isOnboarding && activeView === "settings" ? (
+            <BrowserKeySettings key={session.user.id} />
+          ) : null}
+        </div>
       </section>
     </main>
+  );
+}
+
+interface NavigationProps {
+  readonly activeView: ActiveView;
+  readonly onNavigate: (view: ActiveView) => void;
+}
+
+const appearanceOptions: ReadonlyArray<{
+  readonly label: string;
+  readonly value: ThemePreference;
+}> = [
+  { label: "System default", value: "system" },
+  { label: "Light", value: "light" },
+  { label: "Dark", value: "dark" },
+];
+
+function Navigation({ activeView, onNavigate }: NavigationProps) {
+  return (
+    <nav className="workspace-navigation" aria-label="Primary navigation">
+      {navigationItems.map((item) => (
+        <button
+          className="navigation-button"
+          type="button"
+          aria-current={activeView === item.view ? "page" : undefined}
+          aria-controls={item.view === "settings" ? "practice-settings" : undefined}
+          key={item.view}
+          onClick={() => onNavigate(item.view)}
+        >
+          {item.label}
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -512,6 +548,20 @@ function defaultDraft(): SettingsDraft {
     resetTime: "04:00",
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   };
+}
+
+const supportedTimeZones = (() => {
+  try {
+    return Intl.supportedValuesOf("timeZone");
+  } catch {
+    return [];
+  }
+})();
+
+function timeZoneOptions(currentTimeZone: string): readonly string[] {
+  return Array.from(new Set(["UTC", currentTimeZone, ...supportedTimeZones])).sort((left, right) =>
+    left.localeCompare(right),
+  );
 }
 
 function toDraft(settings: PracticeSettings): SettingsDraft {

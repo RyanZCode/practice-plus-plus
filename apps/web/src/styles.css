@@ -1,6 +1,7 @@
 :root {
   color: #172033;
-  background: #f3f5f8;
+  background: #f6f7f9;
+  color-scheme: light;
   font-family: system-ui, sans-serif;
 }
 
@@ -14,9 +15,9 @@ html {
 
 body {
   margin: 0;
+  min-width: 0;
 }
 
-.app-shell,
 .auth-page,
 .error-page {
   display: grid;
@@ -25,8 +26,7 @@ body {
   padding: 1.5rem;
 }
 
-.auth-card,
-.account-card {
+.auth-card {
   width: min(100%, 30rem);
   padding: 2rem;
   border: 1px solid #dce1e9;
@@ -34,29 +34,139 @@ body {
   background: #ffffff;
 }
 
-.account-card {
-  width: 100%;
-  box-shadow: 0 8px 32px #17203308;
-}
-
 .app-shell {
-  grid-template-columns: minmax(0, min(72rem, 100%));
-  place-content: start center;
-  padding-top: 3rem;
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr);
+  min-height: 100vh;
   width: 100%;
 }
 
-.account-actions {
+.app-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 1.5rem 1rem;
+  border-right: 1px solid #dde2e9;
+  background: #ffffff;
+}
+
+.brand-heading {
+  margin: 0;
+}
+
+.brand-button {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.75rem 1.25rem;
-  justify-content: flex-end;
+  width: 100%;
+  min-height: auto;
+  padding: 0.5rem;
+  border: 0;
+  color: #172033;
+  background: transparent;
+  text-align: left;
+}
+
+.brand-button:hover:not(:disabled) {
+  color: #075985;
+  background: #eef7fc;
+}
+
+.brand-button strong {
+  font-size: 1.05rem;
+}
+
+.brand-mark {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2.4rem;
+  height: 2.4rem;
+  margin-right: 0.7rem;
+  place-items: center;
+  border-radius: 0.65rem;
+  color: #ffffff;
+  background: #00599c;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.workspace-navigation {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 2rem;
+}
+
+.navigation-button {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 2.6rem;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border: 0;
+  color: #4a5568;
+  background: transparent;
+  text-align: left;
+  font-weight: 600;
+}
+
+.navigation-button:hover:not(:disabled) {
+  color: #075985;
+  background: #e7f3fb;
+}
+
+.navigation-button[aria-current="page"],
+.navigation-button[aria-current="page"]:hover:not(:disabled) {
+  color: #075985;
+  background: #dceef9;
+}
+
+.account-summary {
+  margin-top: auto;
+  padding: 1rem 0.5rem 0;
+  border-top: 1px solid #e5e8ed;
+}
+
+.sign-out-button,
+.mobile-sign-out {
+  min-height: auto;
+  margin: 0.5rem 0 0;
+  padding: 0.25rem 0;
+  border: 0;
+  color: #0969a8;
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.sign-out-button:hover:not(:disabled),
+.mobile-sign-out:hover:not(:disabled) {
+  color: #075985;
+  background: transparent;
+  text-decoration: underline;
 }
 
 .account-email {
+  color: #6a7485;
   font-size: 0.875rem;
   overflow-wrap: anywhere;
+}
+
+.workspace-panel {
+  min-width: 0;
+}
+
+.workspace-content {
+  width: min(100%, 78rem);
+  min-width: 0;
+  margin: 0 auto;
+  padding: 2.25rem clamp(1.5rem, 4vw, 4rem) 4rem;
+}
+
+.mobile-header,
+.mobile-navigation {
+  display: none;
 }
 
 h1,
@@ -83,21 +193,33 @@ h1 + p {
 button {
   min-height: 2.75rem;
   padding: 0.65rem 1rem;
-  border: 1px solid #312e81;
+  border: 1px solid #075985;
   border-radius: 0.5rem;
   color: #ffffff;
-  background: #3730a3;
+  background: #0969a8;
   cursor: pointer;
   font: inherit;
   font-weight: 650;
 }
 
 button:hover:not(:disabled) {
-  background: #312e81;
+  background: #075985;
+}
+
+.primary-button,
+button[type="submit"] {
+  border-color: #0474b8;
+  background: #0077b8;
+  box-shadow: 0 2px 8px rgb(0 89 156 / 24%);
+}
+
+.primary-button:hover:not(:disabled),
+button[type="submit"]:hover:not(:disabled) {
+  background: #00669f;
 }
 
 button:focus-visible {
-  outline: 3px solid #a5b4fc;
+  outline: 3px solid #79b8e8;
   outline-offset: 2px;
 }
 
@@ -129,68 +251,28 @@ button:disabled {
   font-size: 0.875rem;
 }
 
-.account-card button,
 .auth-card > button {
   margin-top: 1rem;
 }
 
-.account-heading {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.account-email,
 .settings-help {
   color: #5f6b7d;
 }
 
-.account-heading .text-button {
-  min-height: auto;
-  margin: 0;
-  padding: 0.35rem 0.5rem;
-  border: 0;
-  border-radius: 0.375rem;
-  color: #3730a3;
-  background: transparent;
-  font-weight: 600;
+.account-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
 }
 
-.account-heading .text-button:hover:not(:disabled) {
-  background: #eef2ff;
-}
-
-.account-heading .text-button[aria-current="page"],
-.account-heading .text-button[aria-current="page"]:hover:not(:disabled) {
-  color: #ffffff;
-  background: #3730a3;
-}
-
-.account-heading .brand-button {
-  min-height: auto;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-}
-
-.account-heading .brand-button:hover:not(:disabled) {
-  color: #3730a3;
-  background: transparent;
-}
-
-.account-heading .brand-button[aria-current="page"] {
-  color: #3730a3;
-  box-shadow: inset 0 -0.15rem #a5b4fc;
+.account-actions button {
+  margin-top: 0;
 }
 
 .settings-status,
 .settings-form {
-  margin-top: 2rem;
+  max-width: 46rem;
 }
 
 .settings-status .secondary-button {
@@ -200,6 +282,12 @@ button:disabled {
 .settings-form {
   display: grid;
   gap: 1.25rem;
+}
+
+.settings-form + .key-settings {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid #dce1e9;
 }
 
 .settings-form h2,
@@ -235,8 +323,8 @@ button:disabled {
 
 .settings-form input:focus-visible,
 .settings-form select:focus-visible {
-  outline: 3px solid #c7d2fe;
-  border-color: #4f46e5;
+  outline: 3px solid #a7d3f2;
+  border-color: #0969a8;
 }
 
 .settings-form fieldset {
@@ -256,7 +344,7 @@ button:disabled {
   min-height: auto;
   margin: 0;
   padding: 0;
-  accent-color: #3730a3;
+  accent-color: #0969a8;
 }
 
 .interval-grid {
@@ -274,28 +362,122 @@ button:disabled {
   margin-top: 0;
 }
 
-@media (max-width: 32rem) {
+.appearance-setting {
+  display: block;
+}
+
+.appearance-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.appearance-options label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #b8c0cc;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.appearance-options input[type="radio"] {
+  min-height: auto;
+  margin: 0;
+  margin-right: 0.5rem;
+  padding: 0;
+  accent-color: #0969a8;
+}
+
+.appearance-options label:has(input:checked) {
+  border-color: #0969a8;
+  color: #075985;
+  background: #dceef9;
+}
+
+@media (max-width: 48rem) {
   .app-shell {
-    padding: 1rem;
+    display: block;
   }
-  .account-card {
-    padding: 1.25rem;
+
+  .app-sidebar {
+    display: none;
   }
-  .account-heading {
-    flex-direction: column;
+
+  .mobile-header {
+    position: sticky;
+    z-index: 2;
+    top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 3.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #dde2e9;
+    background: #ffffff;
   }
-  .account-actions {
-    justify-content: flex-start;
+
+  .mobile-brand {
+    min-height: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: #172033;
+    background: transparent;
+    font-size: 1.05rem;
+    font-weight: 800;
   }
+
+  .mobile-brand-heading {
+    margin: 0;
+    line-height: 1;
+  }
+
+  .mobile-brand:hover:not(:disabled) {
+    color: #075985;
+    background: transparent;
+  }
+
+  .mobile-sign-out {
+    margin: 0;
+  }
+
+  .mobile-navigation {
+    display: block;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid #dde2e9;
+    background: #ffffff;
+  }
+
+  .mobile-navigation .workspace-navigation {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.25rem;
+    margin: 0;
+  }
+
+  .mobile-navigation .navigation-button {
+    justify-content: center;
+    min-width: 0;
+    min-height: 2.35rem;
+    padding: 0.45rem 0.25rem;
+    text-align: center;
+    font-size: 0.78rem;
+  }
+
+  .workspace-content {
+    padding: 1.5rem 1rem 3rem;
+  }
+
   .interval-grid {
     grid-template-columns: 1fr;
   }
 }
 
 .practice {
-  margin-top: 2rem;
-  border-top: 1px solid #dce1e9;
-  padding-top: 1.5rem;
   line-height: 1.5;
 }
 .practice h2 {
@@ -307,7 +489,7 @@ button:disabled {
 }
 .practice input[type="checkbox"],
 .practice input[type="radio"] {
-  accent-color: #3730a3;
+  accent-color: #0969a8;
 }
 .problem-list {
   list-style: none;
@@ -385,18 +567,22 @@ button:disabled {
 .outcome-form :is(select, textarea, input):focus-visible,
 .review-date-form input:focus-visible,
 summary:focus-visible {
-  outline: 3px solid #c7d2fe;
+  outline: 3px solid #a7d3f2;
   outline-offset: 2px;
 }
 
 .outcome-form summary {
   cursor: pointer;
-  color: #3730a3;
+  color: #0969a8;
   font-weight: 600;
 }
 
 .review-date-form {
   margin-bottom: 1rem;
+}
+
+.review-date-form .account-actions {
+  margin-top: 0.75rem;
 }
 
 .outcome-form details {
@@ -406,6 +592,39 @@ summary:focus-visible {
 .history-list {
   list-style: none;
   padding: 0;
+}
+
+#attempt-history-heading,
+.context-section {
+  scroll-margin-top: 5.5rem;
+}
+
+.history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1rem 0;
+  padding: 0.75rem;
+  border: 1px solid #dce1e9;
+  border-radius: 0.75rem;
+  background: #ffffff;
+}
+
+.history-pagination-sticky {
+  position: sticky;
+  z-index: 1;
+  top: 1rem;
+}
+
+.history-pagination .account-actions {
+  justify-content: flex-end;
+}
+
+.history-pagination a {
+  padding: 0.65rem 0.25rem;
+  color: #075985;
+  font-weight: 650;
 }
 
 .history-list li {
@@ -430,6 +649,14 @@ summary:focus-visible {
 
 .daily-plan {
   margin-bottom: 2rem;
+}
+
+.daily-plan .account-actions {
+  margin-top: 1rem;
+}
+
+.daily-plan .account-actions + .settings-help {
+  margin-top: 1rem;
 }
 
 .coach-messages {
@@ -511,7 +738,7 @@ summary:focus-visible {
 }
 
 .markdown-message a {
-  color: #3730a3;
+  color: #0969a8;
 }
 
 .coach textarea,
@@ -527,9 +754,6 @@ summary:focus-visible {
 }
 
 .external-ai {
-  margin-top: 2rem;
-  border-top: 1px solid #dce1e9;
-  padding-top: 1.5rem;
   line-height: 1.5;
 }
 
@@ -537,10 +761,16 @@ summary:focus-visible {
   margin: 0;
 }
 
+.coach > .settings-form,
+.external-ai > .settings-form {
+  margin-top: 1.25rem;
+}
+
+.memory-review-button {
+  margin-top: 0.75rem;
+}
+
 .learning-context {
-  margin-top: 2rem;
-  border-top: 1px solid #dce1e9;
-  padding-top: 1.5rem;
   line-height: 1.5;
 }
 
@@ -565,6 +795,34 @@ summary:focus-visible {
 .learning-context-heading > button {
   flex-shrink: 0;
   margin: 0;
+}
+
+.section-navigation {
+  position: sticky;
+  z-index: 1;
+  top: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  padding: 0.5rem;
+  border: 1px solid #dce1e9;
+  border-radius: 0.75rem;
+  background: #ffffff;
+}
+
+.section-navigation a {
+  flex: 1;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  color: #075985;
+  text-align: center;
+  text-decoration: none;
+  font-weight: 650;
+}
+
+.section-navigation a:hover,
+.section-navigation a:focus-visible {
+  background: #e7f3fb;
 }
 
 .context-section + .context-section {
@@ -621,7 +879,7 @@ summary:focus-visible {
 
 .compact-context-form :is(input, select):focus-visible,
 .inference-form :is(input, select, textarea):focus-visible {
-  outline: 3px solid #c7d2fe;
+  outline: 3px solid #a7d3f2;
   outline-offset: 1px;
 }
 
@@ -675,7 +933,7 @@ summary:focus-visible {
 
 .inference-form summary {
   cursor: pointer;
-  color: #3730a3;
+  color: #0969a8;
   font-weight: 600;
 }
 
@@ -684,6 +942,15 @@ summary:focus-visible {
 }
 
 @media (max-width: 48rem) {
+  .history-pagination-sticky,
+  .section-navigation {
+    top: 4.5rem;
+  }
+
+  .context-section {
+    scroll-margin-top: 9rem;
+  }
+
   .compact-context-form,
   .compact-context-form.preference-form {
     grid-template-columns: 1fr;
@@ -692,6 +959,10 @@ summary:focus-visible {
 }
 
 @media (max-width: 32rem) {
+  .appearance-options {
+    grid-template-columns: 1fr;
+  }
+
   .learning-context-heading {
     flex-direction: column;
   }
@@ -699,4 +970,186 @@ summary:focus-visible {
   .inference-fields {
     grid-template-columns: 1fr;
   }
+}
+
+:root[data-theme="dark"] {
+  color: #e5e7eb;
+  background: #1e2023;
+  color-scheme: dark;
+}
+
+[data-theme="dark"] body,
+[data-theme="dark"] .workspace-panel {
+  background: #1e2023;
+}
+
+[data-theme="dark"] .auth-card,
+[data-theme="dark"] .app-sidebar,
+[data-theme="dark"] .mobile-header,
+[data-theme="dark"] .mobile-navigation {
+  border-color: #3b3f45;
+  background: #27292d;
+}
+
+[data-theme="dark"] .brand-button,
+[data-theme="dark"] .mobile-brand {
+  color: #f3f4f6;
+}
+
+[data-theme="dark"] .brand-button:hover:not(:disabled),
+[data-theme="dark"] .mobile-brand:hover:not(:disabled) {
+  color: #72b7e6;
+  background: #31343a;
+}
+
+[data-theme="dark"] .account-email,
+[data-theme="dark"] .auth-help,
+[data-theme="dark"] .settings-help,
+[data-theme="dark"] .observed-list small,
+[data-theme="dark"] .inference-meta {
+  color: #9ca3af;
+}
+
+[data-theme="dark"] .navigation-button {
+  color: #c4c8cf;
+}
+
+[data-theme="dark"] .navigation-button:hover:not(:disabled) {
+  color: #8bc5eb;
+  background: #2d363d;
+}
+
+[data-theme="dark"] .navigation-button[aria-current="page"],
+[data-theme="dark"] .navigation-button[aria-current="page"]:hover:not(:disabled) {
+  color: #a9d5f2;
+  background: #123b55;
+}
+
+[data-theme="dark"] .account-summary,
+[data-theme="dark"] .appearance-setting,
+[data-theme="dark"] .settings-form fieldset,
+[data-theme="dark"] .settings-form + .key-settings,
+[data-theme="dark"] .history-pagination,
+[data-theme="dark"] .section-navigation,
+[data-theme="dark"] .problem-list li,
+[data-theme="dark"] .history-list li,
+[data-theme="dark"] .coach-messages > li,
+[data-theme="dark"] .context-section + .context-section,
+[data-theme="dark"] .context-list > li {
+  border-color: #3b3f45;
+}
+
+[data-theme="dark"] .sign-out-button,
+[data-theme="dark"] .mobile-sign-out,
+[data-theme="dark"] .history-pagination a,
+[data-theme="dark"] .section-navigation a,
+[data-theme="dark"] .markdown-message a,
+[data-theme="dark"] .outcome-form summary,
+[data-theme="dark"] .inference-form summary {
+  color: #67b5e8;
+}
+
+[data-theme="dark"] .history-pagination,
+[data-theme="dark"] .section-navigation {
+  background: #27292d;
+}
+
+[data-theme="dark"] .section-navigation a:hover,
+[data-theme="dark"] .section-navigation a:focus-visible {
+  background: #2d363d;
+}
+
+[data-theme="dark"]
+  button:not(.brand-button):not(.mobile-brand):not(.navigation-button):not(.sign-out-button):not(
+    .mobile-sign-out
+  ):not(.secondary-button):not(.danger-button) {
+  border-color: #1377b9;
+  background: #00599c;
+}
+
+[data-theme="dark"]
+  button:not(.brand-button):not(.mobile-brand):not(.navigation-button):not(.sign-out-button):not(
+    .mobile-sign-out
+  ):not(.secondary-button):not(.danger-button):hover:not(:disabled) {
+  background: #0876b9;
+}
+
+[data-theme="dark"] .brand-button,
+[data-theme="dark"] .mobile-brand,
+[data-theme="dark"] .navigation-button,
+[data-theme="dark"] .sign-out-button,
+[data-theme="dark"] .mobile-sign-out {
+  border-color: transparent;
+}
+
+[data-theme="dark"] .sign-out-button:hover:not(:disabled),
+[data-theme="dark"] .mobile-sign-out:hover:not(:disabled) {
+  color: #8bc5eb;
+  background: transparent;
+}
+
+[data-theme="dark"] button.secondary-button {
+  border-color: #4a4f57;
+  color: #e5e7eb;
+  background: #2d3035;
+  box-shadow: none;
+}
+
+[data-theme="dark"] button.secondary-button:hover:not(:disabled) {
+  background: #363a40;
+}
+
+[data-theme="dark"] .primary-button,
+[data-theme="dark"] button[type="submit"] {
+  border-color: #1688cc;
+  background: #087fbd;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 28%);
+}
+
+[data-theme="dark"] .primary-button:hover:not(:disabled),
+[data-theme="dark"] button[type="submit"]:hover:not(:disabled) {
+  background: #1593d1;
+}
+
+[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  border-color: #4a4f57;
+  color: #e5e7eb;
+  background: #27292d;
+}
+
+[data-theme="dark"] .appearance-options label {
+  border-color: #4a4f57;
+  background: #2d3035;
+}
+
+[data-theme="dark"] .appearance-options label:has(input:checked) {
+  border-color: #1377b9;
+  color: #a9d5f2;
+  background: #123b55;
+}
+
+[data-theme="dark"] .markdown-message code,
+[data-theme="dark"] .markdown-message pre {
+  background: #2d3035;
+}
+
+[data-theme="dark"] .auth-message {
+  color: #fda4af;
+  background: #3a1721;
+}
+
+[data-theme="dark"] .danger-button {
+  border-color: #753247;
+  color: #fda4af;
+  background: #3a1721;
+}
+
+[data-theme="dark"] .danger-button:hover:not(:disabled) {
+  background: #4a1c29;
+}
+
+[data-theme="dark"] .save-message {
+  color: #86efac;
 }

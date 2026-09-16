@@ -27,6 +27,22 @@ export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: strin
   const [error, setError] = useState<string>();
   const [reload, setReload] = useState(0);
 
+  function scrollToHistory(): void {
+    document.getElementById("attempt-history-heading")?.scrollIntoView({ block: "start" });
+  }
+
+  function showNewer(): void {
+    setPages((value) => value.slice(0, -1));
+    scrollToHistory();
+  }
+
+  function showOlder(): void {
+    const next = page?.next;
+    if (next === null || next === undefined) return;
+    setPages((value) => [...value, next]);
+    scrollToHistory();
+  }
+
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -49,7 +65,7 @@ export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: strin
 
   return (
     <section className="attempt-history" aria-label="Attempt history">
-      <h2>Attempt history</h2>
+      <h2 id="attempt-history-heading">Attempt history</h2>
       {loading ? <p role="status">Loading history…</p> : null}
       {error ? (
         <div>
@@ -62,6 +78,17 @@ export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: strin
         </div>
       ) : null}
       {page?.attempts.length === 0 ? <p>No confirmed attempts on this page.</p> : null}
+      {page === undefined ? null : (
+        <HistoryPagination
+          disabled={loading}
+          hasNewer={pages.length > 1}
+          hasOlder={page.next !== null}
+          pageNumber={pages.length}
+          position="top"
+          onNewer={showNewer}
+          onOlder={showOlder}
+        />
+      )}
       <ol className="history-list">
         {page?.attempts.map((attempt) => (
           <li key={attempt.id}>
@@ -153,28 +180,60 @@ export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: strin
           </li>
         ))}
       </ol>
+      {page === undefined ? null : (
+        <HistoryPagination
+          disabled={loading}
+          hasNewer={pages.length > 1}
+          hasOlder={page.next !== null}
+          pageNumber={pages.length}
+          position="bottom"
+          onNewer={showNewer}
+          onOlder={showOlder}
+        />
+      )}
+    </section>
+  );
+}
+
+function HistoryPagination({
+  disabled,
+  hasNewer,
+  hasOlder,
+  pageNumber,
+  position,
+  onNewer,
+  onOlder,
+}: {
+  readonly disabled: boolean;
+  readonly hasNewer: boolean;
+  readonly hasOlder: boolean;
+  readonly pageNumber: number;
+  readonly position: "bottom" | "top";
+  readonly onNewer: () => void;
+  readonly onOlder: () => void;
+}) {
+  return (
+    <nav
+      id={position === "bottom" ? "attempt-history-end" : undefined}
+      className={`history-pagination${position === "top" ? " history-pagination-sticky" : ""}`}
+      aria-label="Attempt history pages"
+    >
+      <span>Page {pageNumber}</span>
       <div className="account-actions">
-        {pages.length > 1 ? (
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => setPages((value) => value.slice(0, -1))}
-          >
+        <a href={position === "top" ? "#attempt-history-end" : "#attempt-history-heading"}>
+          {position === "top" ? "Bottom" : "Back to top"}
+        </a>
+        {hasNewer ? (
+          <button className="secondary-button" type="button" disabled={disabled} onClick={onNewer}>
             Newer attempts
           </button>
         ) : null}
-        {page?.next ? (
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => {
-              if (page.next) setPages([...pages, page.next]);
-            }}
-          >
+        {hasOlder ? (
+          <button className="secondary-button" type="button" disabled={disabled} onClick={onOlder}>
             Older attempts
           </button>
         ) : null}
       </div>
-    </section>
+    </nav>
   );
 }

@@ -393,7 +393,7 @@ export function Practice({
                   disabled={busy || !keyState.hasKey}
                   onClick={() => void generatePlan(true)}
                 >
-                  {busy ? "Creating plan…" : "Personalize with OpenAI"}
+                  {busy ? "Creating plan…" : "Personalize with AI"}
                 </button>
                 <button
                   type="button"

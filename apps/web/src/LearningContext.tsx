@@ -20,10 +20,17 @@ import {
 
 interface LearningContextProps {
   readonly apiUrl: string;
+  readonly focusInferences: boolean;
+  readonly onFocusHandled: () => void;
   readonly token: string;
 }
 
-export function LearningContext({ apiUrl, token }: LearningContextProps) {
+export function LearningContext({
+  apiUrl,
+  focusInferences,
+  onFocusHandled,
+  token,
+}: LearningContextProps) {
   const [context, setContext] = useState<LearningContextResponse>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -43,6 +50,15 @@ export function LearningContext({ apiUrl, token }: LearningContextProps) {
       active = false;
     };
   }, [apiUrl, reload, token]);
+
+  useEffect(() => {
+    if (!focusInferences || context === undefined) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("memory-inferences")?.scrollIntoView({ block: "start" });
+      onFocusHandled();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [context, focusInferences, onFocusHandled]);
 
   async function change(action: () => Promise<unknown>): Promise<void> {
     setBusy(true);
@@ -105,7 +121,12 @@ export function LearningContext({ apiUrl, token }: LearningContextProps) {
         </button>
       ) : (
         <>
-          <section className="context-section">
+          <nav className="section-navigation" aria-label="Memory sections">
+            <a href="#memory-supplied">Supplied</a>
+            <a href="#memory-evidence">Evidence</a>
+            <a href="#memory-inferences">Inferences</a>
+          </nav>
+          <section className="context-section" id="memory-supplied">
             <h3>Information you supplied</h3>
             <p className="settings-help">
               Goals and teaching preferences stay here until you change them.
@@ -164,7 +185,7 @@ export function LearningContext({ apiUrl, token }: LearningContextProps) {
             />
           </section>
 
-          <section className="context-section">
+          <section className="context-section" id="memory-evidence">
             <h3>Evidence Practice++ observed</h3>
             <p className="settings-help">
               Historical facts remain tied to their source records. Changing an inference does not
@@ -197,7 +218,7 @@ export function LearningContext({ apiUrl, token }: LearningContextProps) {
             </ul>
           </section>
 
-          <section className="context-section">
+          <section className="context-section" id="memory-inferences">
             <h3>Conclusions Practice++ inferred</h3>
             <p className="settings-help">
               Only approved inferences can be used in later AI context. Pending and rejected items
