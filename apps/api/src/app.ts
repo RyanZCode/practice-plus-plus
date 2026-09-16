@@ -23,6 +23,7 @@ import { createLearningContextRouter, type LearningContextStore } from "./learni
 import { createAssessmentRouter, type AssessmentOptions } from "./assessments.js";
 import { createExternalAiExportRouter, type ExternalAiExportOptions } from "./externalAiExport.js";
 import { createPlanningRouter, type PlanningOptions } from "./planning.js";
+import { createAnalyticsRouter, type AnalyticsStore } from "./analytics.js";
 
 interface AuthenticationOptions {
   readonly tutor?: TutorOptions;
@@ -39,6 +40,7 @@ interface AuthenticationOptions {
   readonly assessments?: AssessmentOptions;
   readonly externalAiExport?: ExternalAiExportOptions;
   readonly planning?: PlanningOptions;
+  readonly analyticsStore?: AnalyticsStore;
   readonly verifier: AccessTokenVerifier;
 }
 
@@ -174,6 +176,15 @@ export function createApp(options: AppOptions = {}): Express {
         authenticate,
         resolveProfile,
         createLearningContextRouter(options.authentication.learningContextStore),
+      );
+    }
+
+    if (options.authentication.analyticsStore !== undefined) {
+      app.use(
+        "/analytics",
+        authenticate,
+        resolveProfile,
+        createAnalyticsRouter(options.authentication.analyticsStore),
       );
     }
 
