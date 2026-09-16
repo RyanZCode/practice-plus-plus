@@ -18,6 +18,8 @@ export function ReviewDateForm({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
+  const savedDate = saved.manualDueDate ?? saved.generatedDueDate;
+  const changed = date !== savedDate;
 
   async function save(value: string | null) {
     setSaving(true);
@@ -46,12 +48,12 @@ export function ReviewDateForm({
       }}
     >
       <p>
-        Review due: {saved.manualDueDate ?? saved.generatedDueDate}
+        Next review: {savedDate}
         {saved.manualDueDate !== null ? " (manual override)" : ""}
         {" · "}Generated date: {saved.generatedDueDate}
       </p>
       <label>
-        Review date
+        Next review date
         <input
           type="date"
           required
@@ -60,21 +62,25 @@ export function ReviewDateForm({
           onChange={(event) => setDate(event.target.value)}
         />
       </label>
-      <div className="account-actions">
-        <button type="submit" disabled={saving}>
-          Save review date
-        </button>
-        {saved.manualDueDate !== null ? (
-          <button
-            className="secondary-button"
-            type="button"
-            disabled={saving}
-            onClick={() => void save(null)}
-          >
-            Use generated date
-          </button>
-        ) : null}
-      </div>
+      {changed || saved.manualDueDate !== null ? (
+        <div className="account-actions">
+          {changed ? (
+            <button type="submit" disabled={saving}>
+              Save review date
+            </button>
+          ) : null}
+          {saved.manualDueDate !== null ? (
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={saving}
+              onClick={() => void save(null)}
+            >
+              Use generated date
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {message ? <p role="status">{message}</p> : null}
       {error ? <p role="alert">{error}</p> : null}
     </form>

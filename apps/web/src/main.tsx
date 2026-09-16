@@ -6,7 +6,14 @@ import { AuthProvider } from "./auth";
 import { readConfig } from "./config";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { getSupabaseClient } from "./supabase";
+import { loadTheme, resolveTheme } from "./theme";
 import "./styles.css";
+
+const colorSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+document.documentElement.dataset.theme = resolveTheme(
+  loadTheme(window.localStorage),
+  colorSchemeQuery.matches,
+);
 
 function Root() {
   const config = readConfig();

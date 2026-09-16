@@ -345,6 +345,12 @@ export function AttemptTutor({
             value={draft}
             disabled={busy || disabled}
             onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.ctrlKey && event.key === "Enter" && draft.trim().length > 0) {
+                event.preventDefault();
+                void send(gaveUp ? { type: "SOLUTION_REVIEW" } : help);
+              }
+            }}
           />
         </label>
         {error ? (
@@ -373,7 +379,10 @@ export function AttemptTutor({
         ) : null}
         <div className="account-actions">
           <button
+            className="primary-button"
             type="button"
+            title="Send message (Ctrl+Enter)"
+            aria-keyshortcuts="Control+Enter"
             disabled={
               busy || checkpointBusy || disabled || !keyState.hasKey || draft.trim().length === 0
             }

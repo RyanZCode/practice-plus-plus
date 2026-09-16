@@ -27,11 +27,13 @@ export function Coach({
   token,
   userId,
   defaultModel,
+  onReviewMemory,
 }: {
   apiUrl: string;
   token: string;
   userId: string;
   defaultModel: string;
+  onReviewMemory: () => void;
 }) {
   const { browserKey } = useAuth();
   const keyState = useSyncExternalStore(browserKey.subscribe, browserKey.getSnapshot);
@@ -223,42 +225,22 @@ export function Coach({
             required
             disabled={busy}
             onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.ctrlKey && event.key === "Enter") {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
           />
         </label>
-        {error ? (
-          <p className="auth-message" role="alert">
-            {error}
-          </p>
-        ) : null}
-        {checkpointError ? (
-          <p className="auth-message" role="alert">
-            {checkpointError}
-          </p>
-        ) : null}
-        {summary ? (
-          <div role="status">
-            <strong>Latest learning checkpoint</strong>
-            <p>{summary.topics}</p>
-          </div>
-        ) : null}
-        {suggestions.length > 0 ? (
-          <section aria-label="Memory review queue">
-            <h3>Memory suggestions to review</h3>
-            <p className="settings-help">
-              These inferences are pending and are not used in future coaching until you approve
-              them.
-            </p>
-            <ul>
-              {suggestions.map((suggestion) => (
-                <li key={suggestion.id}>
-                  <strong>{suggestion.category}</strong>: {suggestion.content}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
         <div className="account-actions">
-          <button type="submit" disabled={busy || checkpointBusy || !keyState.hasKey}>
+          <button
+            className="primary-button"
+            type="submit"
+            title="Send (Ctrl+Enter)"
+            aria-keyshortcuts="Control+Enter"
+            disabled={busy || checkpointBusy || !keyState.hasKey}
+          >
             {busy ? "Responding…" : "Send"}
           </button>
           <button
@@ -297,6 +279,45 @@ export function Coach({
             Clear conversation
           </button>
         </div>
+        {error ? (
+          <p className="auth-message" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {checkpointError ? (
+          <p className="auth-message" role="alert">
+            {checkpointError}
+          </p>
+        ) : null}
+        {summary ? (
+          <div role="status">
+            <strong>Latest learning checkpoint</strong>
+            <p>{summary.topics}</p>
+          </div>
+        ) : null}
+        {suggestions.length > 0 ? (
+          <section aria-label="Memory review queue">
+            <h3>Memory suggestions to review</h3>
+            <p className="settings-help">
+              These inferences are pending and are not used in future coaching until you approve
+              them.
+            </p>
+            <button
+              className="secondary-button memory-review-button"
+              type="button"
+              onClick={onReviewMemory}
+            >
+              Review in Memory
+            </button>
+            <ul>
+              {suggestions.map((suggestion) => (
+                <li key={suggestion.id}>
+                  <strong>{suggestion.category}</strong>: {suggestion.content}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </form>
     </section>
   );
