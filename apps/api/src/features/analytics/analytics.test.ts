@@ -63,9 +63,73 @@ describe("pattern evidence aggregation", () => {
         attempt(9, "INCOMPLETE", { type: "REDO" }),
       ],
       "2026-09-18",
+      {
+        exactRedos: [
+          {
+            sourceAttemptId: "30000000-0000-4000-8000-000000000001",
+            dueDate: "2026-09-17",
+            problem: {
+              leetcodeId: 1,
+              title: "Two Sum",
+              url: "https://leetcode.com/problems/two-sum/",
+            },
+          },
+          {
+            sourceAttemptId: "30000000-0000-4000-8000-000000000002",
+            dueDate: "2026-09-18",
+            problem: {
+              leetcodeId: 20,
+              title: "Valid Parentheses",
+              url: "https://leetcode.com/problems/valid-parentheses/",
+            },
+          },
+        ],
+        transfers: [
+          {
+            id: "40000000-0000-4000-8000-000000000001",
+            sourceAttemptId: "30000000-0000-4000-8000-000000000003",
+            dueDate: "2026-09-16",
+            patternName: "Graphs",
+            sourceProblemTitle: "Number of Islands",
+          },
+          {
+            id: "40000000-0000-4000-8000-000000000002",
+            sourceAttemptId: "30000000-0000-4000-8000-000000000004",
+            dueDate: "2026-09-19",
+            patternName: "Stack",
+            sourceProblemTitle: "Daily Temperatures",
+          },
+        ],
+      },
     );
 
     const evidence = result.patterns[0]!;
+    expect(result.summary).toMatchObject({
+      freshOutcomes: { independent: 3, assisted: 1, gaveUp: 1 },
+      redo: {
+        outcomes: { independent: 1, assisted: 1, gaveUp: 1, incomplete: 1 },
+        successRate: 2 / 3,
+      },
+      assistance: { conceptualHint: 1, debugging: 1, solutionReview: 1 },
+      reviewWork: {
+        overdueExactRedos: 1,
+        overdueTransfers: 1,
+        dueTodayExactRedos: 1,
+        dueTodayTransfers: 0,
+        overdueItems: [
+          {
+            type: "TRANSFER",
+            patternName: "Graphs",
+            daysOverdue: 2,
+          },
+          {
+            type: "EXACT_REDO",
+            problem: { title: "Two Sum" },
+            daysOverdue: 1,
+          },
+        ],
+      },
+    });
     expect(evidence.classification).toBe("NEEDS_PRACTICE");
     expect(evidence.fresh).toMatchObject({
       sampleCount: 5,
@@ -157,6 +221,8 @@ it("queries only confirmed attempts for the authenticated user", async () => {
     },
     pattern: { findMany: vi.fn().mockResolvedValue([]) },
     attempt: { findMany: vi.fn().mockResolvedValue([]) },
+    reviewObligation: { findMany: vi.fn().mockResolvedValue([]) },
+    transferObligation: { findMany: vi.fn().mockResolvedValue([]) },
   };
   const client = {
     ...tx,
@@ -173,6 +239,12 @@ it("queries only confirmed attempts for the authenticated user", async () => {
       where: { userProfileId, confirmedAt: { not: null }, outcome: { not: null } },
     }),
   );
+  expect(tx.reviewObligation.findMany).toHaveBeenCalledWith(
+    expect.objectContaining({ where: { resolvedAt: null, sourceAttempt: { userProfileId } } }),
+  );
+  expect(tx.transferObligation.findMany).toHaveBeenCalledWith(
+    expect.objectContaining({ where: { resolvedAt: null, sourceAttempt: { userProfileId } } }),
+  );
 });
 
 const servers: Server[] = [];
@@ -187,6 +259,28 @@ afterEach(async () => {
 it("authenticates pattern analytics and uses the resolved profile", async () => {
   const patternEvidence = vi.fn().mockResolvedValue({
     asOfPracticeDate: "2026-09-17",
+    summary: {
+      freshOutcomes: { independent: 0, assisted: 0, gaveUp: 0 },
+      redo: {
+        outcomes: { independent: 0, assisted: 0, gaveUp: 0, incomplete: 0 },
+        successRate: null,
+      },
+      assistance: {
+        clarification: 0,
+        conceptualHint: 0,
+        debugging: 0,
+        optimization: 0,
+        solutionReview: 0,
+      },
+      optimality: { optimal: 0, suboptimal: 0, unknownOrOmitted: 0 },
+      reviewWork: {
+        overdueExactRedos: 0,
+        overdueTransfers: 0,
+        dueTodayExactRedos: 0,
+        dueTodayTransfers: 0,
+        overdueItems: [],
+      },
+    },
     patterns: [],
   });
   const app = createApp({
