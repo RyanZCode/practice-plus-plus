@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Attempt } from "@practice-plus-plus/contracts";
-import { eligibleProblems, remainingSeconds } from "./attemptState";
+import { remainingSeconds } from "./attemptState";
 
 const attempt: Attempt = {
   review: null,
@@ -51,13 +51,4 @@ describe("attempt timer", () => {
     };
     expect(remainingSeconds(paused, Date.parse("2026-09-07T04:00:00.000Z"))).toBe(1200);
   });
-});
-it("allows paid problems unless filtered and always excludes unavailable ones", () => {
-  const paid = { ...attempt.problem, availability: "PAID_ONLY" as const };
-  const unavailable = { ...attempt.problem, availability: "UNAVAILABLE" as const };
-  expect(eligibleProblems([attempt.problem, paid, unavailable], false)).toEqual([
-    attempt.problem,
-    paid,
-  ]);
-  expect(eligibleProblems([attempt.problem, paid, unavailable], true)).toEqual([attempt.problem]);
 });

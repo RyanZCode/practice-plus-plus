@@ -8,7 +8,7 @@ export function BrowserKeySettings() {
 
   return (
     <form
-      className="settings-form key-settings"
+      className="settings-form key-settings page-surface"
       onSubmit={(event) => {
         event.preventDefault();
         if (input.current) {

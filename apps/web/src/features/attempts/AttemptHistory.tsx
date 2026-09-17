@@ -64,7 +64,7 @@ export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: strin
   }, [apiUrl, token, pages, reload]);
 
   return (
-    <section className="attempt-history" aria-label="Attempt history">
+    <section className="attempt-history page-surface" aria-label="Attempt history">
       <h2 id="attempt-history-heading">Attempt history</h2>
       {loading ? <p role="status">Loading history…</p> : null}
       {error ? (
