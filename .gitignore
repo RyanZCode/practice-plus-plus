@@ -4,7 +4,7 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
-apps/api/src/generated/prisma/
+apps/api/src/shared/generated/prisma/
 supabase/.branches/
 supabase/.temp/
 

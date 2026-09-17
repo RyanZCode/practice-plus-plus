@@ -3,18 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "dist/server.js",
+  "main": "dist/application/server.js",
   "scripts": {
     "prebuild": "pnpm --filter @practice-plus-plus/contracts build && pnpm --filter @practice-plus-plus/scheduling build && pnpm run prisma:generate",
     "build": "tsc -p tsconfig.build.json",
-    "dev": "pnpm run build && cross-env DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres node --env-file-if-exists=.env dist/server.js",
+    "dev": "pnpm run build && cross-env DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres node --env-file-if-exists=.env dist/application/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:migrate:dev": "cross-env DIRECT_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres prisma migrate dev",
     "prisma:migrate:local": "cross-env DIRECT_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres prisma migrate deploy",
     "prisma:migrate:status": "prisma migrate status",
     "pretypecheck": "pnpm --filter @practice-plus-plus/scheduling build && pnpm run prisma:generate",
-    "start": "node dist/server.js",
+    "start": "node dist/application/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
