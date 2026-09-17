@@ -347,7 +347,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
           {!isLoading && !loadFailed && (isOnboarding || activeView === "settings") ? (
             <form
               id="practice-settings"
-              className="settings-form"
+              className="settings-form settings-page page-surface"
               onSubmit={(event) => void handleSave(event)}
             >
               <div>

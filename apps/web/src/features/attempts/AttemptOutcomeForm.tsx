@@ -76,7 +76,7 @@ export function AttemptOutcomeForm({
 
   return (
     <form
-      className="outcome-form"
+      className="outcome-form page-surface"
       onSubmit={(event) => {
         event.preventDefault();
         if (outcome === "" || !canConfirm) return;

@@ -118,7 +118,7 @@ export function ExternalAiExport({ apiUrl, token }: { apiUrl: string; token: str
 
   const choices = selections(attempt);
   return (
-    <section className="external-ai">
+    <section className="external-ai page-surface">
       <h2>External AI context</h2>
       <p className="settings-help">
         Create a bounded Markdown package for an AI conversation outside Practice++. It can include

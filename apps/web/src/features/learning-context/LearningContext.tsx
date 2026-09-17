@@ -88,7 +88,7 @@ export function LearningContext({
     return <p className="settings-status">Loading learning context…</p>;
 
   return (
-    <section className="learning-context">
+    <section className="learning-context page-surface">
       <div className="learning-context-heading">
         <div>
           <h2>What Practice++ knows about me</h2>

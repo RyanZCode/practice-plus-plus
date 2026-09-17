@@ -171,7 +171,7 @@ export function Coach({
   }
 
   return (
-    <section className="coach">
+    <section className="coach page-surface">
       <h2>Coach</h2>
       <p className="settings-help">
         Discuss your practice plan, progress, goals, or reflections. This conversation clears when
@@ -296,7 +296,7 @@ export function Coach({
           </div>
         ) : null}
         {suggestions.length > 0 ? (
-          <section aria-label="Memory review queue">
+          <section className="memory-review-queue" aria-label="Memory review queue">
             <h3>Memory suggestions to review</h3>
             <p className="settings-help">
               These inferences are pending and are not used in future coaching until you approve
@@ -309,10 +309,11 @@ export function Coach({
             >
               Review in Memory
             </button>
-            <ul>
+            <ul className="memory-suggestion-list">
               {suggestions.map((suggestion) => (
                 <li key={suggestion.id}>
-                  <strong>{suggestion.category}</strong>: {suggestion.content}
+                  <strong>{suggestion.category.replaceAll("_", " ")}</strong>
+                  <p>{suggestion.content}</p>
                 </li>
               ))}
             </ul>

@@ -1,8 +1,4 @@
-import {
-  attemptTimerSeconds,
-  type Attempt,
-  type CatalogProblem,
-} from "@practice-plus-plus/contracts";
+import { attemptTimerSeconds, type Attempt } from "@practice-plus-plus/contracts";
 
 export function remainingSeconds(attempt: Attempt, now: number): number {
   if (attempt.timerSkippedAt !== null) return 0;
@@ -15,11 +11,4 @@ export function remainingSeconds(attempt: Attempt, now: number): number {
       ? now
       : Date.parse(attempt.timerPausedAt);
   return Math.max(0, Math.ceil((endsAt - effectiveNow) / 1000));
-}
-
-export function eligibleProblems(problems: CatalogProblem[], hidePaid: boolean): CatalogProblem[] {
-  return problems.filter(
-    (problem) =>
-      problem.availability !== "UNAVAILABLE" && (!hidePaid || problem.availability !== "PAID_ONLY"),
-  );
 }
