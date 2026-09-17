@@ -2,6 +2,7 @@ import { practiceSettingsSchema, type PracticeSettings } from "@practice-plus-pl
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { AttemptHistory } from "../features/attempts/AttemptHistory";
+import { Analytics } from "../features/analytics/Analytics";
 import { authenticatedUserId } from "../features/auth/authState";
 import { useAuth } from "../features/auth/auth";
 import { ProtectedRoute } from "../features/auth/ProtectedRoute";
@@ -30,12 +31,14 @@ interface SettingsDraft {
   readonly timeZone: string;
 }
 
-type ActiveView = "coach" | "external-ai" | "history" | "learning" | "practice" | "settings";
+type ActiveView =
+  "analytics" | "coach" | "external-ai" | "history" | "learning" | "practice" | "settings";
 
 const navigationItems: ReadonlyArray<{ readonly label: string; readonly view: ActiveView }> = [
   { label: "Today", view: "practice" },
   { label: "Coach", view: "coach" },
   { label: "History", view: "history" },
+  { label: "Analytics", view: "analytics" },
   { label: "Memory", view: "learning" },
   { label: "AI Export", view: "external-ai" },
   { label: "Settings", view: "settings" },
@@ -317,6 +320,10 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
 
           {!isLoading && !loadFailed && !isOnboarding && activeView === "history" ? (
             <AttemptHistory apiUrl={apiUrl} token={session.access_token} />
+          ) : null}
+
+          {!isLoading && !loadFailed && !isOnboarding && activeView === "analytics" ? (
+            <Analytics apiUrl={apiUrl} token={session.access_token} />
           ) : null}
 
           {!isLoading && !loadFailed && !isOnboarding && activeView === "learning" ? (

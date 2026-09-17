@@ -551,6 +551,49 @@ export const patternEvidenceSchema = z.strictObject({
 
 export const patternEvidenceResponseSchema = z.strictObject({
   asOfPracticeDate: z.iso.date(),
+  summary: z.strictObject({
+    freshOutcomes: learningOutcomeCountsSchema,
+    redo: z.strictObject({
+      outcomes: outcomeCountsSchema,
+      successRate: z.number().min(0).max(1).nullable(),
+    }),
+    assistance: assistanceCountsSchema,
+    optimality: z.strictObject({
+      optimal: z.number().int().nonnegative(),
+      suboptimal: z.number().int().nonnegative(),
+      unknownOrOmitted: z.number().int().nonnegative(),
+    }),
+    reviewWork: z.strictObject({
+      overdueExactRedos: z.number().int().nonnegative(),
+      overdueTransfers: z.number().int().nonnegative(),
+      dueTodayExactRedos: z.number().int().nonnegative(),
+      dueTodayTransfers: z.number().int().nonnegative(),
+      overdueItems: z.array(
+        z.discriminatedUnion("type", [
+          z.strictObject({
+            type: z.literal("EXACT_REDO"),
+            sourceAttemptId: z.uuid(),
+            dueDate: z.iso.date(),
+            daysOverdue: z.number().int().positive(),
+            problem: catalogProblemSchema.pick({
+              leetcodeId: true,
+              title: true,
+              url: true,
+            }),
+          }),
+          z.strictObject({
+            type: z.literal("TRANSFER"),
+            transferId: z.uuid(),
+            sourceAttemptId: z.uuid(),
+            dueDate: z.iso.date(),
+            daysOverdue: z.number().int().positive(),
+            patternName: z.enum(mvpPatternNames),
+            sourceProblemTitle: z.string().min(1).max(255),
+          }),
+        ]),
+      ),
+    }),
+  }),
   patterns: z.array(patternEvidenceSchema),
 });
 export type PatternEvidence = z.infer<typeof patternEvidenceSchema>;

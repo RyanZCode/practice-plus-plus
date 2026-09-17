@@ -21,6 +21,20 @@ type AnalyticsAttempt = {
 };
 
 type AnalyticsPattern = { id: string; name: string };
+type AnalyticsDueWork = {
+  exactRedos: readonly {
+    sourceAttemptId: string;
+    dueDate: string;
+    problem: { leetcodeId: number; title: string; url: string };
+  }[];
+  transfers: readonly {
+    id: string;
+    sourceAttemptId: string;
+    dueDate: string;
+    patternName: string;
+    sourceProblemTitle: string;
+  }[];
+};
 
 export interface AnalyticsStore {
   patternEvidence(userProfileId: string, now: Date): Promise<PatternEvidenceResponse>;
@@ -30,6 +44,7 @@ export function aggregatePatternEvidence(
   patterns: readonly AnalyticsPattern[],
   attempts: readonly AnalyticsAttempt[],
   asOfPracticeDate: string,
+  dueWork: AnalyticsDueWork = { exactRedos: [], transfers: [] },
 ): PatternEvidenceResponse {
   const asOfDay = calendarDay(asOfPracticeDate);
   const eligible = attempts.filter(
@@ -39,9 +54,34 @@ export function aggregatePatternEvidence(
   const recent = learningAttempts.filter(
     (attempt) => calendarDay(attempt.practiceDate) >= asOfDay - 6,
   );
+  const freshAttempts = learningAttempts.filter((attempt) => attempt.type === "FRESH");
+  const redoAttempts = eligible.filter((attempt) => attempt.type === "REDO");
+  const knownRedoAttempts = redoAttempts.filter((attempt) => attempt.outcome !== "INCOMPLETE");
+  const redoSuccesses = knownRedoAttempts.filter(
+    (attempt) => attempt.outcome === "INDEPENDENT" || attempt.outcome === "ASSISTED",
+  ).length;
 
   return patternEvidenceResponseSchema.parse({
     asOfPracticeDate,
+    summary: {
+      freshOutcomes: countLearningOutcomes(freshAttempts),
+      redo: {
+        outcomes: countOutcomes(redoAttempts),
+        successRate:
+          knownRedoAttempts.length === 0 ? null : redoSuccesses / knownRedoAttempts.length,
+      },
+      assistance: countAssistance(
+        learningAttempts.filter((attempt) => attempt.assistance.length > 0),
+      ),
+      optimality: countOptimality(learningAttempts),
+      reviewWork: {
+        overdueExactRedos: countDueBefore(dueWork.exactRedos, asOfPracticeDate),
+        overdueTransfers: countDueBefore(dueWork.transfers, asOfPracticeDate),
+        dueTodayExactRedos: countDueOn(dueWork.exactRedos, asOfPracticeDate),
+        dueTodayTransfers: countDueOn(dueWork.transfers, asOfPracticeDate),
+        overdueItems: overdueItems(dueWork, asOfPracticeDate),
+      },
+    },
     patterns: patterns.map((pattern) => {
       const involving = learningAttempts.filter((attempt) =>
         attempt.patternIds.includes(pattern.id),
@@ -99,13 +139,7 @@ export function aggregatePatternEvidence(
             .filter((event) => event.type === "CONCEPTUAL_HINT")
             .map((event) => event.hintLevel ?? 0)
             .sort((a, b) => b - a)[0] || null,
-        optimality: {
-          optimal: involving.filter((attempt) => attempt.optimality === "OPTIMAL").length,
-          suboptimal: involving.filter((attempt) => attempt.optimality === "SUBOPTIMAL").length,
-          unknownOrOmitted: involving.filter(
-            (attempt) => attempt.optimality === null || attempt.optimality === "UNKNOWN",
-          ).length,
-        },
+        optimality: countOptimality(involving),
         lastPracticed,
         stale: lastPracticed !== null && asOfDay - calendarDay(lastPracticed) >= 30,
         recentExposureShare,
@@ -119,7 +153,7 @@ export function aggregatePatternEvidence(
 export function createPrismaAnalyticsStore(client: PrismaClient): AnalyticsStore {
   return {
     async patternEvidence(userProfileId, now) {
-      const [settings, patterns, attempts] = await client.$transaction([
+      const [settings, patterns, attempts, reviews, transfers] = await client.$transaction([
         client.practiceSettings.findUnique({
           where: { userProfileId },
           select: { timeZone: true, resetMinutes: true },
@@ -139,6 +173,30 @@ export function createPrismaAnalyticsStore(client: PrismaClient): AnalyticsStore
             problem: { select: { problemPatterns: { select: { patternId: true } } } },
           },
         }),
+        client.reviewObligation.findMany({
+          where: { resolvedAt: null, sourceAttempt: { userProfileId } },
+          select: {
+            sourceAttemptId: true,
+            generatedDueDate: true,
+            manualDueDate: true,
+            sourceAttempt: {
+              select: {
+                problem: { select: { leetcodeId: true, title: true, url: true } },
+              },
+            },
+          },
+        }),
+        client.transferObligation.findMany({
+          where: { resolvedAt: null, sourceAttempt: { userProfileId } },
+          select: {
+            id: true,
+            sourceAttemptId: true,
+            generatedEligibleDate: true,
+            manualEligibleDate: true,
+            pattern: { select: { name: true } },
+            sourceAttempt: { select: { problem: { select: { title: true } } } },
+          },
+        }),
       ]);
       if (settings === null)
         throw new HttpError(409, "Save practice settings before viewing analytics.");
@@ -152,6 +210,20 @@ export function createPrismaAnalyticsStore(client: PrismaClient): AnalyticsStore
           patternIds: attempt.problem.problemPatterns.map((tag) => tag.patternId),
         })),
         practiceDateFor(now, settings),
+        {
+          exactRedos: reviews.map((review) => ({
+            sourceAttemptId: review.sourceAttemptId,
+            dueDate: date(review.manualDueDate ?? review.generatedDueDate),
+            problem: review.sourceAttempt.problem,
+          })),
+          transfers: transfers.map((transfer) => ({
+            id: transfer.id,
+            sourceAttemptId: transfer.sourceAttemptId,
+            dueDate: date(transfer.manualEligibleDate ?? transfer.generatedEligibleDate),
+            patternName: transfer.pattern.name,
+            sourceProblemTitle: transfer.sourceAttempt.problem.title,
+          })),
+        },
       );
     },
   };
@@ -210,6 +282,48 @@ function countAssistance(attempts: readonly AnalyticsAttempt[]) {
     optimization: count("OPTIMIZATION"),
     solutionReview: count("SOLUTION_REVIEW"),
   };
+}
+
+function countOptimality(attempts: readonly AnalyticsAttempt[]) {
+  return {
+    optimal: attempts.filter((attempt) => attempt.optimality === "OPTIMAL").length,
+    suboptimal: attempts.filter((attempt) => attempt.optimality === "SUBOPTIMAL").length,
+    unknownOrOmitted: attempts.filter(
+      (attempt) => attempt.optimality === null || attempt.optimality === "UNKNOWN",
+    ).length,
+  };
+}
+
+function countDueBefore(items: readonly { dueDate: string }[], practiceDate: string) {
+  return items.filter((item) => calendarDay(item.dueDate) < calendarDay(practiceDate)).length;
+}
+
+function countDueOn(items: readonly { dueDate: string }[], practiceDate: string) {
+  return items.filter((item) => item.dueDate === practiceDate).length;
+}
+
+function overdueItems(dueWork: AnalyticsDueWork, practiceDate: string) {
+  const practiceDay = calendarDay(practiceDate);
+  return [
+    ...dueWork.exactRedos.map((item) => ({
+      type: "EXACT_REDO" as const,
+      sourceAttemptId: item.sourceAttemptId,
+      dueDate: item.dueDate,
+      daysOverdue: practiceDay - calendarDay(item.dueDate),
+      problem: item.problem,
+    })),
+    ...dueWork.transfers.map((item) => ({
+      type: "TRANSFER" as const,
+      transferId: item.id,
+      sourceAttemptId: item.sourceAttemptId,
+      dueDate: item.dueDate,
+      daysOverdue: practiceDay - calendarDay(item.dueDate),
+      patternName: item.patternName,
+      sourceProblemTitle: item.sourceProblemTitle,
+    })),
+  ]
+    .filter((item) => item.daysOverdue > 0)
+    .sort((left, right) => left.dueDate.localeCompare(right.dueDate));
 }
 
 function date(value: Date) {
