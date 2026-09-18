@@ -1,6 +1,10 @@
-import type { PatternEvidence, PatternEvidenceResponse } from "@practice-plus-plus/contracts";
+import type {
+  PatternEvidence,
+  PatternEvidenceResponse,
+  StreakCalendarResponse,
+} from "@practice-plus-plus/contracts";
 import { useEffect, useState } from "react";
-import { loadAnalytics } from "./analyticsApi";
+import { loadAnalytics, loadStreakCalendar } from "./analyticsApi";
 
 const classificationLabels = {
   UNTESTED: "Untested",
@@ -56,10 +60,18 @@ export function Analytics({ apiUrl, token }: { apiUrl: string; token: string }) 
     );
   if (analytics === undefined) return null;
 
-  return <AnalyticsView analytics={analytics} />;
+  return <AnalyticsView analytics={analytics} apiUrl={apiUrl} token={token} />;
 }
 
-export function AnalyticsView({ analytics }: { analytics: PatternEvidenceResponse }) {
+export function AnalyticsView({
+  analytics,
+  apiUrl,
+  token,
+}: {
+  analytics: PatternEvidenceResponse;
+  apiUrl?: string;
+  token?: string;
+}) {
   const patterns = [...analytics.patterns].sort(comparePatterns);
   const { summary } = analytics;
   const overdue = summary.reviewWork.overdueExactRedos + summary.reviewWork.overdueTransfers;
@@ -114,6 +126,10 @@ export function AnalyticsView({ analytics }: { analytics: PatternEvidenceRespons
           }
         />
       </div>
+
+      {apiUrl === undefined || token === undefined ? null : (
+        <StreakCalendar apiUrl={apiUrl} token={token} />
+      )}
 
       <section
         className="analytics-section page-surface"
@@ -328,4 +344,243 @@ function formatPercent(value: number | null) {
 
 function formatDaysOverdue(days: number) {
   return `${days} ${days === 1 ? "day" : "days"} overdue`;
+}
+
+function StreakCalendar({ apiUrl, token }: { apiUrl: string; token: string }) {
+  const [calendar, setCalendar] = useState<StreakCalendarResponse>();
+  const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(true);
+  const [month, setMonth] = useState<string>();
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(undefined);
+    void loadStreakCalendar(apiUrl, token, month)
+      .then((result) => {
+        if (active) setCalendar(result);
+      })
+      .catch((reason: unknown) => {
+        if (active) {
+          setError(reason instanceof Error ? reason.message : "Unable to load streak calendar.");
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [apiUrl, token, month, reload]);
+
+  if (loading && calendar === undefined)
+    return (
+      <section className="streak-section page-surface" aria-labelledby="streak-heading">
+        <h2 id="streak-heading">Daily target streak</h2>
+        <p role="status">Loading streak calendar…</p>
+      </section>
+    );
+  if (error !== undefined && calendar === undefined)
+    return (
+      <section className="streak-section page-surface" aria-labelledby="streak-heading">
+        <h2 id="streak-heading">Daily target streak</h2>
+        <p className="auth-message" role="alert">
+          {error}
+        </p>
+        <button type="button" onClick={() => setReload((value) => value + 1)}>
+          Try again
+        </button>
+      </section>
+    );
+  if (calendar === undefined) return null;
+
+  const currentMonth = calendar.asOfPracticeDate.slice(0, 7);
+  return (
+    <StreakCalendarView
+      calendar={calendar}
+      {...(error === undefined ? {} : { error })}
+      loading={loading}
+      nextDisabled={calendar.month >= currentMonth}
+      onPreviousMonth={() => setMonth(shiftMonth(calendar.month, -1))}
+      onNextMonth={() => setMonth(shiftMonth(calendar.month, 1))}
+    />
+  );
+}
+
+export function StreakCalendarView({
+  calendar,
+  error,
+  loading = false,
+  nextDisabled = false,
+  onPreviousMonth,
+  onNextMonth,
+}: {
+  calendar: StreakCalendarResponse;
+  error?: string;
+  loading?: boolean;
+  nextDisabled?: boolean;
+  onPreviousMonth: () => void;
+  onNextMonth: () => void;
+}) {
+  const firstWeekday = new Date(`${calendar.month}-01T00:00:00.000Z`).getUTCDay();
+  const monthLabel = formatMonth(calendar.month);
+  const streakLabel = `${calendar.currentStreak} ${calendar.currentStreak === 1 ? "day" : "days"}`;
+
+  return (
+    <section className="streak-section page-surface" aria-labelledby="streak-heading">
+      <div className="streak-heading">
+        <div>
+          <h2 id="streak-heading">Daily target streak</h2>
+          <p>
+            Complete every saved plan item to fulfill a practice day. This streak is motivational
+            context, not a skill score.
+          </p>
+        </div>
+        <div className="streak-stat" aria-label={`Current streak: ${streakLabel}`}>
+          <strong>{calendar.currentStreak}</strong>
+          <span>current streak</span>
+        </div>
+      </div>
+
+      <div className="streak-calendar-toolbar">
+        <button className="secondary-button" type="button" onClick={onPreviousMonth}>
+          Previous month
+        </button>
+        <h3 aria-live="polite">{monthLabel}</h3>
+        <button
+          className="secondary-button"
+          type="button"
+          disabled={nextDisabled}
+          onClick={onNextMonth}
+        >
+          Next month
+        </button>
+      </div>
+
+      {loading ? <p role="status">Loading month…</p> : null}
+      {error === undefined ? null : (
+        <p className="auth-message" role="alert">
+          {error}
+        </p>
+      )}
+
+      <div
+        className="streak-calendar-grid"
+        role="grid"
+        aria-label={`${monthLabel} daily target calendar`}
+      >
+        {weekdayLabels.map((label) => (
+          <span className="streak-weekday" role="columnheader" key={label}>
+            {label}
+          </span>
+        ))}
+        {Array.from({ length: firstWeekday }, (_, index) => (
+          <span
+            className="streak-day streak-day-empty"
+            role="gridcell"
+            aria-hidden="true"
+            key={`empty-${index}`}
+          />
+        ))}
+        {calendar.days.map((day) => {
+          const label = streakDayLabel(day);
+          return (
+            <span
+              aria-current={day.isCurrent ? "date" : undefined}
+              aria-label={label}
+              className={`streak-day streak-day-${day.status.toLowerCase()}${
+                day.isCurrent ? " streak-day-today" : ""
+              }`}
+              data-status={day.status}
+              role="gridcell"
+              title={label}
+              key={day.date}
+            >
+              <strong>{Number(day.date.slice(-2))}</strong>
+              {day.requiredCount === null ? null : (
+                <small>
+                  {day.completedCount} / {day.requiredCount}
+                </small>
+              )}
+            </span>
+          );
+        })}
+      </div>
+
+      <ul className="streak-legend" aria-label="Calendar legend">
+        <li>
+          <span className="streak-legend-swatch streak-swatch-completed" aria-hidden="true" />
+          Completed
+        </li>
+        <li>
+          <span className="streak-legend-swatch streak-swatch-missed" aria-hidden="true" />
+          Missed
+        </li>
+        <li>
+          <span className="streak-legend-swatch streak-swatch-current" aria-hidden="true" />
+          Current
+        </li>
+        <li>
+          <span className="streak-legend-swatch streak-swatch-neutral" aria-hidden="true" />
+          No practice available
+        </li>
+        <li>
+          <span className="streak-legend-swatch streak-swatch-future" aria-hidden="true" />
+          Future
+        </li>
+      </ul>
+
+      {calendar.trackingStartDate === null ? (
+        <p className="streak-note">Tracking begins after your first practice plan is generated.</p>
+      ) : (
+        <p className="streak-note">
+          Tracking started {formatDate(calendar.trackingStartDate)}. Neutral days do not extend or
+          break the streak.
+        </p>
+      )}
+    </section>
+  );
+}
+
+const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+function formatMonth(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${value}-01T00:00:00.000Z`));
+}
+
+function shiftMonth(value: string, amount: number) {
+  const date = new Date(`${value}-01T00:00:00.000Z`);
+  date.setUTCMonth(date.getUTCMonth() + amount);
+  return `${date.getUTCFullYear().toString().padStart(4, "0")}-${(date.getUTCMonth() + 1)
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+function streakDayLabel(day: StreakCalendarResponse["days"][number]) {
+  const counts =
+    day.requiredCount === null ? "" : ` ${day.completedCount} of ${day.requiredCount} completed.`;
+  const current = day.isCurrent ? " Current practice day." : "";
+  switch (day.status) {
+    case "COMPLETED":
+      return `${formatDate(day.date)}. Completed.${counts}${current}`;
+    case "MISSED":
+      return `${formatDate(day.date)}. Missed.${counts}`;
+    case "CURRENT":
+      return `${formatDate(day.date)}. In progress.${counts}`;
+    case "NEUTRAL":
+      return `${formatDate(day.date)}. ${
+        day.neutralReason === "NO_PRACTICE_AVAILABLE"
+          ? "No practice available."
+          : "Neutral boundary transition."
+      }${current}`;
+    case "UNTRACKED":
+      return `${formatDate(day.date)}. Not tracked yet.`;
+    case "FUTURE":
+      return `${formatDate(day.date)}. Future practice day.`;
+  }
 }

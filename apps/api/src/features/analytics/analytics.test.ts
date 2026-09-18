@@ -303,3 +303,40 @@ it("authenticates pattern analytics and uses the resolved profile", async () => 
   expect((await fetch(url, { headers: { authorization: "Bearer test" } })).status).toBe(200);
   expect(patternEvidence).toHaveBeenCalledWith(userProfileId, expect.any(Date));
 });
+
+it("authenticates streak analytics, validates the month, and uses the resolved profile", async () => {
+  const streak = vi.fn().mockResolvedValue({
+    asOfPracticeDate: "2026-09-17",
+    currentStreak: 0,
+    trackingStartDate: null,
+    month: "2026-09",
+    days: [],
+  });
+  const app = createApp({
+    logger: pino({ level: "silent" }),
+    authentication: {
+      analyticsStore: {
+        patternEvidence: vi.fn(),
+        streak,
+      } satisfies AnalyticsStore,
+      profileStore: {
+        resolveByAuthSubject: vi.fn().mockResolvedValue({ id: userProfileId, role: "USER" }),
+      },
+      verifier: { verify: vi.fn().mockResolvedValue({ subject: "subject" }) },
+    },
+  });
+  const server = createServer(app);
+  servers.push(server);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (address === null || typeof address === "string") throw new Error("No port");
+  const url = `http://127.0.0.1:${address.port}/analytics/streak`;
+  expect((await fetch(url)).status).toBe(401);
+  expect(
+    (await fetch(`${url}?month=2026-13`, { headers: { authorization: "Bearer test" } })).status,
+  ).toBe(400);
+  expect(
+    (await fetch(`${url}?month=2026-08`, { headers: { authorization: "Bearer test" } })).status,
+  ).toBe(200);
+  expect(streak).toHaveBeenCalledWith(userProfileId, expect.any(Date), "2026-08");
+});

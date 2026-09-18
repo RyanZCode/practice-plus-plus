@@ -743,7 +743,7 @@ export function Practice({
                           ? "Premium"
                           : problem.availability === "UNAVAILABLE"
                             ? "Unavailable"
-                            : "Free"}
+                            : null}
                       </span>
                       <button
                         type="button"

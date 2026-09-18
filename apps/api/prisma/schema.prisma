@@ -53,6 +53,7 @@ model UserProfile {
   catalogImportBatches    CatalogImportBatch[]
   reviewedProblems        Problem[]                @relation("ProblemReviewedBy")
   publishedProblems       Problem[]                @relation("ProblemPublishedBy")
+  dailyCompletions        DailyCompletion[]
 
   @@map("user_profiles")
 }
@@ -309,6 +310,29 @@ model DailyPlanItem {
   @@index([attemptId])
   @@index([transferId])
   @@map("daily_plan_items")
+}
+
+enum DailyCompletionState {
+  ACTIVE
+  FULFILLED
+  NEUTRAL
+}
+
+model DailyCompletion {
+  userProfileId  String               @map("user_profile_id") @db.Uuid
+  practiceDate   DateTime             @map("practice_date") @db.Date
+  requiredCount  Int                  @map("required_count") @db.SmallInt
+  completedCount Int                  @map("completed_count") @db.SmallInt
+  state          DailyCompletionState
+  neutralReason  String?              @map("neutral_reason") @db.VarChar(40)
+  fulfilledAt    DateTime?            @map("fulfilled_at") @db.Timestamptz(3)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  userProfile    UserProfile          @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+
+  @@id([userProfileId, practiceDate])
+  @@index([userProfileId, practiceDate])
+  @@map("daily_completions")
 }
 
 enum LearnerGoalState {

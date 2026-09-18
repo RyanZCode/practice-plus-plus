@@ -55,6 +55,12 @@ function database() {
     attempt: { findMany: vi.fn().mockResolvedValue([]) },
     reviewObligation: { findMany: vi.fn().mockResolvedValue([]) },
     transferObligation: { findMany: vi.fn().mockResolvedValue([]) },
+    dailyCompletion: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      create: vi.fn().mockResolvedValue({}),
+    },
   };
   const client = {
     $transaction: async (fn: (value: typeof tx) => Promise<unknown>) => fn(tx),

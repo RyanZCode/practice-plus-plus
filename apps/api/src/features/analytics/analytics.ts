@@ -1,5 +1,6 @@
 import {
   patternEvidenceResponseSchema,
+  streakCalendarQuerySchema,
   type PatternEvidenceResponse,
 } from "@practice-plus-plus/contracts";
 import { Router } from "express";
@@ -7,6 +8,7 @@ import { practiceDateFor } from "../daily-plan/dailyPlan.js";
 import { HttpError } from "../../shared/errors.js";
 import type { PrismaClient } from "../../shared/generated/prisma/client.js";
 import { getApplicationProfile } from "../account/profile.js";
+import { createPrismaStreakStore, type StreakStore } from "./streak.js";
 
 type AnalyticsAttempt = {
   id: string;
@@ -38,6 +40,7 @@ type AnalyticsDueWork = {
 
 export interface AnalyticsStore {
   patternEvidence(userProfileId: string, now: Date): Promise<PatternEvidenceResponse>;
+  streak?: StreakStore["calendar"];
 }
 
 export function aggregatePatternEvidence(
@@ -151,6 +154,7 @@ export function aggregatePatternEvidence(
 }
 
 export function createPrismaAnalyticsStore(client: PrismaClient): AnalyticsStore {
+  const streakStore = createPrismaStreakStore(client);
   return {
     async patternEvidence(userProfileId, now) {
       const [settings, patterns, attempts, reviews, transfers] = await client.$transaction([
@@ -226,6 +230,7 @@ export function createPrismaAnalyticsStore(client: PrismaClient): AnalyticsStore
         },
       );
     },
+    streak: streakStore.calendar,
   };
 }
 
@@ -234,6 +239,16 @@ export function createAnalyticsRouter(store: AnalyticsStore, clock = () => new D
   router.get("/patterns", async (request, response) => {
     response.json(await store.patternEvidence(getApplicationProfile(request).id, clock()));
   });
+  const loadStreak = store.streak;
+  if (loadStreak !== undefined) {
+    router.get("/streak", async (request, response) => {
+      const parsed = streakCalendarQuerySchema.safeParse(request.query);
+      if (!parsed.success) throw new HttpError(400, "Invalid streak calendar month.");
+      response.json(
+        await loadStreak(getApplicationProfile(request).id, clock(), parsed.data.month),
+      );
+    });
+  }
   return router;
 }
 
