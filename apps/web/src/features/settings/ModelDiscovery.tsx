@@ -4,10 +4,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+
+import type { ProviderModel } from "@practice-plus-plus/contracts";
 
 import { useAuth } from "../auth/auth";
 import { discoverModels, ModelDiscoveryError } from "./modelDiscoveryApi";
@@ -15,7 +18,7 @@ import { discoverModels, ModelDiscoveryError } from "./modelDiscoveryApi";
 export type ModelDiscoveryStatus = "idle" | "loading" | "ready" | "empty" | "stale" | "error";
 
 interface ModelDiscoveryValue {
-  readonly models: readonly string[];
+  readonly models: readonly ProviderModel[];
   readonly status: ModelDiscoveryStatus;
   readonly error?: string;
   readonly retry: () => void;
@@ -32,6 +35,8 @@ const emptyValue: ModelDiscoveryValue = {
   retry: () => undefined,
 };
 
+const discoveryRefreshCooldownMs = 10 * 60 * 1000;
+
 const ModelDiscoveryContext = createContext<ModelDiscoveryValue>(emptyValue);
 
 export function ModelDiscoveryProvider({ apiUrl, children }: ModelDiscoveryProviderProps) {
@@ -41,28 +46,53 @@ export function ModelDiscoveryProvider({ apiUrl, children }: ModelDiscoveryProvi
   const keyState = useSyncExternalStore(browserKey.subscribe, browserKey.getSnapshot);
   const [retryCount, setRetryCount] = useState(0);
   const [state, setState] = useState<ModelDiscoveryValue>(emptyValue);
+  const lastDiscoveryAt = useRef(0);
 
   const retry = useCallback(() => setRetryCount((count) => count + 1), []);
 
   useEffect(() => {
+    const refreshIfStale = () => {
+      if (
+        token !== null &&
+        userId !== null &&
+        keyState.hasKey &&
+        document.visibilityState === "visible" &&
+        Date.now() - lastDiscoveryAt.current >= discoveryRefreshCooldownMs
+      ) {
+        retry();
+      }
+    };
+
+    window.addEventListener("focus", refreshIfStale);
+    document.addEventListener("visibilitychange", refreshIfStale);
+    return () => {
+      window.removeEventListener("focus", refreshIfStale);
+      document.removeEventListener("visibilitychange", refreshIfStale);
+    };
+  }, [keyState.hasKey, retry, token, userId]);
+
+  useEffect(() => {
     if (token === null || userId === null) {
       setState(emptyValue);
+      lastDiscoveryAt.current = 0;
       return;
     }
     const apiKey = browserKey.getKey(userId);
     if (!keyState.hasKey || apiKey === "") {
       setState(emptyValue);
+      lastDiscoveryAt.current = 0;
       return;
     }
 
     const controller = new AbortController();
     let active = true;
+    lastDiscoveryAt.current = Date.now();
     setState((current) => ({ models: current.models, status: "loading", retry }));
     void discoverModels(apiUrl, token, apiKey, controller.signal)
       .then((result) => {
         if (!active) return;
         setState({
-          models: result.models.map((model) => model.id),
+          models: result.models,
           status: result.state === "EMPTY" ? "empty" : "ready",
           retry,
         });

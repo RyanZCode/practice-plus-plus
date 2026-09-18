@@ -9,7 +9,7 @@ describe("model discovery API", () => {
         JSON.stringify({
           providerId: "openai",
           state: "READY",
-          models: [{ id: "gpt-4.1" }],
+          models: [{ id: "gpt-4.1", reasoningEfforts: [] }],
         }),
         { headers: { "content-type": "application/json" } },
       ),
@@ -20,7 +20,7 @@ describe("model discovery API", () => {
     ).resolves.toEqual({
       providerId: "openai",
       state: "READY",
-      models: [{ id: "gpt-4.1" }],
+      models: [{ id: "gpt-4.1", reasoningEfforts: [] }],
     });
     expect(fetcher).toHaveBeenCalledWith(
       "https://api.example/ai/models",

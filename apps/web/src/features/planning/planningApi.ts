@@ -4,6 +4,7 @@ import {
   planningRecommendationSchema,
   type DailyPlan,
   type PlanningPreview,
+  type ProviderSelection,
 } from "@practice-plus-plus/contracts";
 
 async function post(apiUrl: string, token: string, path: string, body: unknown): Promise<unknown> {
@@ -25,12 +26,12 @@ async function post(apiUrl: string, token: string, path: string, body: unknown):
 export async function generateIntegratedPlan(
   apiUrl: string,
   token: string,
-  model: string,
+  selection: ProviderSelection,
   apiKey: string,
 ): Promise<DailyPlan> {
   return dailyPlanSchema.parse(
     await post(apiUrl, token, "/ai/planning/integrated", {
-      selection: { providerId: "openai", model },
+      selection,
       apiKey,
     }),
   );

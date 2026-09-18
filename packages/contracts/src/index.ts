@@ -12,6 +12,10 @@ export * from "./context.js";
 export const providerIdSchema = z.enum(["openai"]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
+export const reasoningEffortValues = ["none", "minimal", "low", "medium", "high", "xhigh"] as const;
+export const reasoningEffortSchema = z.enum(reasoningEffortValues);
+export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
+
 export const openAiModels = [
   "gpt-6-astra",
   "gpt-5.6-luna",
@@ -29,10 +33,14 @@ export const modelNameSchema = z
 export const providerSelectionSchema = z.strictObject({
   providerId: providerIdSchema,
   model: modelNameSchema,
+  reasoningEffort: reasoningEffortSchema.optional(),
 });
 export type ProviderSelection = z.infer<typeof providerSelectionSchema>;
 
-export const providerModelSchema = z.strictObject({ id: modelNameSchema });
+export const providerModelSchema = z.strictObject({
+  id: modelNameSchema,
+  reasoningEfforts: z.array(reasoningEffortSchema).default([]),
+});
 export type ProviderModel = z.infer<typeof providerModelSchema>;
 
 export const providerModelDiscoveryRequestSchema = z.strictObject({
@@ -224,6 +232,7 @@ const wholeDaysSchema = z.number().int().min(1).max(90);
 export const practiceSettingsSchema = z
   .strictObject({
     defaultAiModel: modelNameSchema,
+    reasoningEffort: reasoningEffortSchema.nullable().default(null),
     attemptTimerMinutes: z.number().int().min(1).max(180),
     dailyTarget: z.number().int().min(1).max(10),
     redoIntervals: z.strictObject({

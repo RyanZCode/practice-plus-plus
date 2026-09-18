@@ -23,6 +23,7 @@ describe("provider selection", () => {
     { providerId: "openai", model: "" },
     { providerId: "openai", model: "a".repeat(201) },
     { providerId: "openai", model: "model\r\ninjected" },
+    { providerId: "openai", model: "model", reasoningEffort: "invalid" },
   ])("rejects invalid selections and extra configuration: %j", (selection) => {
     expect(providerSelectionSchema.safeParse(selection).success).toBe(false);
   });
@@ -33,6 +34,7 @@ describe("provider model discovery", () => {
     expect(
       practiceSettingsSchema.parse({
         defaultAiModel: "enterprise-chat:v2",
+        reasoningEffort: null,
         attemptTimerMinutes: 30,
         dailyTarget: 2,
         redoIntervals: { high: 1, low: 7, medium: 3 },
@@ -44,9 +46,13 @@ describe("provider model discovery", () => {
       providerModelDiscoveryResponseSchema.parse({
         providerId: "openai",
         state: "READY",
-        models: [{ id: "gpt-4.1" }],
+        models: [{ id: "gpt-4.1", reasoningEfforts: [] }],
       }),
-    ).toEqual({ providerId: "openai", state: "READY", models: [{ id: "gpt-4.1" }] });
+    ).toEqual({
+      providerId: "openai",
+      state: "READY",
+      models: [{ id: "gpt-4.1", reasoningEfforts: [] }],
+    });
   });
 
   it("keeps discovery credentials and provider selection strict", () => {

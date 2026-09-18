@@ -4,17 +4,21 @@ import {
   type CoachRequest,
   type ConversationSummary,
   type MemorySuggestion,
+  type ReasoningEffort,
 } from "@practice-plus-plus/contracts";
 import { useAuth } from "../auth/auth";
+import { useModelDiscovery } from "../settings/ModelDiscovery";
 import { recentCoachMessages, streamCoach } from "./coachApi";
 import { MarkdownMessage } from "../../shared/MarkdownMessage";
 import { OpenAIModelSelect } from "../settings/OpenAIModelSelect";
+import { ReasoningEffortSelect } from "../settings/ReasoningEffortSelect";
 import {
   checkpointMessages,
   loadMemorySuggestions,
   needsCheckpoint,
   saveCheckpoint,
 } from "../learning-context/summaryApi";
+import { openAiSelection } from "../../shared/aiSelection";
 
 interface Message {
   role: "user" | "assistant";
@@ -27,18 +31,25 @@ export function Coach({
   token,
   userId,
   defaultModel,
+  defaultReasoningEffort,
   onReviewMemory,
 }: {
   apiUrl: string;
   token: string;
   userId: string;
   defaultModel: string;
+  defaultReasoningEffort: ReasoningEffort | null;
   onReviewMemory: () => void;
 }) {
   const { browserKey } = useAuth();
+  const { models } = useModelDiscovery();
   const keyState = useSyncExternalStore(browserKey.subscribe, browserKey.getSnapshot);
   const [model, setModel] = useState(defaultModel);
   useEffect(() => setModel(defaultModel), [defaultModel]);
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | null>(
+    defaultReasoningEffort,
+  );
+  useEffect(() => setReasoningEffort(defaultReasoningEffort), [defaultReasoningEffort]);
   const [purpose, setPurpose] = useState<CoachRequest["purpose"]>("GENERAL");
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -77,7 +88,7 @@ export function Coach({
     setCheckpointError(undefined);
     try {
       const result = await saveCheckpoint(apiUrl, token, {
-        selection: { providerId: "openai", model },
+        selection: openAiSelection(model, models, reasoningEffort),
         apiKey: browserKey.getKey(userId) ?? "",
         mode: "COACH",
         attemptId: null,
@@ -112,7 +123,7 @@ export function Coach({
       if (saved) contextMessages = [];
     }
     const input = coachRequestSchema.safeParse({
-      selection: { providerId: "openai", model },
+      selection: openAiSelection(model, models, reasoningEffort),
       apiKey: browserKey.getKey(userId),
       purpose,
       messages: recentCoachMessages(
@@ -182,7 +193,15 @@ export function Coach({
         <p role="status">Add your OpenAI API key in Practice settings to chat.</p>
       ) : null}
       <form className="settings-form" onSubmit={(event) => void send(event)}>
-        <OpenAIModelSelect value={model} disabled={busy || checkpointBusy} onChange={setModel} />
+        <div className="ai-control-grid">
+          <OpenAIModelSelect value={model} disabled={busy || checkpointBusy} onChange={setModel} />
+          <ReasoningEffortSelect
+            model={model}
+            value={reasoningEffort}
+            disabled={busy || checkpointBusy}
+            onChange={setReasoningEffort}
+          />
+        </div>
         <label>
           Conversation focus
           <select

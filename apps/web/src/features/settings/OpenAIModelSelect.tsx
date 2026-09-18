@@ -17,11 +17,15 @@ export function OpenAIModelSelect({
 }) {
   const discovery = useModelDiscovery();
   const canSelect = discovery.status === "ready" || discovery.status === "stale";
-  const selectedValue = discovery.models.includes(value) ? value : "";
+  const selectedValue = discovery.models.some((model) => model.id === value) ? value : "";
 
   useEffect(() => {
-    if (canSelect && discovery.models.length > 0 && !discovery.models.includes(value)) {
-      onChange(discovery.models[0]!);
+    if (
+      canSelect &&
+      discovery.models.length > 0 &&
+      !discovery.models.some((model) => model.id === value)
+    ) {
+      onChange(discovery.models[0]!.id);
     }
   }, [canSelect, discovery.models, onChange, value]);
 
@@ -39,8 +43,8 @@ export function OpenAIModelSelect({
             {discovery.status === "loading" ? "Discovering models…" : "Select a discovered model"}
           </option>
           {discovery.models.map((model) => (
-            <option key={model} value={model}>
-              {model}
+            <option key={model.id} value={model.id}>
+              {model.id}
             </option>
           ))}
         </select>
@@ -66,10 +70,10 @@ export function OpenAIModelSelect({
       ) : null}
       {discovery.status === "error" ? (
         <p className="auth-message" role="alert">
-          {discovery.error ?? "Model discovery failed. Retry after checking your API key."}
+          {discovery.error ?? "Model discovery failed. Check your API key and try again."}
         </p>
       ) : null}
-      {discovery.status !== "idle" && discovery.status !== "loading" ? (
+      {discovery.status === "stale" || discovery.status === "error" ? (
         <div className="model-selector-actions">
           <button
             className="secondary-button"
@@ -77,7 +81,7 @@ export function OpenAIModelSelect({
             disabled={disabled}
             onClick={discovery.retry}
           >
-            Retry discovery
+            Try again
           </button>
         </div>
       ) : null}

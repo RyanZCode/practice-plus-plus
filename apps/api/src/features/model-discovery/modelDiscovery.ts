@@ -9,7 +9,11 @@ import {
 import express, { type ErrorRequestHandler } from "express";
 
 import { HttpError } from "../../shared/errors.js";
-import { type ProviderModelDiscoveryAdapter, ProviderError } from "../../shared/providers.js";
+import {
+  supportedReasoningEfforts,
+  type ProviderModelDiscoveryAdapter,
+  ProviderError,
+} from "../../shared/providers.js";
 import { getApplicationProfile } from "../account/profile.js";
 
 const cacheTtlMs = 10 * 60 * 1000;
@@ -117,7 +121,10 @@ function toResponse(
   return providerModelDiscoveryResponseSchema.parse({
     providerId,
     state: models.length === 0 ? "EMPTY" : "READY",
-    models: models.map((id) => ({ id })),
+    models: models.map((id) => ({
+      id,
+      reasoningEfforts: supportedReasoningEfforts(providerId, id),
+    })),
   });
 }
 

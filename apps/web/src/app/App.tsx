@@ -1,4 +1,8 @@
-import { practiceSettingsSchema, type PracticeSettings } from "@practice-plus-plus/contracts";
+import {
+  practiceSettingsSchema,
+  type PracticeSettings,
+  type ReasoningEffort,
+} from "@practice-plus-plus/contracts";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { AttemptHistory } from "../features/attempts/AttemptHistory";
@@ -13,6 +17,7 @@ import { Practice } from "../features/practice/Practice";
 import { BrowserKeySettings } from "../features/settings/BrowserKeySettings";
 import { ModelDiscoveryProvider } from "../features/settings/ModelDiscovery";
 import { OpenAIModelSelect } from "../features/settings/OpenAIModelSelect";
+import { ReasoningEffortSelect } from "../features/settings/ReasoningEffortSelect";
 import { loadPracticeSettings, savePracticeSettings } from "../features/settings/settingsApi";
 import { clearTutorConversationsForUser } from "../features/tutor/tutorConversationStorage";
 import { loadTheme, resolveTheme, saveTheme, type ThemePreference } from "../shared/theme";
@@ -24,6 +29,7 @@ interface AppProps {
 interface SettingsDraft {
   readonly attemptTimerMinutes: string;
   readonly defaultAiModel: string;
+  readonly reasoningEffort: ReasoningEffort | "";
   readonly dailyTarget: string;
   readonly highInterval: string;
   readonly lowInterval: string;
@@ -172,6 +178,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
 
     const result = practiceSettingsSchema.safeParse({
       defaultAiModel: draft.defaultAiModel,
+      reasoningEffort: draft.reasoningEffort === "" ? null : draft.reasoningEffort,
       attemptTimerMinutes: Number(draft.attemptTimerMinutes),
       dailyTarget: Number(draft.dailyTarget),
       redoIntervals: {
@@ -307,6 +314,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
                 token={session.access_token}
                 userId={session.user.id}
                 defaultModel={savedSettings?.defaultAiModel ?? "gpt-5.4-mini"}
+                defaultReasoningEffort={savedSettings?.reasoningEffort ?? null}
               />
             </div>
           ) : null}
@@ -318,6 +326,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
               token={session.access_token}
               userId={session.user.id}
               defaultModel={savedSettings?.defaultAiModel ?? "gpt-5.4-mini"}
+              defaultReasoningEffort={savedSettings?.reasoningEffort ?? null}
               onReviewMemory={() => {
                 setFocusMemoryInferences(true);
                 setActiveView("learning");
@@ -440,13 +449,24 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
                 />
               </label>
 
-              <OpenAIModelSelect
-                value={draft.defaultAiModel}
-                disabled={isSaving}
-                onChange={(defaultAiModel) => setDraft({ ...draft, defaultAiModel })}
-                label="Default OpenAI model"
-                help="Used when you open Coach or Attempt tutor. Availability depends on your OpenAI API account."
-              />
+              <div className="ai-control-grid">
+                <OpenAIModelSelect
+                  value={draft.defaultAiModel}
+                  disabled={isSaving}
+                  onChange={(defaultAiModel) => setDraft({ ...draft, defaultAiModel })}
+                  label="Default OpenAI model"
+                  help="Used when you open Coach or Attempt tutor. Availability depends on your OpenAI API account."
+                />
+
+                <ReasoningEffortSelect
+                  model={draft.defaultAiModel}
+                  value={draft.reasoningEffort === "" ? null : draft.reasoningEffort}
+                  disabled={isSaving}
+                  onChange={(reasoningEffort) =>
+                    setDraft({ ...draft, reasoningEffort: reasoningEffort ?? "" })
+                  }
+                />
+              </div>
 
               <fieldset>
                 <legend>Redo intervals</legend>
@@ -554,6 +574,7 @@ function Navigation({ activeView, onNavigate }: NavigationProps) {
 function defaultDraft(): SettingsDraft {
   return {
     defaultAiModel: "gpt-5.4-mini",
+    reasoningEffort: "",
     attemptTimerMinutes: "30",
     dailyTarget: "2",
     highInterval: "1",
@@ -581,6 +602,7 @@ function timeZoneOptions(currentTimeZone: string): readonly string[] {
 function toDraft(settings: PracticeSettings): SettingsDraft {
   return {
     defaultAiModel: settings.defaultAiModel,
+    reasoningEffort: settings.reasoningEffort ?? "",
     attemptTimerMinutes: String(settings.attemptTimerMinutes),
     dailyTarget: String(settings.dailyTarget),
     highInterval: String(settings.redoIntervals.high),

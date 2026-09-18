@@ -128,6 +128,31 @@ describe("provider adapter", () => {
     },
   );
 
+  it("sends a supported reasoning effort to the provider", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(streamResponse(complete));
+    await collect(fetcher, {
+      ...request,
+      selection: { providerId: "openai", model: "gpt-5.5", reasoningEffort: "high" },
+    });
+
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toMatchObject({
+      model: "gpt-5.5",
+      reasoning_effort: "high",
+    });
+  });
+
+  it("omits an unsupported reasoning effort and preserves provider defaults", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(streamResponse(complete));
+    await collect(fetcher, {
+      ...request,
+      selection: { providerId: "openai", model: "gpt-4.1", reasoningEffort: "high" },
+    });
+
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).not.toHaveProperty(
+      "reasoning_effort",
+    );
+  });
+
   it.each([301, 302, 303, 307, 308])(
     "rejects redirect status %i without another request",
     async (status) => {
