@@ -11,6 +11,7 @@ import { ExternalAiExport } from "../features/external-ai/ExternalAiExport";
 import { LearningContext } from "../features/learning-context/LearningContext";
 import { Practice } from "../features/practice/Practice";
 import { BrowserKeySettings } from "../features/settings/BrowserKeySettings";
+import { ModelDiscoveryProvider } from "../features/settings/ModelDiscovery";
 import { OpenAIModelSelect } from "../features/settings/OpenAIModelSelect";
 import { loadPracticeSettings, savePracticeSettings } from "../features/settings/settingsApi";
 import { clearTutorConversationsForUser } from "../features/tutor/tutorConversationStorage";
@@ -76,7 +77,13 @@ export function App({ apiUrl }: AppProps) {
 
   return (
     <ProtectedRoute>
-      <AccountPage apiUrl={apiUrl} themePreference={themePreference} onThemeChange={changeTheme} />
+      <ModelDiscoveryProvider apiUrl={apiUrl}>
+        <AccountPage
+          apiUrl={apiUrl}
+          themePreference={themePreference}
+          onThemeChange={changeTheme}
+        />
+      </ModelDiscoveryProvider>
     </ProtectedRoute>
   );
 }
