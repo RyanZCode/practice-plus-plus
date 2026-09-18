@@ -24,6 +24,7 @@ import { Router } from "express";
 
 import { catalogProblemSelect, toCatalogProblem } from "../catalog/catalog.js";
 import { practiceDateFor } from "../daily-plan/dailyPlan.js";
+import { updateDailyCompletionForAttempt } from "../daily-plan/dailyCompletion.js";
 import { HttpError } from "../../shared/errors.js";
 import type { PrismaClient, Prisma } from "../../shared/generated/prisma/client.js";
 import { getApplicationProfile } from "../account/profile.js";
@@ -341,7 +342,7 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
           where: { attemptId, resolvedAt: null, sourceAttempt: { userProfileId } },
           data: { resolvedAt: now },
         });
-        return tx.attempt.update({
+        const updated = await tx.attempt.update({
           where: { id: attemptId, userProfileId },
           data: {
             ...details,
@@ -373,6 +374,8 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
           },
           select,
         });
+        await updateDailyCompletionForAttempt(tx, userProfileId, attemptId, input.outcome, now);
+        return updated;
       });
     },
     async active(userProfileId) {

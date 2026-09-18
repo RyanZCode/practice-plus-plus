@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { AnalyticsView } from "./Analytics";
+import { AnalyticsView, StreakCalendarView } from "./Analytics";
 
 it("renders decision-oriented analytics with definitions and no skill-score claim", () => {
   const html = renderToStaticMarkup(
@@ -134,4 +134,52 @@ describe("analytics empty states", () => {
     expect(html).toContain("Not enough data");
     expect(html).toContain("No known ratings");
   });
+});
+
+it("renders the daily-target calendar with status labels and neutral guidance", () => {
+  const html = renderToStaticMarkup(
+    createElement(StreakCalendarView, {
+      calendar: {
+        asOfPracticeDate: "2026-09-17",
+        currentStreak: 2,
+        trackingStartDate: "2026-09-12",
+        month: "2026-09",
+        days: [
+          {
+            date: "2026-09-16",
+            status: "COMPLETED",
+            isCurrent: false,
+            requiredCount: 2,
+            completedCount: 2,
+            neutralReason: null,
+          },
+          {
+            date: "2026-09-17",
+            status: "CURRENT",
+            isCurrent: true,
+            requiredCount: 2,
+            completedCount: 1,
+            neutralReason: null,
+          },
+          {
+            date: "2026-09-18",
+            status: "NEUTRAL",
+            isCurrent: false,
+            requiredCount: 0,
+            completedCount: 0,
+            neutralReason: "NO_PRACTICE_AVAILABLE",
+          },
+        ],
+      },
+      onPreviousMonth: () => undefined,
+      onNextMonth: () => undefined,
+    }),
+  );
+
+  expect(html).toContain("Daily target streak");
+  expect(html).toContain("2</strong>");
+  expect(html).toContain("Completed");
+  expect(html).toContain("No practice available");
+  expect(html).toContain('data-status="CURRENT"');
+  expect(html).toContain("Neutral days do not extend or break the streak.");
 });

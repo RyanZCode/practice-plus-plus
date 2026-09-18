@@ -5,6 +5,7 @@ import { catalogProblemSelect, toCatalogProblem } from "../catalog/catalog.js";
 import { HttpError } from "../../shared/errors.js";
 import type { Prisma, PrismaClient } from "../../shared/generated/prisma/client.js";
 import { getApplicationProfile } from "../account/profile.js";
+import { ensureDailyCompletion } from "./dailyCompletion.js";
 
 const select = {
   practiceDate: true,
@@ -60,6 +61,13 @@ export function createPrismaDailyPlanStore(client: PrismaClient): DailyPlanStore
       if (saved !== null && practiceDateFor(now, saved) === date(saved.practiceDate)) {
         if (freshProblemIds !== undefined)
           throw new HttpError(409, "Today's plan has already been saved.");
+        await ensureDailyCompletion(tx, userProfileId, saved, {
+          practiceDate: saved.practiceDate,
+          target: saved.target,
+          timeZone: saved.timeZone,
+          resetMinutes: saved.resetMinutes,
+          itemCount: saved.items.length,
+        });
         return present(saved);
       }
       const settings = await tx.practiceSettings.findUnique({ where: { userProfileId } });
@@ -148,6 +156,13 @@ export function createPrismaDailyPlanStore(client: PrismaClient): DailyPlanStore
           throw new HttpError(409, "The planning recommendation is no longer valid.");
       }
       const selections = buildDailyPlan(planInput);
+      await ensureDailyCompletion(tx, userProfileId, saved, {
+        practiceDate: new Date(`${practiceDate}T00:00:00.000Z`),
+        target: settings.dailyTarget,
+        timeZone: settings.timeZone,
+        resetMinutes: settings.resetMinutes,
+        itemCount: selections.length,
+      });
       await tx.dailyPlan.deleteMany({ where: { userProfileId } });
       return present(
         await tx.dailyPlan.create({

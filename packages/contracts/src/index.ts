@@ -618,6 +618,37 @@ export const dailyPlanSchema = z
   .refine((plan) => plan.items.length <= plan.target);
 export type DailyPlan = z.infer<typeof dailyPlanSchema>;
 
+export const dailyCompletionStateSchema = z.enum(["ACTIVE", "FULFILLED", "NEUTRAL"]);
+export const dailyCompletionNeutralReasonSchema = z.enum([
+  "NO_PRACTICE_AVAILABLE",
+  "BOUNDARY_CHANGE",
+]);
+export const streakCalendarQuerySchema = z.strictObject({
+  month: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+    .optional(),
+});
+export const streakCalendarResponseSchema = z.strictObject({
+  asOfPracticeDate: z.iso.date(),
+  currentStreak: z.number().int().nonnegative(),
+  trackingStartDate: z.iso.date().nullable(),
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  days: z.array(
+    z.strictObject({
+      date: z.iso.date(),
+      status: z.enum(["COMPLETED", "MISSED", "CURRENT", "FUTURE", "NEUTRAL", "UNTRACKED"]),
+      isCurrent: z.boolean(),
+      requiredCount: z.number().int().min(0).max(10).nullable(),
+      completedCount: z.number().int().min(0).max(10).nullable(),
+      neutralReason: dailyCompletionNeutralReasonSchema.nullable(),
+    }),
+  ),
+});
+export type DailyCompletionState = z.infer<typeof dailyCompletionStateSchema>;
+export type DailyCompletionNeutralReason = z.infer<typeof dailyCompletionNeutralReasonSchema>;
+export type StreakCalendarResponse = z.infer<typeof streakCalendarResponseSchema>;
+
 export const planningRecommendationSchema = z.strictObject({
   version: z.literal(1),
   planningStateId: z.string().regex(/^[a-f0-9]{64}$/),

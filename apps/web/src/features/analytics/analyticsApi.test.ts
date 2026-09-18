@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadAnalytics } from "./analyticsApi";
+import { loadAnalytics, loadStreakCalendar } from "./analyticsApi";
 
 const response = {
   asOfPracticeDate: "2026-09-17",
@@ -40,6 +40,23 @@ const response = {
   patterns: [],
 };
 
+const streakResponse = {
+  asOfPracticeDate: "2026-09-17",
+  currentStreak: 2,
+  trackingStartDate: "2026-09-12",
+  month: "2026-09",
+  days: [
+    {
+      date: "2026-09-17",
+      status: "CURRENT",
+      isCurrent: true,
+      requiredCount: 2,
+      completedCount: 1,
+      neutralReason: null,
+    },
+  ],
+};
+
 describe("analytics client", () => {
   it("loads and validates user analytics without caching", async () => {
     const fetcher = vi
@@ -61,5 +78,31 @@ describe("analytics client", () => {
         new Response(JSON.stringify({ ...response, summary: {} }), { status: 200 }),
       );
     await expect(loadAnalytics("https://api.example.com", "token", fetcher)).rejects.toThrow();
+  });
+
+  it("loads a requested streak month without caching", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(JSON.stringify(streakResponse), { status: 200 }));
+
+    await expect(
+      loadStreakCalendar("https://api.example.com/", "token", "2026-09", fetcher),
+    ).resolves.toEqual(streakResponse);
+    expect(fetcher).toHaveBeenCalledWith("https://api.example.com/analytics/streak?month=2026-09", {
+      cache: "no-store",
+      headers: { authorization: "Bearer token" },
+    });
+  });
+
+  it("rejects an invalid streak response", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ ...streakResponse, month: "bad" }), { status: 200 }),
+      );
+
+    await expect(
+      loadStreakCalendar("https://api.example.com", "token", undefined, fetcher),
+    ).rejects.toThrow();
   });
 });
