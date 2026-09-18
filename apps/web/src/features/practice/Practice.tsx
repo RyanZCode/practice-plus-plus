@@ -4,6 +4,7 @@ import type {
   CatalogProblem,
   DailyPlan,
   MemorySuggestion,
+  ReasoningEffort,
 } from "@practice-plus-plus/contracts";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
@@ -27,6 +28,7 @@ import { AttemptTutor } from "../tutor/AttemptTutor";
 import { loadMemorySuggestions } from "../learning-context/summaryApi";
 import { generateAssessmentDraft, loadAssessmentDraft } from "../assessments/assessmentApi";
 import { useAuth } from "../auth/auth";
+import { useModelDiscovery } from "../settings/ModelDiscovery";
 import { generateIntegratedPlan } from "../planning/planningApi";
 import {
   browseCatalog,
@@ -35,19 +37,23 @@ import {
   type CatalogSort,
   type CatalogSortDirection,
 } from "./catalogBrowse";
+import { openAiSelection } from "../../shared/aiSelection";
 
 export function Practice({
   apiUrl,
   token,
   userId,
   defaultModel,
+  defaultReasoningEffort,
 }: {
   apiUrl: string;
   token: string;
   userId: string;
   defaultModel: string;
+  defaultReasoningEffort: ReasoningEffort | null;
 }) {
   const { browserKey } = useAuth();
+  const { models } = useModelDiscovery();
   const keyState = useSyncExternalStore(browserKey.subscribe, browserKey.getSnapshot);
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [problems, setProblems] = useState<CatalogProblem[]>([]);
@@ -207,7 +213,7 @@ export function Practice({
           ? await generateIntegratedPlan(
               apiUrl,
               token,
-              defaultModel,
+              openAiSelection(defaultModel, models, defaultReasoningEffort),
               browserKey.getKey(userId) ?? "",
             )
           : await loadDailyPlan(apiUrl, token),
@@ -382,6 +388,7 @@ export function Practice({
               token={token}
               userId={userId}
               defaultModel={defaultModel}
+              defaultReasoningEffort={defaultReasoningEffort}
               attempt={attempt}
               hintsAvailable={seconds === 0}
               disabled={busy}
@@ -410,7 +417,7 @@ export function Practice({
                 try {
                   setAssessmentDraft(
                     await generateAssessmentDraft(apiUrl, token, {
-                      selection: { providerId: "openai", model: defaultModel },
+                      selection: openAiSelection(defaultModel, models, defaultReasoningEffort),
                       apiKey: browserKey.getKey(userId) ?? "",
                       attemptId: attempt.id,
                     }),

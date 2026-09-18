@@ -57,6 +57,20 @@ describe("model discovery service", () => {
     });
   });
 
+  it("reports reasoning capabilities for supported discovered models", async () => {
+    const provider: ProviderModelDiscoveryAdapter = {
+      discoverModels: vi.fn().mockResolvedValue(["gpt-5.5", "gpt-4.1"]),
+    };
+    const service = createModelDiscoveryService({ provider });
+
+    await expect(service.discover("profile-a", request)).resolves.toMatchObject({
+      models: [
+        { id: "gpt-5.5", reasoningEfforts: ["none", "minimal", "low", "medium", "high", "xhigh"] },
+        { id: "gpt-4.1", reasoningEfforts: [] },
+      ],
+    });
+  });
+
   it("does not cache provider failures", async () => {
     const provider: ProviderModelDiscoveryAdapter = {
       discoverModels: vi
@@ -114,7 +128,7 @@ describe("model discovery route", () => {
     expect(await response.json()).toEqual({
       providerId: "openai",
       state: "READY",
-      models: [{ id: "gpt-4.1" }],
+      models: [{ id: "gpt-4.1", reasoningEfforts: [] }],
     });
     expect(provider.discoverModels).toHaveBeenCalledWith(
       expect.objectContaining({ providerId: "openai", apiKey: "private-key" }),

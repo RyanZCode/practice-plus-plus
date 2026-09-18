@@ -4,6 +4,7 @@ import { createPrismaSettingsStore } from "./settings.js";
 
 const settings = {
   defaultAiModel: "gpt-5.4-mini" as const,
+  reasoningEffort: null,
   attemptTimerMinutes: 30,
   dailyTarget: 2,
   redoIntervals: { high: 1, low: 7, medium: 3 },
@@ -13,6 +14,7 @@ const settings = {
 
 const settingsRecord = {
   defaultAiModel: "gpt-5.4-mini",
+  reasoningEffort: null,
   attemptTimerMinutes: 30,
   dailyTarget: 2,
   highIntervalDays: 1,

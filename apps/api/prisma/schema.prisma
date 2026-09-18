@@ -61,6 +61,7 @@ model UserProfile {
 model PracticeSettings {
   userProfileId       String      @id @map("user_profile_id") @db.Uuid
   defaultAiModel      String      @default("gpt-5.4-mini") @map("default_ai_model") @db.VarChar(200)
+  reasoningEffort     String?     @map("reasoning_effort") @db.VarChar(20)
   attemptTimerMinutes Int         @default(30) @map("attempt_timer_minutes") @db.SmallInt
   timeZone            String      @map("time_zone") @db.VarChar(100)
   resetMinutes        Int         @map("reset_minutes") @db.SmallInt

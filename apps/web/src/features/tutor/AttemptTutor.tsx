@@ -3,12 +3,15 @@ import {
   tutorRequestSchema,
   type Attempt,
   type MemorySuggestion,
+  type ReasoningEffort,
   type TutorHelp,
 } from "@practice-plus-plus/contracts";
 import { useAuth } from "../auth/auth";
+import { useModelDiscovery } from "../settings/ModelDiscovery";
 import { recentCoachMessages, streamTutor } from "../coach/coachApi";
 import { MarkdownMessage } from "../../shared/MarkdownMessage";
 import { OpenAIModelSelect } from "../settings/OpenAIModelSelect";
+import { ReasoningEffortSelect } from "../settings/ReasoningEffortSelect";
 import {
   checkpointMessages,
   loadMemorySuggestions,
@@ -20,6 +23,7 @@ import {
   saveTutorConversation,
   type StoredTutorMessage,
 } from "./tutorConversationStorage";
+import { openAiSelection } from "../../shared/aiSelection";
 
 const levels = ["Small nudge", "Key idea", "Approach outline"];
 const actions = ["Get a small nudge", "Show me the key idea", "Outline the approach"];
@@ -30,6 +34,7 @@ export function AttemptTutor({
   token,
   userId,
   defaultModel,
+  defaultReasoningEffort,
   attempt,
   hintsAvailable,
   disabled,
@@ -40,6 +45,7 @@ export function AttemptTutor({
   token: string;
   userId: string;
   defaultModel: string;
+  defaultReasoningEffort: ReasoningEffort | null;
   attempt: Attempt;
   hintsAvailable: boolean;
   disabled: boolean;
@@ -47,9 +53,14 @@ export function AttemptTutor({
   onBusy: (busy: boolean) => void;
 }) {
   const { browserKey } = useAuth();
+  const { models } = useModelDiscovery();
   const keyState = useSyncExternalStore(browserKey.subscribe, browserKey.getSnapshot);
   const [model, setModel] = useState(defaultModel);
   useEffect(() => setModel(defaultModel), [defaultModel]);
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | null>(
+    defaultReasoningEffort,
+  );
+  useEffect(() => setReasoningEffort(defaultReasoningEffort), [defaultReasoningEffort]);
   const [draft, setDraft] = useState("");
   const stored = useRef(loadTutorConversation(window.sessionStorage, userId, attempt.id));
   const [messages, setMessages] = useState<Message[]>(stored.current.messages);
@@ -111,7 +122,7 @@ export function AttemptTutor({
     setCheckpointError(undefined);
     try {
       const result = await saveCheckpoint(apiUrl, token, {
-        selection: { providerId: "openai", model },
+        selection: openAiSelection(model, models, reasoningEffort),
         apiKey: browserKey.getKey(userId) ?? "",
         mode: "ATTEMPT_TUTOR",
         attemptId: attempt.id,
@@ -162,7 +173,7 @@ export function AttemptTutor({
       if (saved) contextMessages = [];
     }
     const input = tutorRequestSchema.safeParse({
-      selection: { providerId: "openai", model },
+      selection: openAiSelection(model, models, reasoningEffort),
       apiKey: browserKey.getKey(userId),
       attemptId: attempt.id,
       help: requested,
@@ -246,11 +257,17 @@ export function AttemptTutor({
           {hintsAvailable || gaveUp ? "Tutor workspace" : "Ask for clarification or debugging help"}
         </summary>
         <div className="settings-form">
-          <div className="tutor-control-grid">
+          <div className="ai-control-grid">
             <OpenAIModelSelect
               value={model}
               disabled={busy || checkpointBusy || disabled}
               onChange={setModel}
+            />
+            <ReasoningEffortSelect
+              model={model}
+              value={reasoningEffort}
+              disabled={busy || checkpointBusy || disabled}
+              onChange={setReasoningEffort}
             />
             {!gaveUp ? (
               <label>

@@ -3,8 +3,10 @@ import {
   openAiModels,
   providerIdSchema,
   providerSelectionSchema,
+  reasoningEffortValues,
   type ProviderId,
   type ProviderModelDiscoveryRequest,
+  type ReasoningEffort,
   type ProviderSelection,
   type ProvidersResponse,
 } from "@practice-plus-plus/contracts";
@@ -20,6 +22,13 @@ const providers: Record<ProviderId, { name: string; endpoint: string; modelsEndp
 };
 
 const compatibleChatModels = new Set<string>(openAiModels);
+
+export function supportedReasoningEfforts(
+  providerId: ProviderId,
+  model: string,
+): readonly ReasoningEffort[] {
+  return providerId === "openai" && compatibleChatModels.has(model) ? reasoningEffortValues : [];
+}
 
 export function getProviders(): ProvidersResponse {
   return { providers: [{ id: "openai", name: providers.openai.name }] };
@@ -104,6 +113,12 @@ export function createProviderAdapter(
         stream: true,
         store: false,
         max_completion_tokens: 4096,
+        ...(selection.data.reasoningEffort !== undefined &&
+        supportedReasoningEfforts(selection.data.providerId, selection.data.model).includes(
+          selection.data.reasoningEffort,
+        )
+          ? { reasoning_effort: selection.data.reasoningEffort }
+          : {}),
         ...(request.format === "json"
           ? { response_format: { type: "json_object" } }
           : request.format === undefined
