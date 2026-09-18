@@ -39,6 +39,68 @@ async function collect(fetcher: typeof fetch, input = request): Promise<string[]
 afterEach(() => vi.useRealTimers());
 
 describe("provider adapter", () => {
+  it("discovers only allowlisted regular GPT models and removes duplicates", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            { id: "text-embedding-3-small" },
+            { id: "gpt-6-astra" },
+            { id: "gpt-5.6-luna" },
+            { id: "gpt-5.6-luna" },
+            { id: "gpt-5.6-terra" },
+            { id: "gpt-5.6-sol" },
+            { id: "gpt-5.5" },
+            { id: "gpt-5.4" },
+            { id: "gpt-4.1" },
+            { id: "dall-e-3" },
+            { id: "unknown-model" },
+            { id: "model with spaces" },
+          ],
+        }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const models = await createProviderAdapter(fetcher).discoverModels({
+      providerId: "openai",
+      apiKey: "private-key",
+    });
+
+    expect(models).toEqual([
+      "gpt-6-astra",
+      "gpt-5.6-luna",
+      "gpt-5.6-terra",
+      "gpt-5.6-sol",
+      "gpt-5.5",
+    ]);
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://api.openai.com/v1/models",
+      expect.objectContaining({
+        method: "GET",
+        redirect: "manual",
+        headers: {
+          accept: "application/json",
+          authorization: "Bearer private-key",
+        },
+      }),
+    );
+  });
+
+  it("normalizes discovery failures without reading the upstream body", async () => {
+    const response = new Response("private-key private-response", { status: 401 });
+    const read = vi.spyOn(response, "text");
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response);
+
+    await expect(
+      createProviderAdapter(fetcher).discoverModels({
+        providerId: "openai",
+        apiKey: "private-key",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_credentials" });
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it.each(["\n", "\r\n", "\r"])(
     "streams fragmented UTF-8 and %j event boundaries",
     async (newline) => {

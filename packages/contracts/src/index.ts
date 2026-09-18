@@ -12,7 +12,13 @@ export * from "./context.js";
 export const providerIdSchema = z.enum(["openai"]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
-export const openAiModels = ["gpt-5.4-mini", "gpt-5.4", "gpt-4.1-mini", "gpt-4.1"] as const;
+export const openAiModels = [
+  "gpt-6-astra",
+  "gpt-5.6-luna",
+  "gpt-5.6-terra",
+  "gpt-5.6-sol",
+  "gpt-5.5",
+] as const;
 export const modelNameSchema = z
   .string()
   .trim()
@@ -25,6 +31,25 @@ export const providerSelectionSchema = z.strictObject({
   model: modelNameSchema,
 });
 export type ProviderSelection = z.infer<typeof providerSelectionSchema>;
+
+export const providerModelSchema = z.strictObject({ id: modelNameSchema });
+export type ProviderModel = z.infer<typeof providerModelSchema>;
+
+export const providerModelDiscoveryRequestSchema = z.strictObject({
+  providerId: providerIdSchema,
+  apiKey: z.string().regex(/^[\x21-\x7e]{1,4096}$/),
+});
+export type ProviderModelDiscoveryRequest = z.infer<typeof providerModelDiscoveryRequestSchema>;
+
+export const providerModelDiscoveryStateSchema = z.enum(["READY", "EMPTY"]);
+export type ProviderModelDiscoveryState = z.infer<typeof providerModelDiscoveryStateSchema>;
+
+export const providerModelDiscoveryResponseSchema = z.strictObject({
+  providerId: providerIdSchema,
+  state: providerModelDiscoveryStateSchema,
+  models: z.array(providerModelSchema),
+});
+export type ProviderModelDiscoveryResponse = z.infer<typeof providerModelDiscoveryResponseSchema>;
 
 export const coachRequestSchema = z
   .strictObject({
@@ -198,7 +223,7 @@ const wholeDaysSchema = z.number().int().min(1).max(90);
 
 export const practiceSettingsSchema = z
   .strictObject({
-    defaultAiModel: z.enum(openAiModels),
+    defaultAiModel: modelNameSchema,
     attemptTimerMinutes: z.number().int().min(1).max(180),
     dailyTarget: z.number().int().min(1).max(10),
     redoIntervals: z.strictObject({

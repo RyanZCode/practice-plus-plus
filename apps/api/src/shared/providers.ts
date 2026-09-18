@@ -1,15 +1,25 @@
 import {
+  modelNameSchema,
+  openAiModels,
+  providerIdSchema,
   providerSelectionSchema,
   type ProviderId,
+  type ProviderModelDiscoveryRequest,
   type ProviderSelection,
   type ProvidersResponse,
 } from "@practice-plus-plus/contracts";
 
 import { HttpError } from "./errors.js";
 
-const providers: Record<ProviderId, { name: string; endpoint: string }> = {
-  openai: { name: "OpenAI", endpoint: "https://api.openai.com/v1/chat/completions" },
+const providers: Record<ProviderId, { name: string; endpoint: string; modelsEndpoint: string }> = {
+  openai: {
+    name: "OpenAI",
+    endpoint: "https://api.openai.com/v1/chat/completions",
+    modelsEndpoint: "https://api.openai.com/v1/models",
+  },
 };
+
+const compatibleChatModels = new Set<string>(openAiModels);
 
 export function getProviders(): ProvidersResponse {
   return { providers: [{ id: "openai", name: providers.openai.name }] };
@@ -54,11 +64,20 @@ export interface ProviderAdapter {
   streamText(request: ProviderRequest): AsyncIterable<string>;
 }
 
+export interface ProviderModelDiscoveryAdapter {
+  discoverModels(
+    request: ProviderModelDiscoveryRequest & { readonly signal?: AbortSignal },
+  ): Promise<readonly string[]>;
+}
+
 const timeoutMs = 120_000;
 const maxRequestBytes = 64 * 1024;
 const maxResponseBytes = 2 * 1024 * 1024;
+const maxModelResponseBytes = 512 * 1024;
 
-export function createProviderAdapter(fetcher: typeof fetch = fetch): ProviderAdapter {
+export function createProviderAdapter(
+  fetcher: typeof fetch = fetch,
+): ProviderAdapter & ProviderModelDiscoveryAdapter {
   return {
     async *streamText(request) {
       const selection = providerSelectionSchema.safeParse(request.selection);
@@ -203,7 +222,127 @@ export function createProviderAdapter(fetcher: typeof fetch = fetch): ProviderAd
         }
       }
     },
+    discoverModels: (request) => discoverModels(request, fetcher),
   };
+}
+
+async function discoverModels(
+  request: ProviderModelDiscoveryRequest & { readonly signal?: AbortSignal },
+  fetcher: typeof fetch,
+): Promise<readonly string[]> {
+  const providerId = providerIdSchema.safeParse(request.providerId);
+  if (!providerId.success || !isValidApiKey(request.apiKey)) {
+    throw new ProviderError("invalid_request");
+  }
+
+  const controller = new AbortController();
+  const signal = request.signal
+    ? AbortSignal.any([request.signal, controller.signal])
+    : controller.signal;
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  let response: Response | undefined;
+  try {
+    signal.throwIfAborted();
+    response = await fetcher(providers[providerId.data].modelsEndpoint, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${request.apiKey}`,
+      },
+      signal,
+    });
+    if (response.status >= 300 && response.status < 400) {
+      throw new ProviderError("redirect_rejected");
+    }
+    if (!response.ok) throw providerErrorForStatus(response.status);
+    if (response.body === null) throw new ProviderError("invalid_response");
+
+    return parseModelList(await readResponseBody(response.body, signal));
+  } catch (error) {
+    if (timedOut) throw new ProviderError("timeout");
+    if (signal.aborted) throw new ProviderError("cancelled");
+    if (error instanceof ProviderError) throw error;
+    throw new ProviderError("unavailable");
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+    if (response?.body && !response.body.locked) {
+      await response.body.cancel().catch(() => undefined);
+    }
+  }
+}
+
+function parseModelList(body: string): readonly string[] {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    throw new ProviderError("invalid_response");
+  }
+  if (!isRecord(payload) || !Array.isArray(payload.data)) {
+    throw new ProviderError("invalid_response");
+  }
+
+  const models: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of payload.data) {
+    if (!isRecord(entry) || typeof entry.id !== "string") continue;
+    const parsedId = modelNameSchema.safeParse(entry.id);
+    if (!parsedId.success || !compatibleChatModels.has(parsedId.data) || seen.has(parsedId.data)) {
+      continue;
+    }
+    seen.add(parsedId.data);
+    models.push(parsedId.data);
+  }
+  return models;
+}
+
+async function readResponseBody(
+  body: ReadableStream<Uint8Array>,
+  signal: AbortSignal,
+): Promise<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let text = "";
+  let bytes = 0;
+  try {
+    while (true) {
+      signal.throwIfAborted();
+      const part = await reader.read();
+      bytes += part.value?.byteLength ?? 0;
+      if (bytes > maxModelResponseBytes) throw new ProviderError("output_limit");
+      try {
+        text += decoder.decode(part.value, { stream: !part.done });
+      } catch {
+        throw new ProviderError("invalid_response");
+      }
+      if (part.done) return text;
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+}
+
+function providerErrorForStatus(status: number): ProviderError {
+  return new ProviderError(
+    status === 401 || status === 403
+      ? "invalid_credentials"
+      : status === 429
+        ? "rate_limited"
+        : [400, 404, 422].includes(status)
+          ? "unsupported_request"
+          : "unavailable",
+  );
+}
+
+function isValidApiKey(value: unknown): value is string {
+  return typeof value === "string" && /^[\x21-\x7e]{1,4096}$/.test(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

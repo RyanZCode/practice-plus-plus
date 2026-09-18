@@ -22,7 +22,7 @@ describe("practice settings contract", () => {
     { ...validSettings, attemptTimerMinutes: 181 },
     { ...validSettings, dailyTarget: 2.5 },
     { ...validSettings, dailyTarget: 11 },
-    { ...validSettings, defaultAiModel: "unlisted-model" },
+    { ...validSettings, defaultAiModel: "model with spaces" },
     { ...validSettings, resetTime: "24:00" },
     { ...validSettings, timeZone: "Toronto" },
     { ...validSettings, redoIntervals: { high: 0, low: 7, medium: 3 } },

@@ -40,6 +40,10 @@ import {
 } from "../features/external-ai/externalAiExport.js";
 import { createPlanningRouter, type PlanningOptions } from "../features/daily-plan/planning.js";
 import { createAnalyticsRouter, type AnalyticsStore } from "../features/analytics/analytics.js";
+import {
+  createModelDiscoveryRouter,
+  type ModelDiscoveryOptions,
+} from "../features/model-discovery/modelDiscovery.js";
 import { requireAuthentication, type AccessTokenVerifier } from "../shared/auth.js";
 import { requireAdministrator } from "../features/account/authorization.js";
 import { handleError, notFound } from "../shared/errors.js";
@@ -63,6 +67,7 @@ interface AuthenticationOptions {
   readonly externalAiExport?: ExternalAiExportOptions;
   readonly planning?: PlanningOptions;
   readonly analyticsStore?: AnalyticsStore;
+  readonly modelDiscovery?: ModelDiscoveryOptions;
   readonly verifier: AccessTokenVerifier;
 }
 
@@ -134,6 +139,15 @@ export function createApp(options: AppOptions = {}): Express {
         authenticate,
         resolveProfile,
         createPlanningRouter(options.authentication.planning),
+      );
+    }
+
+    if (options.authentication.modelDiscovery !== undefined) {
+      app.use(
+        "/ai/models",
+        authenticate,
+        resolveProfile,
+        createModelDiscoveryRouter(options.authentication.modelDiscovery),
       );
     }
 

@@ -301,6 +301,21 @@ button.secondary-button:disabled {
   margin-top: 0;
 }
 
+.model-selector {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.model-selector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+
+.model-selector-actions button {
+  margin-top: 0;
+}
+
 .settings-status,
 .settings-form {
   max-width: 46rem;
@@ -930,6 +945,11 @@ summary:focus-visible {
   white-space: nowrap;
 }
 
+.catalog-sort-menu summary {
+  min-height: 2.75rem;
+  padding: 0.6rem 0.9rem;
+}
+
 .catalog-filter-menu summary::-webkit-details-marker,
 .catalog-sort-menu summary::-webkit-details-marker {
   display: none;
@@ -1071,6 +1091,16 @@ summary:focus-visible {
   margin-top: 0.3rem;
   color: #5f6b7d;
   font-size: 0.75rem;
+}
+
+.catalog-filter-panel fieldset:last-of-type label {
+  min-height: 2.25rem;
+  line-height: 1.35;
+}
+
+.catalog-filter-panel fieldset:last-of-type p {
+  margin-top: 0.45rem;
+  line-height: 1.35;
 }
 
 .catalog-clear-filters {
@@ -1692,6 +1722,14 @@ summary:focus-visible {
   justify-self: end;
 }
 
+.streak-calendar-toolbar .secondary-button:first-child {
+  justify-self: start;
+}
+
+.streak-calendar-toolbar .secondary-button {
+  width: 10rem;
+}
+
 .streak-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -2041,6 +2079,10 @@ summary:focus-visible {
     text-align: center;
   }
 
+  .streak-calendar-toolbar .secondary-button {
+    width: 100%;
+  }
+
   .streak-calendar-toolbar .secondary-button:last-child {
     justify-self: stretch;
   }
@@ -2345,6 +2387,18 @@ summary:focus-visible {
 
 [data-theme="dark"] .catalog-control-value {
   color: #8bc5eb;
+}
+
+[data-theme="dark"] .catalog-difficulty-easy {
+  color: #34d399;
+}
+
+[data-theme="dark"] .catalog-difficulty-medium {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .catalog-difficulty-hard {
+  color: #fb7185;
 }
 
 [data-theme="dark"] .catalog-clear-filters {
