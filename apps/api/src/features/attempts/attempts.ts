@@ -2,6 +2,7 @@ import {
   activeAttemptResponseSchema,
   attemptHistoryQuerySchema,
   attemptHistoryResponseSchema,
+  attemptHistoryPageSize,
   type AttemptHistoryQuery,
   type AttemptHistoryResponse,
   attemptSchema,
@@ -75,6 +76,7 @@ export interface AttemptStore {
   report(userProfileId: string, attemptId: string, input: ReportAttempt): Promise<Attempt>;
   active(userProfileId: string): Promise<Attempt | null>;
   start(userProfileId: string, problemId: string, now: Date): Promise<Attempt>;
+  startExtra(userProfileId: string, now: Date, problemId?: string): Promise<Attempt | null>;
   skip(userProfileId: string, attemptId: string, now: Date): Promise<Attempt>;
   pause(userProfileId: string, attemptId: string, now: Date): Promise<Attempt>;
   resume(userProfileId: string, attemptId: string, now: Date): Promise<Attempt>;
@@ -144,34 +146,25 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
       });
     },
     async history(userProfileId, query) {
-      const records = await client.attempt.findMany({
-        where: {
-          userProfileId,
-          confirmedAt: { not: null },
-          ...(query.before === undefined || query.beforeId === undefined
-            ? {}
-            : {
-                OR: [
-                  { confirmedAt: { lt: new Date(query.before) } },
-                  { confirmedAt: new Date(query.before), id: { lt: query.beforeId } },
-                ],
-              }),
-        },
-        orderBy: [{ confirmedAt: "desc" }, { id: "desc" }],
-        take: 21,
-        select,
-      });
-      const page = records.slice(0, 20);
-      const last = page.at(-1);
+      const where = {
+        userProfileId,
+        confirmedAt: { not: null },
+        ...(query.problemId === undefined ? {} : { problemId: query.problemId }),
+      } satisfies Prisma.AttemptWhereInput;
+      const [total, records] = await Promise.all([
+        client.attempt.count({ where }),
+        client.attempt.findMany({
+          where,
+          orderBy: [{ confirmedAt: "desc" }, { id: "desc" }],
+          skip: (query.page - 1) * attemptHistoryPageSize,
+          take: attemptHistoryPageSize,
+          select,
+        }),
+      ]);
       return attemptHistoryResponseSchema.parse({
-        attempts: page.map(toAttempt),
-        next:
-          records.length > 20 && last
-            ? {
-                before: last.confirmedAt?.toISOString(),
-                beforeId: last.id,
-              }
-            : null,
+        attempts: records.map(toAttempt),
+        page: query.page,
+        totalPages: Math.ceil(total / attemptHistoryPageSize),
       });
     },
     async report(userProfileId, attemptId, input) {
@@ -459,6 +452,98 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
         return present(tx, userProfileId, record);
       });
     },
+    async startExtra(userProfileId, now, problemId) {
+      return client.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM user_profiles WHERE id = ${userProfileId}::uuid FOR UPDATE`;
+        const active = await tx.attempt.findFirst({
+          where: { userProfileId, confirmedAt: null },
+          select,
+        });
+        if (active !== null) {
+          throw new HttpError(409, "Finish your active attempt before starting another problem.");
+        }
+
+        const settings = await tx.practiceSettings.findUnique({ where: { userProfileId } });
+        if (settings === null) {
+          throw new HttpError(409, "Save your practice settings before starting an attempt.");
+        }
+        const plan = await tx.dailyPlan.findUnique({
+          where: { userProfileId },
+          select: {
+            practiceDate: true,
+            timeZone: true,
+            resetMinutes: true,
+            items: { select: { attempt: { select: { confirmedAt: true, outcome: true } } } },
+          },
+        });
+        if (
+          plan === null ||
+          practiceDateFor(now, plan) !== plan.practiceDate.toISOString().slice(0, 10) ||
+          plan.items.length === 0 ||
+          plan.items.some(
+            (item) =>
+              item.attempt === null ||
+              item.attempt.confirmedAt === null ||
+              (item.attempt.outcome !== "INDEPENDENT" &&
+                item.attempt.outcome !== "ASSISTED" &&
+                item.attempt.outcome !== "GAVE_UP"),
+          )
+        ) {
+          throw new HttpError(409, "Complete today's saved plan before starting extra practice.");
+        }
+        const practiceDate = plan.practiceDate.toISOString().slice(0, 10);
+
+        const candidates = await tx.problem.findMany({
+          where: {
+            published: true,
+            ...(settings.difficultyPreference === "ANY"
+              ? {}
+              : {
+                  difficulty:
+                    settings.difficultyPreference === "EASIER"
+                      ? { in: ["EASY", "MEDIUM"] }
+                      : "MEDIUM",
+                }),
+            availability: settings.allowPremiumProblems
+              ? { not: "UNAVAILABLE" }
+              : { notIn: ["PAID_ONLY", "UNAVAILABLE"] },
+          },
+          orderBy:
+            settings.difficultyPreference === "EASIER"
+              ? [{ difficulty: "asc" }, { leetcodeId: "asc" }]
+              : { leetcodeId: "asc" },
+          select: { id: true },
+        });
+        const attempts = await tx.attempt.findMany({
+          where: { userProfileId },
+          select: { problemId: true },
+        });
+        const attempted = new Set(attempts.map((attempt) => attempt.problemId));
+        const problem =
+          problemId === undefined
+            ? candidates.find((candidate) => !attempted.has(candidate.id))
+            : candidates.find(
+                (candidate) => candidate.id === problemId && !attempted.has(candidate.id),
+              );
+        if (problemId !== undefined && problem === undefined) {
+          throw new HttpError(409, "That extra practice problem is no longer eligible.");
+        }
+        if (problem === undefined) return null;
+
+        const record = await tx.attempt.create({
+          data: {
+            userProfileId,
+            problemId: problem.id,
+            type: "FRESH",
+            practiceDate: new Date(`${practiceDate}T00:00:00.000Z`),
+            startedAt: now,
+            timerEndsAt: new Date(now.getTime() + settings.attemptTimerMinutes * 60_000),
+          },
+          select,
+        });
+        return present(tx, userProfileId, record);
+      });
+    },
     async skip(userProfileId, attemptId, now) {
       return client.$transaction(async (tx) => {
         await tx.attempt.updateMany({
@@ -507,6 +592,22 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
 
 export function createAttemptRouter(store: AttemptStore, clock = () => new Date()): Router {
   const router = Router();
+  router.post("/extra", async (request, response) => {
+    if (
+      request.body !== undefined &&
+      (request.body === null ||
+        typeof request.body !== "object" ||
+        Array.isArray(request.body) ||
+        Object.keys(request.body).length > 0)
+    ) {
+      throw new HttpError(400, "Extra practice does not accept request data.");
+    }
+    response.json(
+      activeAttemptResponseSchema.parse({
+        attempt: await store.startExtra(getApplicationProfile(request).id, clock()),
+      }),
+    );
+  });
   router.put("/:attemptId/review", async (request, response) => {
     const id = attemptSchema.shape.id.safeParse(request.params.attemptId);
     const input = reviewOverrideSchema.safeParse(request.body);
@@ -522,11 +623,10 @@ export function createAttemptRouter(store: AttemptStore, clock = () => new Date(
     );
   });
   router.get("/", async (request, response) => {
-    const query = attemptHistoryQuerySchema.safeParse(request.query);
-    if (!query.success) throw new HttpError(400, "Invalid history page.");
+    const query = parseHistoryQuery(request.query);
     response.json(
       attemptHistoryResponseSchema.parse(
-        await store.history(getApplicationProfile(request).id, query.data),
+        await store.history(getApplicationProfile(request).id, query),
       ),
     );
   });
@@ -605,6 +705,27 @@ export function createAttemptRouter(store: AttemptStore, clock = () => new Date(
     );
   });
   return router;
+}
+
+function parseHistoryQuery(rawQuery: unknown): AttemptHistoryQuery {
+  if (rawQuery === null || typeof rawQuery !== "object" || Array.isArray(rawQuery)) {
+    throw new HttpError(400, "Invalid history page.");
+  }
+  const query = rawQuery as Record<string, unknown>;
+  if (Object.keys(query).some((key) => key !== "page" && key !== "problemId")) {
+    throw new HttpError(400, "Invalid history page.");
+  }
+  const rawPage = query.page;
+  const page = rawPage === undefined ? 1 : typeof rawPage === "string" ? Number(rawPage) : null;
+  const problemId =
+    query.problemId === undefined
+      ? undefined
+      : typeof query.problemId === "string"
+        ? query.problemId
+        : null;
+  const parsed = attemptHistoryQuerySchema.safeParse({ page, problemId });
+  if (!parsed.success) throw new HttpError(400, "Invalid history page.");
+  return parsed.data;
 }
 
 function toAttempt(record: AttemptRecord): Attempt {

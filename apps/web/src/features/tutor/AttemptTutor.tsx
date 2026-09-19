@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   tutorRequestSchema,
+  tutorHintNames,
   type Attempt,
   type MemorySuggestion,
   type ReasoningEffort,
@@ -25,8 +26,12 @@ import {
 } from "./tutorConversationStorage";
 import { openAiSelection } from "../../shared/aiSelection";
 
-const levels = ["Small nudge", "Key idea", "Approach outline"];
-const actions = ["Get a small nudge", "Show me the key idea", "Outline the approach"];
+const actions = [
+  "Get a small nudge",
+  "Show me the key idea",
+  "Outline the approach",
+  "Show the solution and explanation",
+];
 type Message = StoredTutorMessage;
 
 export function AttemptTutor({
@@ -73,6 +78,7 @@ export function AttemptTutor({
   const [checkpointError, setCheckpointError] = useState<string>();
   const [error, setError] = useState<string>();
   const active = useRef<AbortController | null>(null);
+  const messagesRef = useRef<HTMLOListElement>(null);
   useEffect(
     () => () => {
       active.current?.abort();
@@ -97,8 +103,12 @@ export function AttemptTutor({
       active = false;
     };
   }, [apiUrl, token, attempt.id]);
+  useEffect(() => {
+    const container = messagesRef.current;
+    if (container !== null) container.scrollTop = container.scrollHeight;
+  }, [messages]);
   const highest = Math.min(
-    3,
+    tutorHintNames.length,
     Math.max(
       0,
       ...attempt.assistance
@@ -153,7 +163,7 @@ export function AttemptTutor({
     if (active.current || disabled || checkpointBusy) return;
     const label =
       requested.type === "CONCEPTUAL_HINT"
-        ? levels[requested.hintLevel - 1]!
+        ? tutorHintNames[requested.hintLevel - 1]!
         : requested.type === "SOLUTION_REVIEW"
           ? "Solution review"
           : requested.type === "OPTIMIZATION"
@@ -242,8 +252,8 @@ export function AttemptTutor({
       <h3>Attempt tutor</h3>
       <p className="settings-help">
         Ask for clarification, debugging help, or progressive hints. Messages and pasted code are
-        sent to OpenAI and kept in this browser session. Only the help category and hint level are
-        saved.
+        sent to OpenAI and kept in this browser session. Only the help category and selected
+        guidance step are saved.
       </p>
       {!keyState.hasKey ? (
         <p role="status">Add your OpenAI API key in Practice settings to use the tutor.</p>
@@ -290,7 +300,7 @@ export function AttemptTutor({
                   <option value="DEBUGGING">Debugging pasted code</option>
                   <option value="OPTIMIZATION">Complexity analysis and optimization</option>
                   {highest > 0 ? (
-                    <option value="CONCEPTUAL_HINT">Discuss {levels[highest - 1]}</option>
+                    <option value="CONCEPTUAL_HINT">Discuss {tutorHintNames[highest - 1]}</option>
                   ) : null}
                 </select>
               </label>
@@ -301,10 +311,10 @@ export function AttemptTutor({
               <div>
                 <strong>Progressive hints</strong>
                 <p className="settings-help">
-                  Current level: {highest === 0 ? "None" : levels[highest - 1]}
+                  Current guidance: {highest === 0 ? "None" : tutorHintNames[highest - 1]}
                 </p>
               </div>
-              {highest < 3 ? (
+              {highest < tutorHintNames.length ? (
                 <div className="account-actions">
                   <button
                     type="button"
@@ -326,20 +336,17 @@ export function AttemptTutor({
                       onClick={() =>
                         void send(
                           { type: "CONCEPTUAL_HINT", hintLevel: highest },
-                          `Give me another ${levels[highest - 1]!.toLowerCase()} without revealing more.`,
+                          `Give me another ${tutorHintNames[highest - 1]!.toLowerCase()} without revealing more.`,
                         )
                       }
                     >
-                      Ask for another {levels[highest - 1]!.toLowerCase()}
+                      Ask for another {tutorHintNames[highest - 1]!.toLowerCase()}
                     </button>
                   ) : null}
                 </div>
               ) : (
                 <div>
-                  <p>
-                    Keep working independently, discuss the outline, or use the give-up action
-                    below.
-                  </p>
+                  <p>Keep working independently, or ask for another solution and explanation.</p>
                   <button
                     className="secondary-button"
                     type="button"
@@ -347,17 +354,18 @@ export function AttemptTutor({
                     onClick={() =>
                       void send(
                         { type: "CONCEPTUAL_HINT", hintLevel: highest },
-                        "Give me another approach outline without revealing more.",
+                        "Explain the solution and why it works again.",
                       )
                     }
                   >
-                    Ask for another approach outline
+                    Ask for another solution and explanation
                   </button>
                 </div>
               )}
             </div>
           ) : null}
           <ol
+            ref={messagesRef}
             className="coach-messages"
             aria-label="Tutor conversation"
             aria-live="polite"

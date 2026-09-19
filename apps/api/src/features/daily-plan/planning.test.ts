@@ -68,18 +68,29 @@ afterEach(async () => {
   );
 });
 
-async function setup(response: unknown) {
-  const assemble = vi.fn().mockResolvedValue(packet);
+async function setup(response: unknown, savedPlan = false, candidates = packet.candidates) {
+  const assemble = vi.fn().mockResolvedValue({
+    ...packet,
+    candidates,
+    current: { ...packet.current, savedPlan },
+  });
   const current = vi.fn().mockResolvedValue(plan);
   const recommended = vi.fn().mockResolvedValue(plan);
+  const startExtra = vi.fn().mockResolvedValue(null);
   const streamText = vi.fn().mockImplementation(async function* () {
+    if (response instanceof Error) throw response;
     yield JSON.stringify(response);
   });
   const store = { current, saved: vi.fn().mockResolvedValue(null), recommended };
   const app = createApp({
     logger: pino({ level: "silent" }),
     authentication: {
-      planning: { assembler: { assemble }, provider: { streamText }, store },
+      planning: {
+        assembler: { assemble },
+        provider: { streamText },
+        store,
+        extra: { startExtra },
+      },
       profileStore: {
         resolveByAuthSubject: vi.fn().mockResolvedValue({ id: userId, role: "USER" }),
       },
@@ -91,13 +102,25 @@ async function setup(response: unknown) {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (address === null || typeof address === "string") throw new Error("No port");
-  return { url: `http://127.0.0.1:${address.port}`, assemble, current, recommended };
+  return {
+    url: `http://127.0.0.1:${address.port}`,
+    assemble,
+    current,
+    recommended,
+    startExtra,
+    streamText,
+  };
 }
 
 const recommendation = {
   version: 1,
   planningStateId: stateId,
   freshProblemIds: [secondId, firstId],
+};
+const extraRecommendation = {
+  version: 1,
+  planningStateId: stateId,
+  problemId: firstId,
 };
 const headers = { authorization: "Bearer token", "content-type": "application/json" };
 
@@ -158,6 +181,69 @@ describe("AI planning", () => {
     expect(confirmed.status).toBe(200);
     expect(harness.assemble).toHaveBeenCalledTimes(2);
     expect(harness.recommended).toHaveBeenCalledOnce();
+  });
+
+  it("starts an AI-selected extra problem without changing the saved plan", async () => {
+    const harness = await setup(extraRecommendation, true);
+    const response = await fetch(`${harness.url}/ai/planning/extra`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        selection: { providerId: "openai", model: "gpt-5.4-mini" },
+        apiKey: "secret",
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ attempt: null });
+    expect(harness.startExtra).toHaveBeenCalledExactlyOnceWith(userId, expect.any(Date), firstId);
+    expect(harness.recommended).not.toHaveBeenCalled();
+  });
+
+  it("shows an error when the AI extra recommendation is invalid", async () => {
+    const harness = await setup({ ...extraRecommendation, problemId: "fabricated" }, true);
+    const response = await fetch(`${harness.url}/ai/planning/extra`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        selection: { providerId: "openai", model: "gpt-5.4-mini" },
+        apiKey: "secret",
+      }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: "The extra-practice recommendation is invalid.",
+    });
+    expect(harness.startExtra).not.toHaveBeenCalled();
+  });
+
+  it("shows an error when the AI extra provider fails", async () => {
+    const harness = await setup(new Error("provider failed"), true);
+    const response = await fetch(`${harness.url}/ai/planning/extra`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        selection: { providerId: "openai", model: "gpt-5.4-mini" },
+        apiKey: "secret",
+      }),
+    });
+    expect(response.status).toBe(500);
+    expect(harness.startExtra).not.toHaveBeenCalled();
+  });
+
+  it("reports no eligible extra practice without calling the provider", async () => {
+    const harness = await setup(extraRecommendation, true, []);
+    const response = await fetch(`${harness.url}/ai/planning/extra`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        selection: { providerId: "openai", model: "gpt-5.4-mini" },
+        apiKey: "secret",
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ attempt: null });
+    expect(harness.streamText).not.toHaveBeenCalled();
+    expect(harness.startExtra).toHaveBeenCalledExactlyOnceWith(userId, expect.any(Date));
   });
 
   it("rejects stale and fabricated external recommendations without saving", async () => {

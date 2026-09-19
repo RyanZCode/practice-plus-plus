@@ -115,6 +115,7 @@ describe("external AI context export", () => {
     expect(result.markdown.slice(marker)).toContain("Trees");
     expect(result.markdown).toContain("Begin independent work");
     expect(result.markdown).toContain("Request a small nudge");
+    expect(result.markdown).toContain("Request the solution and explanation");
     expect(result.markdown).toContain("Give up and review a solution");
     expect(result.markdown).toContain("Record the result");
     expect(result.markdown).toContain("Return only JSON with version 1");

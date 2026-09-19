@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Attempt } from "@practice-plus-plus/contracts";
-import { remainingSeconds } from "./attemptState";
+import { attemptDocumentTitle, formatRemainingSeconds, remainingSeconds } from "./attemptState";
 
 const attempt: Attempt = {
   review: null,
@@ -30,6 +30,18 @@ const attempt: Attempt = {
   },
 };
 describe("attempt timer", () => {
+  it("formats the active timer for the browser tab title", () => {
+    expect(formatRemainingSeconds(1799)).toBe("29:59");
+    expect(attemptDocumentTitle(attempt, 1799)).toBe("29:59 · Two Sum | Practice++");
+    expect(
+      attemptDocumentTitle({ ...attempt, timerPausedAt: "2026-09-07T03:10:00.000Z" }, 1200),
+    ).toBe("Paused 20:00 · Two Sum | Practice++");
+    expect(attemptDocumentTitle(attempt, 0)).toBe("Time up · Two Sum | Practice++");
+    expect(attemptDocumentTitle({ ...attempt, timerSkippedAt: attempt.startedAt }, 0)).toBe(
+      "Practice++",
+    );
+  });
+
   it("starts at thirty minutes and derives elapsed time after refresh or a background tab", () => {
     const start = Date.parse(attempt.startedAt);
     expect(remainingSeconds(attempt, start)).toBe(1800);

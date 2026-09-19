@@ -32,13 +32,16 @@ export const contextPolicySchema = z.discriminatedUnion("mode", [
       attemptId: z.uuid(),
       phase: z.enum(["INDEPENDENT", "HELP", "SOLUTION_REVIEW", "RESULT"]),
       help: z.enum(["CLARIFICATION", "CONCEPTUAL_HINT", "DEBUGGING", "OPTIMIZATION"]).optional(),
-      hintLevel: z.number().int().min(1).max(3).optional(),
+      hintLevel: z.number().int().min(1).max(4).optional(),
     })
     .superRefine((policy, ctx) => {
       if ((policy.phase === "HELP") !== (policy.help !== undefined))
         ctx.addIssue({ code: "custom", message: "Select help only in the help phase" });
       if ((policy.help === "CONCEPTUAL_HINT") !== (policy.hintLevel !== undefined))
-        ctx.addIssue({ code: "custom", message: "Select a level only for conceptual hints" });
+        ctx.addIssue({
+          code: "custom",
+          message: "Select a guidance step only for conceptual hints",
+        });
     }),
 ]);
 export const contextRequestSchema = z.strictObject({

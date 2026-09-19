@@ -1,6 +1,7 @@
 import {
   suggestedOutcome,
   redoNextActionSchema,
+  tutorHintNames,
   type Assistance,
   type Attempt,
   type AttemptAssessmentDraft,
@@ -18,6 +19,11 @@ const assistanceOptions: { type: Assistance["type"]; label: string }[] = [
   { type: "SOLUTION_REVIEW", label: "Editorial or solution review" },
 ];
 
+type DraftAssessmentInput = {
+  completedCode: string | null;
+  currentSummary: NonNullable<ConfirmAttempt["summary"]> | null;
+};
+
 export function AttemptOutcomeForm({
   attempt,
   busy,
@@ -26,6 +32,8 @@ export function AttemptOutcomeForm({
   memorySuggestions,
   assessmentDraft,
   canDraftAssessment,
+  completedCode,
+  onCompletedCodeChange,
   onDraftAssessment,
 }: {
   attempt: Attempt;
@@ -33,7 +41,9 @@ export function AttemptOutcomeForm({
   memorySuggestions: MemorySuggestion[];
   assessmentDraft: AttemptAssessmentDraft | null;
   canDraftAssessment: boolean;
-  onDraftAssessment: () => Promise<void>;
+  completedCode: string;
+  onCompletedCodeChange: (value: string) => void;
+  onDraftAssessment: (input: DraftAssessmentInput) => Promise<void>;
   onConfirm: (input: ConfirmAttempt) => Promise<void>;
   onReport: (input: ReportAttempt) => Promise<void>;
 }) {
@@ -72,6 +82,13 @@ export function AttemptOutcomeForm({
     const suggestion = suggestedOutcome([...attempt.assistance, ...next]);
     if (suggestion !== null) setOutcome(attempt.outcome === "GAVE_UP" ? "GAVE_UP" : suggestion);
     if (type === "SOLUTION_REVIEW") setReproduced(null);
+  }
+
+  function currentSummaryForDraft(): DraftAssessmentInput["currentSummary"] {
+    const current = Object.fromEntries(
+      Object.entries(summary).map(([key, value]) => [key, value.trim() || null]),
+    ) as NonNullable<ConfirmAttempt["summary"]>;
+    return Object.values(current).every((value) => value === null) ? null : current;
   }
 
   return (
@@ -161,11 +178,29 @@ export function AttemptOutcomeForm({
         ) : null}
         {attempt.outcome !== null ? (
           <div>
+            <label>
+              Completed code (optional)
+              <textarea
+                value={completedCode}
+                maxLength={16000}
+                rows={10}
+                placeholder="Paste the code you completed for this problem."
+                onChange={(event) => onCompletedCodeChange(event.target.value)}
+              />
+            </label>
+            <p className="settings-help">
+              Used only when drafting the AI assessment. It is not saved with the attempt.
+            </p>
             <button
               type="button"
               className="secondary-button"
               disabled={busy || !canDraftAssessment}
-              onClick={() => void onDraftAssessment()}
+              onClick={() =>
+                void onDraftAssessment({
+                  completedCode: completedCode.trim() || null,
+                  currentSummary: currentSummaryForDraft(),
+                })
+              }
             >
               {assessmentDraft === null ? "Draft assessment with AI" : "Regenerate AI draft"}
             </button>
@@ -189,7 +224,7 @@ export function AttemptOutcomeForm({
             {attempt.assistance
               .map(
                 (event) =>
-                  `${assistanceOptions.find((option) => option.type === event.type)?.label}${event.hintLevel === null ? "" : ` (level ${event.hintLevel})`}`,
+                  `${assistanceOptions.find((option) => option.type === event.type)?.label}${event.hintLevel === null ? "" : ` (${tutorHintNames[event.hintLevel - 1] ?? "Guidance step"})`}`,
               )
               .join(", ")}
           </p>
@@ -210,12 +245,11 @@ export function AttemptOutcomeForm({
             ))}
           {assistance.some((event) => event.type === "CONCEPTUAL_HINT") ? (
             <label>
-              Highest hint level (optional)
-              <input
-                type="number"
-                min="1"
-                max="32767"
-                step="1"
+              Highest guidance step (optional)
+              <select
+                value={String(
+                  assistance.find((event) => event.type === "CONCEPTUAL_HINT")?.hintLevel ?? "",
+                )}
                 onChange={(event) => {
                   const level = event.target.value === "" ? null : Number(event.target.value);
                   setAssistance((current) =>
@@ -224,7 +258,14 @@ export function AttemptOutcomeForm({
                     ),
                   );
                 }}
-              />
+              >
+                <option value="">Not specified</option>
+                {tutorHintNames.map((name, index) => (
+                  <option key={name} value={index + 1}>
+                    {name}
+                  </option>
+                ))}
+              </select>
             </label>
           ) : null}
         </details>

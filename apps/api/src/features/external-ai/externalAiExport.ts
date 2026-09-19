@@ -1,6 +1,7 @@
 import {
   externalAiExportRequestSchema,
   externalAiExportResponseSchema,
+  tutorHintNames,
   type ContextPacket,
   type ContextRequest,
   type ExternalAiExportRequest,
@@ -38,6 +39,10 @@ const conversationTransitions = [
     "Continue as my attempt tutor. Outline the approach step by step without complete code.",
   ],
   [
+    "Request the solution and explanation",
+    "Continue as my attempt tutor. Give the complete solution and explain why it works. This is the final progressive guidance step and does not by itself record an outcome.",
+  ],
+  [
     "Give up and review a solution",
     "I explicitly give up and request solution review. A full solution is now permitted. Then ask me to close the reference and code it from memory. Keep the recorded outcome as gave up.",
   ],
@@ -62,7 +67,9 @@ function modeLabel(policy: ExternalAiExportRequest["policy"]): string {
     return policy.purpose === "PLANNING" ? "Practice planning" : "General coaching";
   if (policy.phase !== "HELP") return `Attempt tutor: ${policy.phase.toLowerCase()}`;
   return `Attempt tutor: ${policy.help!.toLowerCase()}${
-    policy.hintLevel === undefined ? "" : ` level ${policy.hintLevel}`
+    policy.hintLevel === undefined
+      ? ""
+      : `, ${tutorHintNames[policy.hintLevel - 1] ?? "selected guidance step"}`
   }`;
 }
 

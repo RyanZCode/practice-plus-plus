@@ -99,7 +99,7 @@ async function setup(
 }
 
 describe("attempt tutor", () => {
-  it("enforces the timer, sequential ladder and explicit give-up", () => {
+  it("enforces the timer, sequential guidance and explicit solution review", () => {
     expect(() => assertTutorHelp({ ...attempt, timerSkippedAt: null }, input.help, now)).toThrow(
       "timer",
     );
@@ -117,6 +117,20 @@ describe("attempt tutor", () => {
       assertTutorHelp(
         { ...attempt, assistance: [{ type: "CONCEPTUAL_HINT", hintLevel: 1 }] },
         { type: "CONCEPTUAL_HINT", hintLevel: 2 },
+        now,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertTutorHelp(
+        {
+          ...attempt,
+          assistance: [
+            { type: "CONCEPTUAL_HINT", hintLevel: 1 },
+            { type: "CONCEPTUAL_HINT", hintLevel: 2 },
+            { type: "CONCEPTUAL_HINT", hintLevel: 3 },
+          ],
+        },
+        { type: "CONCEPTUAL_HINT", hintLevel: 4 },
         now,
       ),
     ).not.toThrow();
@@ -140,6 +154,10 @@ describe("attempt tutor", () => {
     expect(
       tutorRequestSchema.safeParse({ ...input, help: { type: "CONCEPTUAL_HINT", hintLevel: 4 } })
         .success,
+    ).toBe(true);
+    expect(
+      tutorRequestSchema.safeParse({ ...input, help: { type: "CONCEPTUAL_HINT", hintLevel: 5 } })
+        .success,
     ).toBe(false);
   });
 
@@ -147,6 +165,7 @@ describe("attempt tutor", () => {
     [{ type: "CONCEPTUAL_HINT", hintLevel: 1 }, "without naming the pattern"],
     [{ type: "CONCEPTUAL_HINT", hintLevel: 2 }, "without the complete algorithm"],
     [{ type: "CONCEPTUAL_HINT", hintLevel: 3 }, "without complete code"],
+    [{ type: "CONCEPTUAL_HINT", hintLevel: 4 }, "complete solution and explain why it works"],
     [{ type: "DEBUGGING" }, "local faults"],
     [{ type: "CLARIFICATION" }, "without solution clues"],
     [{ type: "OPTIMIZATION" }, "complexity analysis"],
@@ -181,6 +200,7 @@ describe("attempt tutor", () => {
         expect.any(Date),
       );
       expect(captured?.messages[0]?.content).toContain(boundary);
+      expect(captured?.messages[0]?.content).not.toContain("level");
       expect(captured?.messages.at(-1)?.content).toBe("private-code");
       for (const secret of [
         "private-key",

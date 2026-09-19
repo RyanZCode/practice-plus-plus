@@ -72,8 +72,15 @@ export const coachRequestSchema = z
   .refine((request) => request.messages.at(-1)?.role === "user");
 export type CoachRequest = z.infer<typeof coachRequestSchema>;
 
+export const tutorHintNames = [
+  "Small nudge",
+  "Key idea",
+  "Approach outline",
+  "Solution and explanation",
+] as const;
+
 export const tutorHelpSchema = z.discriminatedUnion("type", [
-  z.strictObject({ type: z.literal("CONCEPTUAL_HINT"), hintLevel: z.number().int().min(1).max(3) }),
+  z.strictObject({ type: z.literal("CONCEPTUAL_HINT"), hintLevel: z.number().int().min(1).max(4) }),
   z.strictObject({
     type: z.enum(["CLARIFICATION", "DEBUGGING", "OPTIMIZATION", "SOLUTION_REVIEW"]),
   }),
@@ -160,9 +167,12 @@ const assessmentTextSchema = z
 
 export const assessmentEvidenceSchema = z.enum([
   "ATTEMPT",
+  "COMPLETED_CODE",
+  "CURRENT_SUMMARY",
   "ASSISTANCE_EVENTS",
   "ATTEMPT_SUMMARY",
   "CONVERSATION_SUMMARY",
+  "TUTOR_CONVERSATION",
 ]);
 export const attemptAssessmentDraftInputSchema = z.strictObject({
   outcome: z.enum(["INDEPENDENT", "ASSISTED", "GAVE_UP", "INCOMPLETE"]),
@@ -478,7 +488,7 @@ export const assistanceSchema = z
     hintLevel: z.number().int().positive().max(32767).nullable(),
   })
   .refine((value) => value.type === "CONCEPTUAL_HINT" || value.hintLevel === null, {
-    message: "Hint level applies only to conceptual hints.",
+    message: "Guidance step applies only to conceptual hints.",
   });
 export const redoNextActionSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("REPEAT") }),
@@ -546,12 +556,11 @@ export const attemptSchema = z.strictObject({
 export const activeAttemptResponseSchema = z.strictObject({ attempt: attemptSchema.nullable() });
 export type Attempt = z.infer<typeof attemptSchema>;
 
-export const attemptHistoryQuerySchema = z
-  .strictObject({
-    before: z.string().datetime().optional(),
-    beforeId: z.string().uuid().optional(),
-  })
-  .refine((value) => (value.before === undefined) === (value.beforeId === undefined));
+export const attemptHistoryPageSize = 20;
+export const attemptHistoryQuerySchema = z.strictObject({
+  page: z.number().int().positive(),
+  problemId: z.uuid().optional(),
+});
 export type AttemptHistoryQuery = z.infer<typeof attemptHistoryQuerySchema>;
 export const attemptHistoryResponseSchema = z.strictObject({
   attempts: z
@@ -561,8 +570,9 @@ export const attemptHistoryResponseSchema = z.strictObject({
         outcome: attemptOutcomeSchema,
       }),
     )
-    .max(20),
-  next: attemptHistoryQuerySchema.nullable(),
+    .max(attemptHistoryPageSize),
+  page: z.number().int().positive(),
+  totalPages: z.number().int().nonnegative(),
 });
 export type AttemptHistoryResponse = z.infer<typeof attemptHistoryResponseSchema>;
 
@@ -721,6 +731,13 @@ export const planningRecommendationSchema = z.strictObject({
   freshProblemIds: z.array(z.string().uuid()).max(10),
 });
 export type PlanningRecommendation = z.infer<typeof planningRecommendationSchema>;
+
+export const extraPracticeRecommendationSchema = z.strictObject({
+  version: z.literal(1),
+  planningStateId: z.string().regex(/^[a-f0-9]{64}$/),
+  problemId: z.string().uuid(),
+});
+export type ExtraPracticeRecommendation = z.infer<typeof extraPracticeRecommendationSchema>;
 
 export const integratedPlanningRequestSchema = z.strictObject({
   selection: providerSelectionSchema,

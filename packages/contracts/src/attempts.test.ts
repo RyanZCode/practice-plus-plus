@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   attemptAssessmentDraftInputSchema,
+  attemptAssessmentRequestSchema,
   confirmAttemptSchema,
   suggestedOutcome,
 } from "./index.js";
@@ -54,6 +55,7 @@ describe("attempt confirmation", () => {
     { outcome: "INDEPENDENT", timeSpentSeconds: -1 },
     { outcome: "ASSISTED", assistance: [{ type: "DEBUGGING", hintLevel: 1 }] },
     { outcome: "ASSISTED", assistance: [{ type: "CONCEPTUAL_HINT", hintLevel: 0 }] },
+    { outcome: "ASSISTED", assistance: [{ type: "CONCEPTUAL_HINT", hintLevel: 32768 }] },
   ])("rejects invalid confirmation %j", (input) => {
     expect(confirmAttemptSchema.safeParse(input).success).toBe(false);
   });
@@ -61,6 +63,7 @@ describe("attempt confirmation", () => {
     expect(suggestedOutcome([])).toBeNull();
     expect(suggestedOutcome([{ type: "CLARIFICATION", hintLevel: null }])).toBeNull();
     expect(suggestedOutcome([{ type: "CONCEPTUAL_HINT", hintLevel: 2 }])).toBe("ASSISTED");
+    expect(suggestedOutcome([{ type: "CONCEPTUAL_HINT", hintLevel: 4 }])).toBe("ASSISTED");
     expect(
       suggestedOutcome([
         { type: "CONCEPTUAL_HINT", hintLevel: 2 },
@@ -85,6 +88,35 @@ describe("attempt assessment draft", () => {
 
   it("accepts bounded structured evidence", () => {
     expect(attemptAssessmentDraftInputSchema.parse(draft)).toEqual(draft);
+  });
+
+  it("accepts completed code only as transient assessment input", () => {
+    const request = {
+      selection: { providerId: "openai", model: "test-model" },
+      apiKey: "private-key",
+      attemptId: "6931f7d2-86fc-43e1-82e0-e23a263925a5",
+      completedCode: "const answer = solve(input);",
+      currentSummary: {
+        approach: "Tracked a moving frontier.",
+        stuckPoint: null,
+        misconception: null,
+        assistance: null,
+        progressTrigger: null,
+        finalUnderstanding: null,
+        nextTeachingAction: null,
+      },
+      tutorMessages: [{ role: "user", content: "I was stuck on the invariant." }],
+    };
+    expect(attemptAssessmentRequestSchema.parse(request).completedCode).toBe(request.completedCode);
+    expect(attemptAssessmentRequestSchema.parse(request).tutorMessages).toEqual(
+      request.tutorMessages,
+    );
+    expect(
+      attemptAssessmentRequestSchema.safeParse({
+        ...request,
+        completedCode: "x".repeat(16001),
+      }).success,
+    ).toBe(false);
   });
 
   it.each([

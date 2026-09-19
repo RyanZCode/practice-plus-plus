@@ -98,21 +98,31 @@ describe("attempt routes", () => {
   });
   it("authenticates history and rejects invalid or forged pagination", async () => {
     const { store } = database();
-    const history = vi.spyOn(store, "history").mockResolvedValue({ attempts: [], next: null });
+    const history = vi
+      .spyOn(store, "history")
+      .mockResolvedValue({ attempts: [], page: 1, totalPages: 0 });
     const url = await server(store);
     expect((await fetch(`${url}/attempts`)).status).toBe(401);
     for (const query of [
       "userProfileId=other",
       "limit=1000",
-      "before=invalid",
-      `beforeId=${attempt.id}`,
-      "before=2026-09-08T00:00:00.000Z&beforeId=invalid",
+      "page=0",
+      "page=1.5",
+      "page=invalid",
+      "problemId=invalid",
+      "page=1&userProfileId=other",
     ]) {
       expect((await fetch(`${url}/attempts?${query}`, { headers })).status).toBe(400);
     }
     expect(history).not.toHaveBeenCalled();
     expect((await fetch(`${url}/attempts`, { headers })).status).toBe(200);
-    expect(history).toHaveBeenCalledExactlyOnceWith(userId, {});
+    expect(history).toHaveBeenCalledExactlyOnceWith(userId, { page: 1 });
+    expect((await fetch(`${url}/attempts?page=2`, { headers })).status).toBe(200);
+    expect(history).toHaveBeenLastCalledWith(userId, { page: 2 });
+    expect(
+      (await fetch(`${url}/attempts?page=2&problemId=${attempt.problem.id}`, { headers })).status,
+    ).toBe(200);
+    expect(history).toHaveBeenLastCalledWith(userId, { page: 2, problemId: attempt.problem.id });
   });
   it("authenticates result reporting and rejects incomplete or forged input", async () => {
     const { store } = database();
@@ -152,6 +162,7 @@ describe("attempt routes", () => {
       history: vi.fn(),
       active: vi.fn(),
       start: vi.fn(),
+      startExtra: vi.fn(),
       skip: vi.fn(),
       pause: vi.fn(),
       resume: vi.fn(),
@@ -236,6 +247,7 @@ describe("attempt routes", () => {
       history: vi.fn(),
       active: vi.fn().mockResolvedValue(attempt),
       start: vi.fn().mockResolvedValue(attempt),
+      startExtra: vi.fn().mockResolvedValue(attempt),
       skip: vi.fn().mockResolvedValue(attempt),
       pause: vi.fn().mockResolvedValue(attempt),
       resume: vi.fn().mockResolvedValue(attempt),
@@ -277,12 +289,36 @@ describe("attempt routes", () => {
     expect(store.pause).toHaveBeenCalledWith(userId, attempt.id, expect.any(Date));
     expect(store.resume).toHaveBeenCalledWith(userId, attempt.id, expect.any(Date));
   });
+  it("authenticates extra practice and never accepts client-selected data", async () => {
+    const { store } = database();
+    const startExtra = vi.spyOn(store, "startExtra").mockResolvedValue(attempt);
+    const url = await server(store);
+    expect((await fetch(`${url}/attempts/extra`, { method: "POST" })).status).toBe(401);
+    expect(
+      (
+        await fetch(`${url}/attempts/extra`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ problemId }),
+        })
+      ).status,
+    ).toBe(400);
+    const response = await fetch(`${url}/attempts/extra`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({}),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ attempt });
+    expect(startExtra).toHaveBeenCalledExactlyOnceWith(userId, expect.any(Date));
+  });
   it("rejects client-supplied ownership, type, practice date, and invalid identifiers", async () => {
     const store = {
       overrideReview: vi.fn(),
       history: vi.fn(),
       active: vi.fn(),
       start: vi.fn(),
+      startExtra: vi.fn(),
       skip: vi.fn(),
       pause: vi.fn(),
       resume: vi.fn(),
@@ -323,13 +359,17 @@ function database() {
     problemPattern: { findMany: vi.fn().mockResolvedValue([]) },
     $queryRaw: vi.fn().mockResolvedValue([]),
     attempt: {
+      count: vi.fn().mockResolvedValue(0),
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue(record),
       update: vi.fn().mockResolvedValue(record),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
-    problem: { findFirst: vi.fn().mockResolvedValue({ id: problemId }) },
+    problem: {
+      findFirst: vi.fn().mockResolvedValue({ id: problemId }),
+      findMany: vi.fn().mockResolvedValue([{ id: problemId }]),
+    },
     practiceSettings: {
       findUnique: vi.fn().mockResolvedValue({
         timeZone: "America/Toronto",
@@ -338,6 +378,8 @@ function database() {
         mediumIntervalDays: 3,
         lowIntervalDays: 7,
         attemptTimerMinutes: 45,
+        allowPremiumProblems: true,
+        difficultyPreference: "ANY",
       }),
     },
   };
@@ -709,10 +751,12 @@ describe("attempt persistence", () => {
       code: "must not be returned",
       problem: { ...record.problem, patterns: ["hidden"] },
     }));
-    tx.attempt.findMany.mockResolvedValue(rows);
-    const first = await store.history(userId, {});
+    tx.attempt.count.mockResolvedValue(21);
+    tx.attempt.findMany.mockResolvedValue(rows.slice(0, 20));
+    const first = await store.history(userId, { page: 1 });
     expect(first.attempts).toHaveLength(20);
-    expect(first.next).toEqual({ before: confirmedAt.toISOString(), beforeId: rows[19]?.id });
+    expect(first.page).toBe(1);
+    expect(first.totalPages).toBe(2);
     expect(first.attempts[0]).toMatchObject({
       outcome: "INCOMPLETE",
       approach: "Tracked the running total.",
@@ -722,26 +766,31 @@ describe("attempt persistence", () => {
       expect.objectContaining({
         where: { userProfileId: userId, confirmedAt: { not: null } },
         orderBy: [{ confirmedAt: "desc" }, { id: "desc" }],
-        take: 21,
+        skip: 0,
+        take: 20,
       }),
     );
     tx.attempt.findMany.mockResolvedValue([rows[20]]);
-    const second = await store.history(userId, first.next ?? {});
+    const second = await store.history(userId, { page: 2 });
     expect(second.attempts).toHaveLength(1);
-    expect(second.next).toBeNull();
+    expect(second.page).toBe(2);
+    expect(second.totalPages).toBe(2);
     expect(tx.attempt.findMany).toHaveBeenLastCalledWith(
       expect.objectContaining({
         where: {
           userProfileId: userId,
           confirmedAt: { not: null },
-          OR: [{ confirmedAt: { lt: confirmedAt } }, { confirmedAt, id: { lt: rows[19]?.id } }],
         },
+        skip: 20,
+        take: 20,
       }),
     );
+    tx.attempt.count.mockResolvedValue(0);
     tx.attempt.findMany.mockResolvedValue([]);
-    expect(await store.history("another-owner", first.next ?? {})).toEqual({
+    expect(await store.history("another-owner", { page: 1 })).toEqual({
       attempts: [],
-      next: null,
+      page: 1,
+      totalPages: 0,
     });
     expect(tx.attempt.findMany).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -752,6 +801,25 @@ describe("attempt persistence", () => {
       }),
     );
     expect(tx.problemPattern.findMany).not.toHaveBeenCalled();
+  });
+
+  it("filters confirmed history by problem when requested", async () => {
+    const { tx, store } = database();
+    tx.attempt.count.mockResolvedValue(1);
+    tx.attempt.findMany.mockResolvedValue([
+      { ...record, confirmedAt: new Date("2026-09-10T12:00:00Z"), outcome: "INDEPENDENT" },
+    ]);
+
+    await store.history(userId, { page: 1, problemId });
+
+    expect(tx.attempt.count).toHaveBeenCalledWith({
+      where: { userProfileId: userId, confirmedAt: { not: null }, problemId },
+    });
+    expect(tx.attempt.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userProfileId: userId, confirmedAt: { not: null }, problemId },
+      }),
+    );
   });
   it.each(["INDEPENDENT", "ASSISTED", "GAVE_UP"] as const)(
     "reports %s without confirmation and survives reload",
@@ -1120,6 +1188,79 @@ describe("attempt persistence", () => {
     await expect(store.start(userId, "other", new Date())).rejects.toMatchObject({
       statusCode: 409,
     });
+    expect(tx.attempt.create).not.toHaveBeenCalled();
+  });
+  it("starts one eligible extra problem outside the saved plan", async () => {
+    const { tx, store } = database();
+    const now = new Date("2026-09-09T12:00:00Z");
+    tx.dailyPlan.findUnique.mockResolvedValue({
+      practiceDate: new Date("2026-09-09T00:00:00Z"),
+      timeZone: "UTC",
+      resetMinutes: 0,
+      items: [
+        {
+          attempt: { confirmedAt: new Date("2026-09-09T13:00:00Z"), outcome: "INDEPENDENT" },
+        },
+      ],
+    });
+    tx.practiceSettings.findUnique.mockResolvedValue({
+      timeZone: "America/Toronto",
+      resetMinutes: 240,
+      highIntervalDays: 1,
+      mediumIntervalDays: 3,
+      lowIntervalDays: 7,
+      attemptTimerMinutes: 45,
+      allowPremiumProblems: false,
+      difficultyPreference: "EASIER",
+    });
+    tx.problem.findMany.mockResolvedValue([{ id: "fresh-problem" }, { id: problemId }]);
+    tx.attempt.findMany.mockResolvedValue([{ problemId: "fresh-problem" }]);
+    await store.startExtra(userId, now);
+
+    expect(tx.problem.findMany).toHaveBeenCalledWith({
+      where: {
+        published: true,
+        difficulty: { in: ["EASY", "MEDIUM"] },
+        availability: { notIn: ["PAID_ONLY", "UNAVAILABLE"] },
+      },
+      orderBy: [{ difficulty: "asc" }, { leetcodeId: "asc" }],
+      select: { id: true },
+    });
+    expect(tx.attempt.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          problemId,
+          type: "FRESH",
+          practiceDate: new Date("2026-09-09T00:00:00Z"),
+        }),
+      }),
+    );
+    expect(tx.dailyPlanItem.update).not.toHaveBeenCalled();
+  });
+  it("requires a completed current plan and reports when no fresh problem remains", async () => {
+    const { tx, store } = database();
+    tx.dailyPlan.findUnique.mockResolvedValue({
+      practiceDate: new Date("2026-09-09T00:00:00Z"),
+      timeZone: "UTC",
+      resetMinutes: 0,
+      items: [{ attempt: null }],
+    });
+    await expect(store.startExtra(userId, new Date("2026-09-09T12:00:00Z"))).rejects.toThrow(
+      "Complete today's saved plan",
+    );
+
+    tx.dailyPlan.findUnique.mockResolvedValue({
+      practiceDate: new Date("2026-09-09T00:00:00Z"),
+      timeZone: "UTC",
+      resetMinutes: 0,
+      items: [
+        {
+          attempt: { confirmedAt: new Date("2026-09-09T13:00:00Z"), outcome: "ASSISTED" },
+        },
+      ],
+    });
+    tx.problem.findMany.mockResolvedValue([]);
+    await expect(store.startExtra(userId, new Date("2026-09-09T12:00:00Z"))).resolves.toBeNull();
     expect(tx.attempt.create).not.toHaveBeenCalled();
   });
   it("rejects missing settings and ineligible problems", async () => {

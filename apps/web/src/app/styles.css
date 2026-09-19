@@ -356,6 +356,26 @@ button.secondary-button:disabled {
   font-weight: 650;
 }
 
+.settings-form label.premium-setting {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.settings-form .premium-setting input[type="checkbox"] {
+  width: auto;
+  min-height: auto;
+  margin-top: 0.25rem;
+  padding: 0;
+  border: 0;
+}
+
+.premium-setting .settings-help {
+  display: block;
+  margin-top: 0.4rem;
+  font-weight: 400;
+}
+
 .settings-form input,
 .settings-form select {
   min-width: 0;
@@ -564,6 +584,31 @@ button.secondary-button:disabled {
   margin: 0;
   flex-shrink: 0;
 }
+.problem-list-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 6rem;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid #b8d9c9;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.problem-list-status-finished {
+  color: #047857;
+  background: #ecfdf5;
+}
+
+.problem-list-status-incomplete {
+  border-color: #e8d39a;
+  color: #a16207;
+  background: #fffbeb;
+}
 .countdown {
   font-size: 2.25rem;
   font-variant-numeric: tabular-nums;
@@ -738,29 +783,37 @@ button.secondary-button:disabled {
 
 .outcome-form fieldset {
   min-width: 0;
-  margin: 1.5rem 0;
+  margin: 2rem 0;
   padding: 0;
   border: 0;
+}
+
+.outcome-form {
+  line-height: 1.5;
 }
 
 .outcome-form > fieldset {
   margin-bottom: 0;
 }
 
+.outcome-form > fieldset > :is(p, div) {
+  margin-top: 1.25rem;
+}
+
 .outcome-form > fieldset > button {
-  margin-top: 0.75rem;
+  margin-top: 1.25rem;
 }
 
 .outcome-form legend {
   padding: 0;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   font-weight: 650;
 }
 
 .outcome-form label,
 .review-date-form label {
   display: block;
-  margin-top: 0.75rem;
+  margin-top: 1rem;
 }
 
 .outcome-form select,
@@ -770,7 +823,7 @@ button.secondary-button:disabled {
 .review-date-form input {
   display: block;
   width: 100%;
-  margin-top: 0.4rem;
+  margin-top: 0.5rem;
   padding: 0.5rem;
   font: inherit;
   border: 1px solid #b8c0cc;
@@ -801,12 +854,29 @@ summary:focus-visible {
 }
 
 .outcome-form details {
+  margin-top: 1.5rem;
+}
+
+.outcome-form p {
+  line-height: 1.5;
+}
+
+.outcome-form fieldset > p,
+.outcome-form details > p {
   margin-top: 1rem;
 }
 
 .history-list {
   list-style: none;
   padding: 0;
+}
+
+.attempt-history-error {
+  padding-bottom: 2rem;
+}
+
+.attempt-history-error > button {
+  margin-top: 1rem;
 }
 
 #attempt-history-heading,
@@ -817,8 +887,7 @@ summary:focus-visible {
 .history-pagination {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: flex-start;
   margin: 1rem 0;
   padding: 0.75rem;
   border: 1px solid #dce1e9;
@@ -826,20 +895,34 @@ summary:focus-visible {
   background: #ffffff;
 }
 
+.history-page-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.history-page-link,
+.history-page-current {
+  display: inline-grid;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.75rem;
+  place-items: center;
+}
+
+.history-page-current {
+  border: 1px solid #075985;
+  border-radius: 0.5rem;
+  color: #ffffff;
+  background: #0969a8;
+  font-weight: 650;
+}
+
 .history-pagination-sticky {
   position: sticky;
   z-index: 1;
   top: 1rem;
-}
-
-.history-pagination .account-actions {
-  justify-content: flex-end;
-}
-
-.history-pagination a {
-  padding: 0.65rem 0.25rem;
-  color: #075985;
-  font-weight: 650;
 }
 
 .history-list li {
@@ -1094,8 +1177,13 @@ summary:focus-visible {
 }
 
 .catalog-filter-panel fieldset:last-of-type label {
+  align-items: flex-start;
   min-height: 2.25rem;
   line-height: 1.35;
+}
+
+.catalog-filter-panel fieldset:last-of-type input {
+  margin-top: 0.2rem;
 }
 
 .catalog-filter-panel fieldset:last-of-type p {
@@ -1149,7 +1237,8 @@ summary:focus-visible {
 
 .catalog-problem-list li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 6rem 7rem 6rem;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  column-gap: 1.25rem;
   min-height: 3.25rem;
   padding: 0.65rem 0.85rem;
   border: 0;
@@ -1170,11 +1259,39 @@ summary:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.catalog-problem-link {
+  min-height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+}
+
+.catalog-problem-link:hover:not(:disabled),
+.catalog-problem-link:focus-visible {
+  color: #075985;
+  background: transparent;
+  text-decoration: underline;
+}
+
+.catalog-problem-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
 .catalog-difficulty,
 .catalog-availability {
-  text-align: center;
+  text-align: left;
   font-size: 0.875rem;
   font-weight: 650;
+  white-space: nowrap;
 }
 
 .catalog-difficulty-easy {
@@ -1193,10 +1310,87 @@ summary:focus-visible {
   color: #5f6b7d;
 }
 
-.catalog-problem-list li button {
+.catalog-solved {
+  color: #047857;
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.catalog-problem-list li > button {
   width: 100%;
   min-height: 2.25rem;
   padding: 0.4rem 0.65rem;
+}
+
+.catalog-problem-details {
+  margin-top: 1rem;
+}
+
+.catalog-problem-details-back {
+  margin-bottom: 1rem;
+}
+
+.catalog-problem-details-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #dce1e9;
+}
+
+.catalog-problem-details-header h3 {
+  margin: 0.2rem 0 0.35rem;
+}
+
+.catalog-problem-details-header a {
+  flex-shrink: 0;
+}
+
+.catalog-problem-details-section {
+  margin-top: 1.25rem;
+}
+
+.catalog-problem-details-section h4 {
+  margin: 0 0 0.65rem;
+}
+
+.catalog-pattern-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.catalog-pattern-list li {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #b8d9ed;
+  border-radius: 999px;
+  color: #075985;
+  background: #eef7fc;
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.catalog-attempt-history {
+  margin-top: 0;
+}
+
+.catalog-attempt-history h5 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.catalog-attempt-history > li > p {
+  margin: 0.35rem 0 0;
+}
+
+.catalog-load-sentinel {
+  height: 1px;
 }
 
 @media (max-width: 46rem) {
@@ -1209,19 +1403,17 @@ summary:focus-visible {
     grid-column: 1 / -1;
   }
 
-  .catalog-difficulty {
+  .catalog-problem-meta {
     grid-column: 1;
     grid-row: 2;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
   }
 
-  .catalog-availability {
-    grid-column: 1;
-    grid-row: 3;
-  }
-
-  .catalog-problem-list li button {
+  .catalog-problem-list li > button {
     grid-column: 2;
-    grid-row: 2 / span 2;
+    grid-row: 2 / span 3;
   }
 }
 
@@ -1243,9 +1435,16 @@ summary:focus-visible {
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 28rem;
-  overflow-y: auto;
+  height: 40rem;
+  min-height: 16rem;
+  max-height: 75vh;
+  overflow: auto;
   overflow-wrap: anywhere;
+  resize: vertical;
+}
+
+.coach-messages:empty {
+  display: none;
 }
 
 .coach-messages > li {
@@ -2245,6 +2444,18 @@ summary:focus-visible {
   background: #123c2b;
 }
 
+[data-theme="dark"] .problem-list-status-finished {
+  border-color: #31815b;
+  color: #86efac;
+  background: #123c2b;
+}
+
+[data-theme="dark"] .problem-list-status-incomplete {
+  border-color: #806b2e;
+  color: #fde68a;
+  background: #42350b;
+}
+
 [data-theme="dark"] .streak-day-missed,
 [data-theme="dark"] .streak-swatch-missed {
   border-color: #7c2d45;
@@ -2323,7 +2534,6 @@ summary:focus-visible {
 
 [data-theme="dark"] .sign-out-button,
 [data-theme="dark"] .mobile-sign-out,
-[data-theme="dark"] .history-pagination a,
 [data-theme="dark"] .section-navigation a,
 [data-theme="dark"] .markdown-message a,
 [data-theme="dark"] .outcome-form summary,
@@ -2443,6 +2653,26 @@ summary:focus-visible {
   background: #2d3035;
 }
 
+[data-theme="dark"] .catalog-solved {
+  color: #6ee7b7;
+}
+
+[data-theme="dark"] .catalog-problem-link:hover:not(:disabled),
+[data-theme="dark"] .catalog-problem-link:focus-visible {
+  color: #a9d5f2;
+  background: transparent;
+}
+
+[data-theme="dark"] .catalog-problem-details-header {
+  border-color: #3b3f45;
+}
+
+[data-theme="dark"] .catalog-pattern-list li {
+  border-color: #285b78;
+  color: #a9d5f2;
+  background: #123b55;
+}
+
 [data-theme="dark"] .section-navigation a:hover,
 [data-theme="dark"] .section-navigation a:focus-visible {
   background: #2d363d;
@@ -2453,7 +2683,7 @@ summary:focus-visible {
     .mobile-sign-out
   ):not(.secondary-button):not(.danger-button):not(.catalog-clear-filters):not(
     .catalog-sort-option
-  ):not(.catalog-direction-button) {
+  ):not(.catalog-direction-button):not(.catalog-problem-link) {
   border-color: #1377b9;
   background: #00599c;
 }
@@ -2463,7 +2693,7 @@ summary:focus-visible {
     .mobile-sign-out
   ):not(.secondary-button):not(.danger-button):not(.catalog-clear-filters):not(
     .catalog-sort-option
-  ):not(.catalog-direction-button):hover:not(:disabled) {
+  ):not(.catalog-direction-button):not(.catalog-problem-link):hover:not(:disabled) {
   background: #0876b9;
 }
 

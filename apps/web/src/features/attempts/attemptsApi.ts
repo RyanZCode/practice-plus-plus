@@ -6,8 +6,10 @@ import {
   type AttemptHistoryQuery,
   attemptSchema,
   catalogResponseSchema,
+  catalogProblemDetailsResponseSchema,
+  type CatalogListQuery,
+  type CatalogProblemDetailsResponse,
   type Attempt,
-  type CatalogProblem,
   type ConfirmAttempt,
   type ReportAttempt,
 } from "@practice-plus-plus/contracts";
@@ -37,10 +39,21 @@ async function request(
   }
   return response.json();
 }
-export async function loadProblems(apiUrl: string, token: string): Promise<CatalogProblem[]> {
-  return catalogResponseSchema.parse(await request(apiUrl, token, "/catalog/problems")).problems;
-}
+export async function loadProblems(apiUrl: string, token: string, query: CatalogListQuery) {
+  const params = new URLSearchParams({
+    query: query.query,
+    sort: query.sort,
+    sortDirection: query.sortDirection,
+    page: String(query.page),
+    hideSolved: String(query.hideSolved),
+  });
+  if (query.difficulty.length > 0) params.set("difficulty", query.difficulty.join(","));
+  if (query.availability.length > 0) params.set("availability", query.availability.join(","));
 
+  return catalogResponseSchema.parse(
+    await request(apiUrl, token, `/catalog/problems?${params.toString()}`),
+  );
+}
 export async function loadActiveAttempt(apiUrl: string, token: string): Promise<Attempt | null> {
   return activeAttemptResponseSchema.parse(await request(apiUrl, token, "/attempts/active"))
     .attempt;
@@ -50,10 +63,20 @@ export async function loadAttemptHistory(
   token: string,
   query: AttemptHistoryQuery,
 ) {
-  const params = new URLSearchParams();
-  if (query.before !== undefined) params.set("before", query.before);
-  if (query.beforeId !== undefined) params.set("beforeId", query.beforeId);
-  return attemptHistoryResponseSchema.parse(await request(apiUrl, token, `/attempts?${params}`));
+  const params = new URLSearchParams({ page: String(query.page) });
+  if (query.problemId !== undefined) params.set("problemId", query.problemId);
+  return attemptHistoryResponseSchema.parse(
+    await request(apiUrl, token, `/attempts?${params.toString()}`),
+  );
+}
+export async function loadCatalogProblemDetails(
+  apiUrl: string,
+  token: string,
+  problemId: string,
+): Promise<CatalogProblemDetailsResponse> {
+  return catalogProblemDetailsResponseSchema.parse(
+    await request(apiUrl, token, `/catalog/problems/${encodeURIComponent(problemId)}/details`),
+  );
 }
 export async function startAttempt(
   apiUrl: string,
@@ -61,6 +84,10 @@ export async function startAttempt(
   problemId: string,
 ): Promise<Attempt> {
   return attemptSchema.parse(await request(apiUrl, token, "/attempts", { problemId }));
+}
+export async function startExtraPractice(apiUrl: string, token: string): Promise<Attempt | null> {
+  return activeAttemptResponseSchema.parse(await request(apiUrl, token, "/attempts/extra", {}))
+    .attempt;
 }
 export async function skipTimer(
   apiUrl: string,

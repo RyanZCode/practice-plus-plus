@@ -8,7 +8,7 @@ export type CatalogSortDirection = "ASC" | "DESC";
 export interface CatalogBrowseOptions {
   readonly availability: readonly CatalogAvailability[];
   readonly difficulty: readonly CatalogDifficulty[];
-  readonly hidePaid: boolean;
+  readonly hideSolved: boolean;
   readonly query: string;
   readonly sort: CatalogSort;
   readonly sortDirection: CatalogSortDirection;
@@ -21,7 +21,7 @@ const difficultyOrder: Readonly<Record<CatalogProblem["difficulty"], number>> = 
 };
 
 export function browseCatalog(
-  problems: readonly CatalogProblem[],
+  problems: readonly (CatalogProblem & { readonly solved?: boolean })[],
   options: CatalogBrowseOptions,
 ): CatalogProblem[] {
   const query = options.query.trim().toLocaleLowerCase();
@@ -40,7 +40,7 @@ export function browseCatalog(
         (options.difficulty.length === 0 || options.difficulty.includes(problem.difficulty)) &&
         (options.availability.length === 0 ||
           options.availability.includes(problem.availability)) &&
-        (!options.hidePaid || problem.availability !== "PAID_ONLY")
+        (!options.hideSolved || problem.solved !== true)
       );
     })
     .sort((left, right) => {
