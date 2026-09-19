@@ -24,6 +24,7 @@ const database = createDatabase(config.databaseUrl);
 const contextAssembler = createPrismaContextAssembler(database);
 const provider = createProviderAdapter();
 const dailyPlanStore = createPrismaDailyPlanStore(database);
+const attemptStore = createPrismaAttemptStore(database);
 const app = createApp({
   authentication: {
     tutor: {
@@ -43,10 +44,10 @@ const app = createApp({
       store: createPrismaAssessmentStore(database),
     },
     externalAiExport: { assembler: contextAssembler },
-    planning: { assembler: contextAssembler, provider, store: dailyPlanStore },
+    planning: { assembler: contextAssembler, provider, store: dailyPlanStore, extra: attemptStore },
     modelDiscovery: { provider },
     dailyPlanStore,
-    attemptStore: createPrismaAttemptStore(database),
+    attemptStore,
     catalogStore: createPrismaCatalogStore(database),
     catalogImportStore: createPrismaCatalogImportStore(database),
     catalogReviewStore: createPrismaCatalogReviewStore(database),

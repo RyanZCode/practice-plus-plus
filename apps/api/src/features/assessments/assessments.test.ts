@@ -1,5 +1,9 @@
 import { createServer, type Server } from "node:http";
-import type { AttemptAssessmentDraft, ContextPacket } from "@practice-plus-plus/contracts";
+import type {
+  AttemptAssessmentDraft,
+  AttemptAssessmentDraftInput,
+  ContextPacket,
+} from "@practice-plus-plus/contracts";
 import { Writable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -52,6 +56,7 @@ const packet = {
       confidence: null,
       optimality: null,
       approach: null,
+      problem: { leetcodeId: 1, title: "Two Sum", difficulty: "EASY" },
       assistance: [
         {
           id: "e4f94d00-a76f-4a20-af6c-4bb28c4af431",
@@ -93,9 +98,13 @@ afterEach(async () => {
   );
 });
 
-async function setup(provider: ProviderAdapter, store: AssessmentStore) {
+async function setup(
+  provider: ProviderAdapter,
+  store: AssessmentStore,
+  contextPacket: ContextPacket = packet,
+) {
   let logs = "";
-  const assembler = { assemble: vi.fn().mockResolvedValue(packet) };
+  const assembler = { assemble: vi.fn().mockResolvedValue(contextPacket) };
   const server = createServer(
     createApp({
       logger: createLogger(
@@ -147,6 +156,10 @@ describe("attempt assessment drafts", () => {
         selection: { providerId: "openai", model: "test-model" },
         apiKey: "private-key",
         attemptId,
+        completedCode: "const answer = solve(input);",
+        tutorMessages: [
+          { role: "user", content: "I was stuck on maintaining the moving frontier." },
+        ],
       }),
     });
     expect(response.status).toBe(200);
@@ -154,14 +167,176 @@ describe("attempt assessment drafts", () => {
     expect(await response.json()).toEqual(saved);
     expect(assembler.assemble).toHaveBeenCalledWith(
       userId,
-      { policy: { mode: "ATTEMPT_TUTOR", attemptId, phase: "RESULT" }, messages: [] },
+      {
+        policy: { mode: "ATTEMPT_TUTOR", attemptId, phase: "RESULT" },
+        messages: [{ role: "user", content: "I was stuck on maintaining the moving frontier." }],
+      },
       expect.any(Date),
     );
-    expect(store.save).toHaveBeenCalledWith(userId, attemptId, generated);
+    expect(store.save).toHaveBeenCalledWith(userId, attemptId, {
+      ...generated,
+      optimality: "UNKNOWN",
+    });
     expect(providerRequest?.apiKey).toBe("private-key");
     expect(JSON.stringify(providerRequest?.format)).not.toContain("uniqueItems");
     expect(providerRequest?.messages[0]?.content).toContain("structured evidence");
+    expect(providerRequest?.messages[0]?.content).toContain("solution quality");
+    expect(providerRequest?.messages[1]?.content).toContain("const answer = solve(input);");
     expect(providerRequest?.messages[1]?.content).not.toContain("private-key");
+  });
+
+  it("accepts completed code as transient assessment evidence", async () => {
+    const generatedWithCode = {
+      ...generated,
+      evidence: ["ATTEMPT", "ASSISTANCE_EVENTS", "ATTEMPT_SUMMARY", "COMPLETED_CODE"],
+    };
+    const store: AssessmentStore = {
+      find: vi.fn(),
+      save: vi.fn().mockResolvedValue(saved),
+    };
+    const { url } = await setup(
+      {
+        async *streamText() {
+          yield JSON.stringify(generatedWithCode);
+        },
+      },
+      store,
+    );
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { authorization: "Bearer token", "content-type": "application/json" },
+      body: JSON.stringify({
+        selection: { providerId: "openai", model: "test-model" },
+        apiKey: "private-key",
+        attemptId,
+        completedCode: "const answer = solve(input);",
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(store.save).toHaveBeenCalledWith(userId, attemptId, {
+      ...generatedWithCode,
+      optimality: "UNKNOWN",
+    });
+  });
+
+  it("uses unknown solution quality when supplied code cannot be classified", async () => {
+    let savedDraft: AttemptAssessmentDraftInput | undefined;
+    const store: AssessmentStore = {
+      find: vi.fn(),
+      save: vi.fn().mockImplementation(async (_userId, _attemptId, draft) => {
+        savedDraft = draft;
+        return saved;
+      }),
+    };
+    const { url } = await setup(
+      {
+        async *streamText() {
+          yield JSON.stringify({ ...generated, optimality: null });
+        },
+      },
+      store,
+    );
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { authorization: "Bearer token", "content-type": "application/json" },
+      body: JSON.stringify({
+        selection: { providerId: "openai", model: "test-model" },
+        apiKey: "private-key",
+        attemptId,
+        completedCode: "const answer = solve(input);",
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(savedDraft?.optimality).toBe("UNKNOWN");
+  });
+
+  it("preserves current summary details when the model omits them", async () => {
+    let savedDraft: AttemptAssessmentDraftInput | undefined;
+    const currentSummary = {
+      approach: "Tracked a moving frontier.",
+      stuckPoint: "I kept moving the right boundary too early.",
+      misconception: "I treated the frontier as fixed.",
+      assistance: "A hint pointed out the invariant.",
+      progressTrigger: "The invariant explained when the boundary moves.",
+      finalUnderstanding: "The frontier only moves after the invariant holds.",
+      nextTeachingAction: "State the invariant before coding.",
+    };
+    const store: AssessmentStore = {
+      find: vi.fn(),
+      save: vi.fn().mockImplementation(async (_userId, _attemptId, draft) => {
+        savedDraft = draft;
+        return saved;
+      }),
+    };
+    const { url } = await setup(
+      {
+        async *streamText() {
+          yield JSON.stringify({
+            ...generated,
+            summary: { ...generated.summary, stuckPoint: null, misconception: null },
+          });
+        },
+      },
+      store,
+    );
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { authorization: "Bearer token", "content-type": "application/json" },
+      body: JSON.stringify({
+        selection: { providerId: "openai", model: "test-model" },
+        apiKey: "private-key",
+        attemptId,
+        currentSummary,
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(savedDraft?.summary).toMatchObject({
+      stuckPoint: currentSummary.stuckPoint,
+      misconception: currentSummary.misconception,
+    });
+  });
+
+  it("uses the current tutor conversation as transient assessment evidence", async () => {
+    const conversation = {
+      role: "user" as const,
+      content: "I realized the invariant only holds after moving the left boundary.",
+    };
+    const contextWithConversation = {
+      ...packet,
+      messages: [conversation],
+    } as ContextPacket;
+    const generatedWithConversation = {
+      ...generated,
+      evidence: ["ATTEMPT", "ASSISTANCE_EVENTS", "ATTEMPT_SUMMARY", "TUTOR_CONVERSATION" as const],
+    };
+    let providerRequest: ProviderRequest | undefined;
+    const store: AssessmentStore = {
+      find: vi.fn(),
+      save: vi.fn().mockResolvedValue(saved),
+    };
+    const { url } = await setup(
+      {
+        async *streamText(request) {
+          providerRequest = request;
+          yield JSON.stringify(generatedWithConversation);
+        },
+      },
+      store,
+      contextWithConversation,
+    );
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { authorization: "Bearer token", "content-type": "application/json" },
+      body: JSON.stringify({
+        selection: { providerId: "openai", model: "test-model" },
+        apiKey: "private-key",
+        attemptId,
+        tutorMessages: [conversation],
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(providerRequest?.messages[1]?.content).toContain(conversation.content);
+    expect(store.save).toHaveBeenCalledWith(userId, attemptId, generatedWithConversation);
   });
 
   it("rejects invalid or outcome-changing output without persistence", async () => {
@@ -267,10 +442,19 @@ it("upserts a separate draft without confirming or scheduling the attempt", asyn
   expect(tx).not.toHaveProperty("reviewObligation");
 });
 
-it("builds an assessment prompt without active messages or code", () => {
+it("builds an assessment prompt without active messages or submitted code", () => {
   const messages = assessmentMessages(packet);
   expect(messages[0]?.content).toContain("Never include source code");
   expect(messages[0]?.content).toContain("editable draft");
   expect(messages[1]?.content).toContain("Structured checkpoint");
   expect(messages[1]?.content).not.toContain("private-key");
+});
+
+it("includes tutor messages in the assessment prompt without storing them as draft fields", () => {
+  const messages = assessmentMessages({
+    ...packet,
+    messages: [{ role: "assistant", content: "Focus on the invariant." }],
+  } as ContextPacket);
+  expect(messages[0]?.content).toContain("Attempt Tutor conversation history");
+  expect(messages[1]?.content).toContain("Focus on the invariant.");
 });

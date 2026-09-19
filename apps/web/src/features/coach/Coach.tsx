@@ -61,6 +61,7 @@ export function Coach({
   const [checkpointError, setCheckpointError] = useState<string>();
   const [error, setError] = useState<string>();
   const active = useRef<AbortController | null>(null);
+  const messagesRef = useRef<HTMLOListElement>(null);
   useEffect(
     () => () => {
       active.current?.abort();
@@ -80,6 +81,11 @@ export function Coach({
       active = false;
     };
   }, [apiUrl, token]);
+
+  useEffect(() => {
+    const container = messagesRef.current;
+    if (container !== null) container.scrollTop = container.scrollHeight;
+  }, [messages]);
 
   async function checkpoint(source: Message[], endIndex: number): Promise<boolean> {
     const complete = source.filter((message) => message.complete);
@@ -214,6 +220,7 @@ export function Coach({
           </select>
         </label>
         <ol
+          ref={messagesRef}
           className="coach-messages"
           aria-label="Coach conversation"
           aria-live="polite"

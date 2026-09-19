@@ -1,4 +1,8 @@
-import type { Attempt, ExternalAiExportRequest } from "@practice-plus-plus/contracts";
+import {
+  tutorHintNames,
+  type Attempt,
+  type ExternalAiExportRequest,
+} from "@practice-plus-plus/contracts";
 import { useEffect, useState, type FormEvent } from "react";
 import { loadActiveAttempt } from "../attempts/attemptsApi";
 import { createExternalAiExport } from "./externalAiApi";
@@ -13,6 +17,7 @@ type Selection =
   | "HINT_1"
   | "HINT_2"
   | "HINT_3"
+  | "HINT_4"
   | "DEBUGGING"
   | "OPTIMIZATION"
   | "SOLUTION_REVIEW"
@@ -255,9 +260,10 @@ function selections(attempt: Attempt | null): [Selection, string][] {
     return values.concat([
       ["INDEPENDENT", "Independent work"],
       ["CLARIFICATION", "Clarify the problem"],
-      ["HINT_1", "Small nudge"],
-      ["HINT_2", "Key idea"],
-      ["HINT_3", "Approach outline"],
+      ["HINT_1", tutorHintNames[0]],
+      ["HINT_2", tutorHintNames[1]],
+      ["HINT_3", tutorHintNames[2]],
+      ["HINT_4", tutorHintNames[3]],
       ["DEBUGGING", "Debug current code"],
       ["OPTIMIZATION", "Complexity and optimization"],
     ]);

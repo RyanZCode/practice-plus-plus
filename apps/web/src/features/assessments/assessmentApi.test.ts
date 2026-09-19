@@ -40,6 +40,8 @@ describe("assessment draft client", () => {
       selection: { providerId: "openai" as const, model: "test-model" },
       apiKey: "private-key",
       attemptId,
+      completedCode: "const answer = solve(input);",
+      tutorMessages: [{ role: "user" as const, content: "I was stuck on the invariant." }],
     };
     expect(
       await generateAssessmentDraft("https://api.example.com", "token", input, fetcher),

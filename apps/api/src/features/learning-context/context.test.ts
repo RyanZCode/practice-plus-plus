@@ -104,6 +104,7 @@ describe("bounded context", () => {
     expect(packet.current.selections[0]?.kind).toBe("DIAGNOSTIC");
     expect(packet.current.problems[0]?.title).toBe("Problem 1");
     expect(packet.instructions).toContain("omit hidden pattern names");
+    expect(packet.instructions).toContain("Solution and explanation");
     expect(packet.instructions).toContain("External recommendations require confirmation");
     expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
       isolationLevel: "RepeatableRead",

@@ -1,4 +1,8 @@
-import type { AttemptHistoryQuery, AttemptHistoryResponse } from "@practice-plus-plus/contracts";
+import {
+  tutorHintNames,
+  type AttemptHistoryQuery,
+  type AttemptHistoryResponse,
+} from "@practice-plus-plus/contracts";
 import { useEffect, useState } from "react";
 import { loadAttemptHistory } from "./attemptsApi";
 import { ReviewDateForm } from "./ReviewDateForm";
@@ -21,7 +25,7 @@ const labels: Record<string, string> = {
 };
 
 export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: string }) {
-  const [pages, setPages] = useState<AttemptHistoryQuery[]>([{}]);
+  const [pageNumber, setPageNumber] = useState(1);
   const [page, setPage] = useState<AttemptHistoryResponse>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -31,15 +35,8 @@ export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: strin
     document.getElementById("attempt-history-heading")?.scrollIntoView({ block: "start" });
   }
 
-  function showNewer(): void {
-    setPages((value) => value.slice(0, -1));
-    scrollToHistory();
-  }
-
-  function showOlder(): void {
-    const next = page?.next;
-    if (next === null || next === undefined) return;
-    setPages((value) => [...value, next]);
+  function showPage(nextPage: number): void {
+    setPageNumber(nextPage);
     scrollToHistory();
   }
 
@@ -48,7 +45,7 @@ export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: strin
     setLoading(true);
     setError(undefined);
     setPage(undefined);
-    void loadAttemptHistory(apiUrl, token, pages.at(-1) ?? {})
+    void loadAttemptHistory(apiUrl, token, { page: pageNumber } satisfies AttemptHistoryQuery)
       .then((result) => {
         if (active) setPage(result);
       })
@@ -61,14 +58,14 @@ export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: strin
     return () => {
       active = false;
     };
-  }, [apiUrl, token, pages, reload]);
+  }, [apiUrl, token, pageNumber, reload]);
 
   return (
     <section className="attempt-history page-surface" aria-label="Attempt history">
       <h2 id="attempt-history-heading">Attempt history</h2>
       {loading ? <p role="status">Loading history…</p> : null}
       {error ? (
-        <div>
+        <div className="attempt-history-error">
           <p className="auth-message" role="alert">
             {error}
           </p>
@@ -78,15 +75,12 @@ export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: strin
         </div>
       ) : null}
       {page?.attempts.length === 0 ? <p>No confirmed attempts on this page.</p> : null}
-      {page === undefined ? null : (
+      {page === undefined || page.totalPages === 0 ? null : (
         <HistoryPagination
           disabled={loading}
-          hasNewer={pages.length > 1}
-          hasOlder={page.next !== null}
-          pageNumber={pages.length}
-          position="top"
-          onNewer={showNewer}
-          onOlder={showOlder}
+          currentPage={page.page}
+          totalPages={page.totalPages}
+          onPageChange={showPage}
         />
       )}
       <ol className="history-list">
@@ -151,7 +145,7 @@ export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: strin
                       {attempt.assistance
                         .map(
                           (event) =>
-                            `${labels[event.type]}${event.hintLevel === null ? "" : ` (level ${event.hintLevel})`}`,
+                            `${labels[event.type]}${event.hintLevel === null ? "" : ` (${tutorHintNames[event.hintLevel - 1] ?? "Guidance step"})`}`,
                         )
                         .join(", ")}
                     </dd>
@@ -180,59 +174,51 @@ export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: strin
           </li>
         ))}
       </ol>
-      {page === undefined ? null : (
-        <HistoryPagination
-          disabled={loading}
-          hasNewer={pages.length > 1}
-          hasOlder={page.next !== null}
-          pageNumber={pages.length}
-          position="bottom"
-          onNewer={showNewer}
-          onOlder={showOlder}
-        />
-      )}
     </section>
   );
 }
 
-function HistoryPagination({
+export function HistoryPagination({
   disabled,
-  hasNewer,
-  hasOlder,
-  pageNumber,
-  position,
-  onNewer,
-  onOlder,
+  currentPage,
+  totalPages,
+  onPageChange,
 }: {
   readonly disabled: boolean;
-  readonly hasNewer: boolean;
-  readonly hasOlder: boolean;
-  readonly pageNumber: number;
-  readonly position: "bottom" | "top";
-  readonly onNewer: () => void;
-  readonly onOlder: () => void;
+  readonly currentPage: number;
+  readonly totalPages: number;
+  readonly onPageChange: (page: number) => void;
 }) {
   return (
     <nav
-      id={position === "bottom" ? "attempt-history-end" : undefined}
-      className={`history-pagination${position === "top" ? " history-pagination-sticky" : ""}`}
+      className="history-pagination history-pagination-sticky"
       aria-label="Attempt history pages"
     >
-      <span>Page {pageNumber}</span>
-      <div className="account-actions">
-        <a href={position === "top" ? "#attempt-history-end" : "#attempt-history-heading"}>
-          {position === "top" ? "Bottom" : "Back to top"}
-        </a>
-        {hasNewer ? (
-          <button className="secondary-button" type="button" disabled={disabled} onClick={onNewer}>
-            Newer attempts
-          </button>
-        ) : null}
-        {hasOlder ? (
-          <button className="secondary-button" type="button" disabled={disabled} onClick={onOlder}>
-            Older attempts
-          </button>
-        ) : null}
+      <div className="history-page-links">
+        {Array.from({ length: totalPages }, (_, index) => {
+          const page = index + 1;
+          return page === currentPage ? (
+            <span
+              key={page}
+              className="history-page-current"
+              aria-current="page"
+              aria-label={`Page ${page}`}
+            >
+              {page}
+            </span>
+          ) : (
+            <button
+              key={page}
+              className="secondary-button history-page-link"
+              type="button"
+              disabled={disabled}
+              aria-label={`Page ${page}`}
+              onClick={() => onPageChange(page)}
+            >
+              {page}
+            </button>
+          );
+        })}
       </div>
     </nav>
   );

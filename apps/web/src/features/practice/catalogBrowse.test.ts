@@ -13,7 +13,7 @@ const problems: CatalogProblem[] = [
 const defaults: CatalogBrowseOptions = {
   availability: [],
   difficulty: [],
-  hidePaid: false,
+  hideSolved: false,
   query: "",
   sort: "LEETCODE_ID",
   sortDirection: "ASC",
@@ -28,7 +28,7 @@ describe("catalog browsing", () => {
     expect(browseCatalog(problems, { ...defaults, query: "21" })).toEqual([]);
   });
 
-  it("combines difficulty, availability, and paid-preference filters", () => {
+  it("combines difficulty, availability, and solved-status filters", () => {
     expect(
       browseCatalog(problems, {
         ...defaults,
@@ -37,8 +37,11 @@ describe("catalog browsing", () => {
       }),
     ).toEqual([problems[0]]);
     expect(
-      browseCatalog(problems, { ...defaults, hidePaid: true }).map((item) => item.leetcodeId),
-    ).toEqual([4, 33, 217]);
+      browseCatalog(
+        problems.map((item) => (item.leetcodeId === 33 ? { ...item, solved: true } : item)),
+        { ...defaults, hideSolved: true },
+      ).map((item) => item.leetcodeId),
+    ).toEqual([1, 4, 217]);
     expect(
       browseCatalog(problems, {
         ...defaults,

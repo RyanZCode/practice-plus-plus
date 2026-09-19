@@ -242,7 +242,7 @@ describe.skipIf(databaseUrl === undefined)("context relational queries", () => {
     ).rejects.toMatchObject({ statusCode: 409 });
     await store.check(userId, activeId, hint, now, false);
     expect(await db.assistanceEvent.count({ where: { attemptId: activeId } })).toBe(0);
-    for (const hintLevel of [1, 2, 3])
+    for (const hintLevel of [1, 2, 3, 4])
       await store.check(userId, activeId, { type: "CONCEPTUAL_HINT", hintLevel }, now, true);
     await store.check(userId, activeId, { type: "DEBUGGING" }, now, true);
     const packet = await assembler.assemble(
@@ -253,13 +253,13 @@ describe.skipIf(databaseUrl === undefined)("context relational queries", () => {
           attemptId: activeId,
           phase: "HELP",
           help: "CONCEPTUAL_HINT",
-          hintLevel: 3,
+          hintLevel: 4,
         },
         messages: [],
       },
       now,
     );
-    expect(packet.current.attempt?.assistance).toHaveLength(4);
+    expect(packet.current.attempt?.assistance).toHaveLength(5);
     expect(
       packet.current.attempt?.assistance.every((event) => event.source === "INTEGRATED_AI"),
     ).toBe(true);
