@@ -39,6 +39,11 @@ describe("streak calendar derivation", () => {
     expect(calendar.days.find((day) => day.date === "2026-09-10")?.status).toBe("COMPLETED");
     expect(calendar.days.find((day) => day.date === "2026-09-11")?.status).toBe("NEUTRAL");
     expect(calendar.days.find((day) => day.date === "2026-09-12")?.status).toBe("MISSED");
+    expect(calendar.days.find((day) => day.date === "2026-09-13")).toMatchObject({
+      status: "MISSED",
+      requiredCount: 2,
+      completedCount: 0,
+    });
     expect(calendar.days.find((day) => day.date === "2026-09-14")?.status).toBe("COMPLETED");
     expect(calendar.days.find((day) => day.date === "2026-09-15")?.status).toBe("FUTURE");
   });
@@ -68,7 +73,9 @@ describe("streak calendar derivation", () => {
 });
 
 it("loads only the authenticated user's completion history using the practice-day boundary", async () => {
-  const findUnique = vi.fn().mockResolvedValue({ timeZone: "America/Toronto", resetMinutes: 240 });
+  const findUnique = vi
+    .fn()
+    .mockResolvedValue({ timeZone: "America/Toronto", resetMinutes: 240, dailyTarget: 2 });
   const findMany = vi.fn().mockResolvedValue([]);
   const client = {
     practiceSettings: { findUnique },
@@ -84,7 +91,7 @@ it("loads only the authenticated user's completion history using the practice-da
   expect(result.asOfPracticeDate).toBe("2026-09-17");
   expect(findUnique).toHaveBeenCalledWith({
     where: { userProfileId },
-    select: { timeZone: true, resetMinutes: true },
+    select: { timeZone: true, resetMinutes: true, dailyTarget: true },
   });
   expect(findMany).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -100,7 +107,7 @@ it("keeps the saved plan boundary current after a settings change", async () => 
   const findMany = vi.fn().mockResolvedValue([]);
   const client = {
     practiceSettings: {
-      findUnique: vi.fn().mockResolvedValue({ timeZone: "UTC", resetMinutes: 0 }),
+      findUnique: vi.fn().mockResolvedValue({ timeZone: "UTC", resetMinutes: 0, dailyTarget: 2 }),
     },
     dailyPlan: {
       findUnique: vi.fn().mockResolvedValue({

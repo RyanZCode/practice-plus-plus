@@ -74,6 +74,7 @@ export interface AttemptStore {
   ): Promise<Attempt>;
   history(userProfileId: string, query: AttemptHistoryQuery): Promise<AttemptHistoryResponse>;
   report(userProfileId: string, attemptId: string, input: ReportAttempt): Promise<Attempt>;
+  cancel(userProfileId: string, attemptId: string): Promise<null>;
   active(userProfileId: string): Promise<Attempt | null>;
   start(userProfileId: string, problemId: string, now: Date): Promise<Attempt>;
   startExtra(userProfileId: string, now: Date, problemId?: string): Promise<Attempt | null>;
@@ -193,6 +194,26 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
           data: { outcome: input.outcome },
           select,
         });
+      });
+    },
+    async cancel(userProfileId, attemptId) {
+      return client.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM user_profiles WHERE id = ${userProfileId}::uuid FOR UPDATE`;
+        const record = await tx.attempt.findFirst({
+          where: { id: attemptId, userProfileId, confirmedAt: null },
+          select: { id: true },
+        });
+        if (record === null) throw new HttpError(404, "Active attempt not found.");
+        await tx.dailyPlanItem.updateMany({
+          where: { attemptId: record.id },
+          data: { attemptId: null },
+        });
+        await tx.transferObligation.updateMany({
+          where: { attemptId: record.id },
+          data: { attemptId: null },
+        });
+        await tx.attempt.delete({ where: { id: record.id } });
+        return null;
       });
     },
     async reviewSolution(userProfileId, attemptId, now) {
@@ -638,6 +659,15 @@ export function createAttemptRouter(store: AttemptStore, clock = () => new Date(
       attemptSchema.parse(
         await store.report(getApplicationProfile(request).id, id.data, input.data),
       ),
+    );
+  });
+  router.post("/:attemptId/cancel", async (request, response) => {
+    const id = attemptSchema.shape.id.safeParse(request.params.attemptId);
+    if (!id.success) throw new HttpError(400, "Invalid attempt identifier.");
+    response.json(
+      activeAttemptResponseSchema.parse({
+        attempt: await store.cancel(getApplicationProfile(request).id, id.data),
+      }),
     );
   });
   router.get("/active", async (request, response) => {

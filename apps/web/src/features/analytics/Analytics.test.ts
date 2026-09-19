@@ -162,6 +162,14 @@ it("renders the daily-target calendar with status labels and neutral guidance", 
             neutralReason: null,
           },
           {
+            date: "2026-09-15",
+            status: "MISSED",
+            isCurrent: false,
+            requiredCount: 2,
+            completedCount: 0,
+            neutralReason: null,
+          },
+          {
             date: "2026-09-18",
             status: "NEUTRAL",
             isCurrent: false,
@@ -181,5 +189,7 @@ it("renders the daily-target calendar with status labels and neutral guidance", 
   expect(html).toContain("Completed");
   expect(html).toContain("No practice available");
   expect(html).toContain('data-status="CURRENT"');
+  expect(html).toContain("0 / 2");
   expect(html).toContain("Neutral days do not extend or break the streak.");
+  expect(html).not.toContain("motivational context");
 });
