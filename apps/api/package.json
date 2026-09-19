@@ -13,6 +13,8 @@
     "prisma:migrate:dev": "cross-env DIRECT_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres prisma migrate dev",
     "prisma:migrate:local": "cross-env DIRECT_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres prisma migrate deploy",
     "prisma:migrate:status": "prisma migrate status",
+    "catalog:validate": "pnpm run build && node dist/features/catalog/importCatalog.js validate",
+    "catalog:import": "pnpm run build && node --env-file-if-exists=.env dist/features/catalog/importCatalog.js import",
     "pretypecheck": "pnpm --filter @practice-plus-plus/scheduling build && pnpm run prisma:generate",
     "start": "node dist/application/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -27,7 +29,8 @@
     "express": "5.2.1",
     "pg": "8.16.3",
     "pino": "10.3.1",
-    "pino-http": "11.0.0"
+    "pino-http": "11.0.0",
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@practice-plus-plus/config": "workspace:*",

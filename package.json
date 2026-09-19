@@ -10,6 +10,8 @@
   },
   "scripts": {
     "build": "pnpm --recursive --if-present run build",
+    "catalog:validate": "pnpm --filter @practice-plus-plus/api catalog:validate",
+    "catalog:import": "pnpm --filter @practice-plus-plus/api catalog:import",
     "db:local:migrate": "pnpm --filter @practice-plus-plus/api prisma:migrate:local",
     "db:local:start": "supabase db start",
     "db:local:stop": "supabase stop",

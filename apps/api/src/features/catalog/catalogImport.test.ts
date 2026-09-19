@@ -261,4 +261,58 @@ describe("Prisma catalog import store", () => {
     expect(transaction.problem.createManyAndReturn).not.toHaveBeenCalled();
     expect(transaction.problemPattern.createMany).not.toHaveBeenCalled();
   });
+
+  it("skips existing rows when requested", async () => {
+    const createProblems = vi
+      .fn()
+      .mockResolvedValue([{ id: "53a735b6-58cc-4ce3-b58a-44ac67ca23c2", leetcodeId: 2 }]);
+    const transaction = {
+      catalogImportBatch: { create: vi.fn().mockResolvedValue({ id: batchId }) },
+      pattern: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { id: "22d2e255-9fd2-4d9e-a663-b2a1ebc2393f", name: "Arrays & Hashing" },
+          ]),
+      },
+      problem: {
+        createManyAndReturn: createProblems,
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([{ leetcodeId: 1, slug: "two-sum" }])
+          .mockResolvedValueOnce([]),
+      },
+      problemPattern: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    };
+    const client = {
+      $transaction: vi.fn().mockImplementation((operation) => operation(transaction)),
+    } as unknown as PrismaClient;
+    const store = createPrismaCatalogImportStore(client);
+
+    const result = await store.importDrafts({
+      createdByUserProfileId: "61a6afc6-d4de-4a61-879c-7ca6bdb5f6b1",
+      rows: [
+        { row: 1, value: { ...baseRow, availability: "AVAILABLE" } },
+        {
+          row: 2,
+          value: {
+            ...baseRow,
+            availability: "AVAILABLE",
+            leetcodeId: 2,
+            slug: "two-sum-copy",
+            title: "Two Sum Copy",
+          },
+        },
+      ],
+      skipExisting: true,
+      source: { kind: "CURATED", name: "LeetCode CSV" },
+      version: 1,
+    });
+
+    expect(result).toEqual({ batchId, errors: [], importedCount: 1 });
+    expect(createProblems).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ leetcodeId: 2, slug: "two-sum-copy" })],
+      select: { id: true, leetcodeId: true },
+    });
+  });
 });

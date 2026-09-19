@@ -22,6 +22,7 @@ export interface CatalogImportStore {
   importDrafts(input: {
     createdByUserProfileId: string;
     rows: readonly IndexedCatalogImportRow[];
+    skipExisting?: boolean;
     source: CatalogImportSource;
     version: 1;
   }): Promise<CatalogImportResponse>;
@@ -31,7 +32,28 @@ export function createPrismaCatalogImportStore(client: PrismaClient): CatalogImp
   return {
     async importDrafts(input) {
       return client.$transaction(async (transaction) => {
-        const patternNames = [...new Set(input.rows.flatMap(({ value }) => value.patterns))];
+        const existingCandidates = input.skipExisting
+          ? await transaction.problem.findMany({
+              select: { leetcodeId: true, slug: true },
+              where: {
+                OR: [
+                  { leetcodeId: { in: input.rows.map(({ value }) => value.leetcodeId) } },
+                  { slug: { in: input.rows.map(({ value }) => value.slug) } },
+                ],
+              },
+            })
+          : [];
+        const existingIds = new Set(existingCandidates.map((problem) => problem.leetcodeId));
+        const existingSlugs = new Set(existingCandidates.map((problem) => problem.slug));
+        const rows = input.rows.filter(
+          ({ value }) => !existingIds.has(value.leetcodeId) && !existingSlugs.has(value.slug),
+        );
+
+        if (rows.length === 0) {
+          return catalogImportResponseSchema.parse({ batchId: null, errors: [], importedCount: 0 });
+        }
+
+        const patternNames = [...new Set(rows.flatMap(({ value }) => value.patterns))];
         const [patterns, existingProblems] = await Promise.all([
           transaction.pattern.findMany({
             select: { id: true, name: true },
@@ -41,14 +63,14 @@ export function createPrismaCatalogImportStore(client: PrismaClient): CatalogImp
             select: { leetcodeId: true, slug: true },
             where: {
               OR: [
-                { leetcodeId: { in: input.rows.map(({ value }) => value.leetcodeId) } },
-                { slug: { in: input.rows.map(({ value }) => value.slug) } },
+                { leetcodeId: { in: rows.map(({ value }) => value.leetcodeId) } },
+                { slug: { in: rows.map(({ value }) => value.slug) } },
               ],
             },
           }),
         ]);
         const patternIds = new Map(patterns.map((pattern) => [pattern.name, pattern.id]));
-        const errors = findDatabaseErrors(input.rows, existingProblems, patternIds);
+        const errors = findDatabaseErrors(rows, existingProblems, patternIds);
 
         if (errors.length > 0) {
           return failureResponse(errors);
@@ -65,7 +87,7 @@ export function createPrismaCatalogImportStore(client: PrismaClient): CatalogImp
         });
 
         const createdProblems = await transaction.problem.createManyAndReturn({
-          data: input.rows.map(({ value }) => ({
+          data: rows.map(({ value }) => ({
             availability: value.availability,
             difficulty: value.difficulty,
             importBatchId: batch.id,
@@ -83,7 +105,7 @@ export function createPrismaCatalogImportStore(client: PrismaClient): CatalogImp
         );
 
         await transaction.problemPattern.createMany({
-          data: input.rows.flatMap(({ value }) =>
+          data: rows.flatMap(({ value }) =>
             value.patterns.map((patternName) => ({
               patternId: getPatternId(patternIds, patternName),
               problemId: getProblemId(problemIds, value.leetcodeId),
@@ -94,7 +116,7 @@ export function createPrismaCatalogImportStore(client: PrismaClient): CatalogImp
         return catalogImportResponseSchema.parse({
           batchId: batch.id,
           errors: [],
-          importedCount: input.rows.length,
+          importedCount: rows.length,
         });
       });
     },
