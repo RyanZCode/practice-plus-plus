@@ -277,6 +277,16 @@ button.secondary-button:disabled {
   background: #fff1f2;
 }
 
+.practice-error {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.practice-error .auth-message {
+  margin-top: 0;
+}
+
 .auth-help {
   margin-top: 1rem;
   font-size: 0.875rem;
@@ -617,7 +627,7 @@ button.secondary-button:disabled {
 }
 
 .active-attempt {
-  max-width: 58rem;
+  width: 100%;
 }
 
 .attempt-header {
@@ -634,6 +644,78 @@ button.secondary-button:disabled {
 .attempt-header h3 {
   margin: 0.25rem 0;
   font-size: 1.35rem;
+}
+
+.revealed-patterns {
+  margin-top: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #b8d9ed;
+  border-radius: 0.75rem;
+  background: #eef7fc;
+}
+
+.revealed-patterns h4 {
+  margin: 0 0 0.65rem;
+  color: #075985;
+}
+
+.revealed-patterns .attempt-phase-label {
+  margin: 0 0 0.65rem;
+  color: #075985;
+}
+
+.attempt-confirmation-backdrop {
+  position: fixed;
+  z-index: 10;
+  top: 1rem;
+  right: 0;
+  left: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0 1rem;
+  pointer-events: none;
+}
+
+.attempt-confirmation-popup {
+  width: min(100%, 34rem);
+  padding: 1.5rem;
+  border: 1px solid #b8d9ed;
+  border-radius: 0.85rem;
+  background: #ffffff;
+  box-shadow: 0 18px 50px rgb(15 23 42 / 24%);
+  pointer-events: auto;
+  animation: attempt-confirmation-slide-down 240ms ease-out;
+}
+
+.attempt-confirmation-popup h3 {
+  margin: 0;
+}
+
+.attempt-confirmation-popup h3 + p {
+  margin-top: 0.5rem;
+}
+
+.attempt-confirmation-popup > button {
+  width: 100%;
+  margin-top: 1.25rem;
+}
+
+@keyframes attempt-confirmation-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-120%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attempt-confirmation-popup {
+    animation: none;
+  }
 }
 
 .attempt-eyebrow,
@@ -793,6 +875,7 @@ button.secondary-button:disabled {
 }
 
 .outcome-form > fieldset {
+  margin-top: 0;
   margin-bottom: 0;
 }
 
@@ -1279,11 +1362,16 @@ summary:focus-visible {
 }
 
 .catalog-problem-meta {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(4.5rem, auto) minmax(4.5rem, auto);
   align-items: center;
   justify-content: flex-end;
-  gap: 1.25rem;
+  column-gap: 1.25rem;
   min-width: 0;
+}
+
+.catalog-problem-meta-with-availability {
+  grid-template-columns: minmax(4.5rem, auto) minmax(5.5rem, auto) minmax(4.5rem, auto);
 }
 
 .catalog-difficulty,
@@ -1292,6 +1380,11 @@ summary:focus-visible {
   font-size: 0.875rem;
   font-weight: 650;
   white-space: nowrap;
+}
+
+.catalog-difficulty {
+  grid-column: 1;
+  text-align: center;
 }
 
 .catalog-difficulty-easy {
@@ -1307,15 +1400,21 @@ summary:focus-visible {
 }
 
 .catalog-availability {
+  grid-column: 2;
   color: #5f6b7d;
 }
 
 .catalog-solved {
+  grid-column: 2;
   color: #047857;
-  text-align: left;
+  text-align: center;
   font-size: 0.875rem;
   font-weight: 650;
   white-space: nowrap;
+}
+
+.catalog-problem-meta-with-availability .catalog-solved {
+  grid-column: 3;
 }
 
 .catalog-problem-list li > button {
@@ -1407,7 +1506,6 @@ summary:focus-visible {
     grid-column: 1;
     grid-row: 2;
     justify-content: flex-start;
-    flex-wrap: wrap;
     gap: 0.35rem 0.75rem;
   }
 
@@ -2326,7 +2424,8 @@ summary:focus-visible {
 [data-theme="dark"] .mobile-navigation,
 [data-theme="dark"] .analytics-card,
 [data-theme="dark"] .streak-stat,
-[data-theme="dark"] .review-work-summary {
+[data-theme="dark"] .review-work-summary,
+[data-theme="dark"] .attempt-confirmation-popup {
   border-color: #3b3f45;
   background: #27292d;
 }
@@ -2418,7 +2517,9 @@ summary:focus-visible {
 [data-theme="dark"] .streak-day,
 [data-theme="dark"] .streak-legend-swatch,
 [data-theme="dark"] .metric-list > div,
-[data-theme="dark"] .overdue-review-details {
+[data-theme="dark"] .overdue-review-details,
+[data-theme="dark"] .revealed-patterns,
+[data-theme="dark"] .attempt-confirmation-popup {
   border-color: #3b3f45;
 }
 
@@ -2431,6 +2532,16 @@ summary:focus-visible {
   border-color: #285b78;
   color: #a9d5f2;
   background: #123b55;
+}
+
+[data-theme="dark"] .revealed-patterns {
+  border-color: #285b78;
+  background: #123b55;
+}
+
+[data-theme="dark"] .revealed-patterns h4,
+[data-theme="dark"] .revealed-patterns .attempt-phase-label {
+  color: #a9d5f2;
 }
 
 [data-theme="dark"] .streak-day {

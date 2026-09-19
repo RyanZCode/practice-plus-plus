@@ -19,7 +19,7 @@ async function request(
   token: string,
   path: string,
   body?: object,
-  method?: "PUT",
+  method?: "POST" | "PUT",
 ): Promise<unknown> {
   const response = await fetch(`${apiUrl.replace(/\/$/, "")}${path}`, {
     method: method ?? (body === undefined ? "GET" : "POST"),
@@ -134,6 +134,18 @@ export async function confirmAttempt(
   input: ConfirmAttempt,
 ): Promise<Attempt> {
   return attemptSchema.parse(await request(apiUrl, token, `/attempts/${attemptId}/confirm`, input));
+}
+
+export async function cancelAttempt(
+  apiUrl: string,
+  token: string,
+  attemptId: string,
+): Promise<null> {
+  const response = activeAttemptResponseSchema.parse(
+    await request(apiUrl, token, `/attempts/${attemptId}/cancel`, {}, "POST"),
+  );
+  if (response.attempt !== null) throw new Error("Unable to cancel the active attempt.");
+  return null;
 }
 
 export async function reportAttempt(

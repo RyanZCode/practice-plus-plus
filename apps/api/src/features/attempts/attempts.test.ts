@@ -156,6 +156,26 @@ describe("attempt routes", () => {
     });
     expect(report).toHaveBeenCalledExactlyOnceWith(userId, attempt.id, { outcome: "INDEPENDENT" });
   });
+  it("authenticates cancellation and discards the active attempt", async () => {
+    const { store } = database();
+    const cancel = vi.spyOn(store, "cancel").mockResolvedValue(null);
+    const url = await server(store);
+    const path = `${url}/attempts/${attempt.id}/cancel`;
+
+    expect((await fetch(path, { method: "POST" })).status).toBe(401);
+    expect(
+      (await fetch(`${url}/attempts/invalid/cancel`, { method: "POST", headers })).status,
+    ).toBe(400);
+
+    const response = await fetch(path, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({}),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ attempt: null });
+    expect(cancel).toHaveBeenCalledExactlyOnceWith(userId, attempt.id);
+  });
   it("authenticates confirmation and solution review, validates bodies, and passes only the verified owner", async () => {
     const store = {
       overrideReview: vi.fn(),
@@ -167,6 +187,7 @@ describe("attempt routes", () => {
       pause: vi.fn(),
       resume: vi.fn(),
       report: vi.fn().mockResolvedValue(attempt),
+      cancel: vi.fn().mockResolvedValue(null),
       reviewSolution: vi.fn().mockResolvedValue(attempt),
       confirm: vi.fn().mockResolvedValue(attempt),
     };
@@ -252,6 +273,7 @@ describe("attempt routes", () => {
       pause: vi.fn().mockResolvedValue(attempt),
       resume: vi.fn().mockResolvedValue(attempt),
       report: vi.fn().mockResolvedValue(attempt),
+      cancel: vi.fn().mockResolvedValue(null),
       reviewSolution: vi.fn().mockResolvedValue(attempt),
       confirm: vi.fn().mockResolvedValue(attempt),
     };
@@ -323,6 +345,7 @@ describe("attempt routes", () => {
       pause: vi.fn(),
       resume: vi.fn(),
       report: vi.fn().mockResolvedValue(attempt),
+      cancel: vi.fn().mockResolvedValue(null),
       reviewSolution: vi.fn(),
       confirm: vi.fn(),
     };
@@ -353,7 +376,11 @@ describe("attempt routes", () => {
 function database() {
   const tx = {
     dailyPlan: { findUnique: vi.fn().mockResolvedValue(null) },
-    dailyPlanItem: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn() },
+    dailyPlanItem: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
     reviewObligation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     transferObligation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     problemPattern: { findMany: vi.fn().mockResolvedValue([]) },
@@ -365,6 +392,7 @@ function database() {
       create: vi.fn().mockResolvedValue(record),
       update: vi.fn().mockResolvedValue(record),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      delete: vi.fn().mockResolvedValue(record),
     },
     problem: {
       findFirst: vi.fn().mockResolvedValue({ id: problemId }),
@@ -390,6 +418,23 @@ function database() {
   return { tx, store: createPrismaAttemptStore(client) };
 }
 describe("attempt persistence", () => {
+  it("deletes an active attempt without creating an incomplete record", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue(record);
+
+    await expect(store.cancel(userId, attempt.id)).resolves.toBeNull();
+
+    expect(tx.attempt.delete).toHaveBeenCalledWith({ where: { id: attempt.id } });
+    expect(tx.dailyPlanItem.updateMany).toHaveBeenCalledWith({
+      where: { attemptId: attempt.id },
+      data: { attemptId: null },
+    });
+    expect(tx.transferObligation.updateMany).toHaveBeenCalledWith({
+      where: { attemptId: attempt.id },
+      data: { attemptId: null },
+    });
+  });
+
   it.each(["INDEPENDENT", "ASSISTED"])(
     "uses automatic follow-up when a %s redo has no selected next action",
     async (outcome) => {

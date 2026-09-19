@@ -15,6 +15,7 @@ import {
   pauseTimer,
   resumeTimer,
   skipTimer,
+  cancelAttempt as cancelActiveAttempt,
   startAttempt,
   startExtraPractice,
   reviewSolution,
@@ -349,6 +350,23 @@ export function Practice({
     }
   }
 
+  async function cancelAttempt(): Promise<void> {
+    if (attempt === null || !window.confirm("Cancel this attempt? It will be discarded.")) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await cancelActiveAttempt(apiUrl, token, attempt.id);
+      setAttempt(null);
+      setClassifying(false);
+      setSaved(null);
+      setReload((value) => value + 1);
+    } catch (reason) {
+      setError(message(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function generatePlan(personalized: boolean) {
     setBusy(true);
     setError(undefined);
@@ -431,14 +449,24 @@ export function Practice({
     <section className="practice">
       <h2>Practice</h2>
       {saved ? (
-        <div role="status">
-          <p>Attempt confirmed.</p>
-          {saved.patterns ? <p>Patterns: {saved.patterns.join(", ")}</p> : null}
+        <div
+          className="attempt-confirmation-backdrop"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <div className="attempt-confirmation-popup">
+            <h3 id="attempt-confirmation-heading">Attempt confirmed</h3>
+            <p>Your result was saved.</p>
+            <button type="button" autoFocus onClick={() => setSaved(null)}>
+              Continue
+            </button>
+          </div>
         </div>
       ) : null}
       {loading ? <p role="status">Loading practice…</p> : null}
       {error === undefined ? null : (
-        <div>
+        <div className="practice-error">
           <p className="auth-message" role="alert">
             {error}
           </p>
@@ -463,7 +491,6 @@ export function Practice({
               <p className="attempt-metadata">
                 {attempt.problem.difficulty.charAt(0) +
                   attempt.problem.difficulty.slice(1).toLocaleLowerCase()}
-                {attempt.patterns ? ` · ${attempt.patterns.join(", ")}` : ""}
                 {attempt.problem.availability === "PAID_ONLY" ? " · LeetCode Premium required" : ""}
               </p>
             </div>
@@ -476,6 +503,18 @@ export function Practice({
               Open on LeetCode ↗
             </a>
           </header>
+          {attempt.patterns?.length ? (
+            <section className="revealed-patterns" aria-labelledby="revealed-patterns-heading">
+              <p className="attempt-phase-label" id="revealed-patterns-heading">
+                Patterns
+              </p>
+              <ul className="catalog-pattern-list">
+                {attempt.patterns.map((pattern) => (
+                  <li key={pattern}>{pattern}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           {attempt.solutionReviewedAt !== null ? (
             <p>
               <a
@@ -658,6 +697,14 @@ export function Practice({
                     Give up and review a solution
                   </button>
                 ) : null}
+                <button
+                  className="danger-button"
+                  type="button"
+                  disabled={busy || tutorBusy}
+                  onClick={() => void cancelAttempt()}
+                >
+                  Cancel attempt
+                </button>
               </div>
             </div>
           )}
@@ -1018,7 +1065,13 @@ export function Practice({
                             </strong>
                           )}
                         </div>
-                        <div className="catalog-problem-meta">
+                        <div
+                          className={
+                            problem.availability !== "AVAILABLE" && problem.solved
+                              ? "catalog-problem-meta catalog-problem-meta-with-availability"
+                              : "catalog-problem-meta"
+                          }
+                        >
                           <span
                             className={`catalog-difficulty catalog-difficulty-${problem.difficulty.toLocaleLowerCase()}`}
                           >
