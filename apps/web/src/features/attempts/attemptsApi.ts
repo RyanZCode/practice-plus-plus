@@ -6,8 +6,6 @@ import {
   type AttemptHistoryQuery,
   attemptSchema,
   catalogResponseSchema,
-  catalogPreferencesSchema,
-  type CatalogPreferences,
   type Attempt,
   type CatalogProblem,
   type ConfirmAttempt,
@@ -43,22 +41,6 @@ export async function loadProblems(apiUrl: string, token: string): Promise<Catal
   return catalogResponseSchema.parse(await request(apiUrl, token, "/catalog/problems")).problems;
 }
 
-export async function loadCatalogPreferences(
-  apiUrl: string,
-  token: string,
-): Promise<CatalogPreferences> {
-  return catalogPreferencesSchema.parse(await request(apiUrl, token, "/catalog/preferences"));
-}
-
-export async function saveCatalogPreferences(
-  apiUrl: string,
-  token: string,
-  hidePaidProblems: boolean,
-): Promise<CatalogPreferences> {
-  return catalogPreferencesSchema.parse(
-    await request(apiUrl, token, "/catalog/preferences", { hidePaidProblems }, "PUT"),
-  );
-}
 export async function loadActiveAttempt(apiUrl: string, token: string): Promise<Attempt | null> {
   return activeAttemptResponseSchema.parse(await request(apiUrl, token, "/attempts/active"))
     .attempt;
