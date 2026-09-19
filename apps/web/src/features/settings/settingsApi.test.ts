@@ -6,6 +6,8 @@ const settings = {
   defaultAiModel: "gpt-5.4-mini" as const,
   reasoningEffort: null,
   attemptTimerMinutes: 30,
+  allowPremiumProblems: true,
+  difficultyPreference: "ANY" as const,
   dailyTarget: 2,
   redoIntervals: { high: 1, low: 7, medium: 3 },
   resetTime: "04:00",

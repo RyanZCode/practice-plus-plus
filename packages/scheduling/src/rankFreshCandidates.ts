@@ -1,4 +1,9 @@
-import type { Attempt, CatalogProblem, FreshRankingReason } from "@practice-plus-plus/contracts";
+import type {
+  Attempt,
+  CatalogProblem,
+  FreshRankingReason,
+  ProblemDifficultyPreference,
+} from "@practice-plus-plus/contracts";
 
 export type FreshCandidate = Pick<
   CatalogProblem,
@@ -32,7 +37,8 @@ export function rankFreshCandidates(
   candidates: readonly FreshCandidate[],
   history: readonly FreshRankingAttempt[],
   practiceDate: string,
-  hidePaidProblems: boolean,
+  allowPremiumProblems: boolean,
+  difficultyPreference: ProblemDifficultyPreference = "ANY",
 ): RankedFreshCandidate[] {
   const attempted = new Set(history.map((attempt) => attempt.problemId));
   const patterns = new Map(
@@ -49,7 +55,8 @@ export function rankFreshCandidates(
       (candidate) =>
         candidate.published &&
         candidate.availability !== "UNAVAILABLE" &&
-        !(hidePaidProblems && candidate.availability === "PAID_ONLY") &&
+        (allowPremiumProblems || candidate.availability !== "PAID_ONLY") &&
+        matchesDifficultyPreference(candidate.difficulty, difficultyPreference) &&
         !attempted.has(candidate.id),
     )
     .map((candidate) => {
@@ -68,11 +75,30 @@ export function rankFreshCandidates(
     })
     .sort(
       (a, b) =>
+        difficultyPriority(a.candidate, difficultyPreference) -
+          difficultyPriority(b.candidate, difficultyPreference) ||
         a.priority - b.priority ||
         difficultyOrder[a.candidate.difficulty] - difficultyOrder[b.candidate.difficulty] ||
         a.candidate.leetcodeId - b.candidate.leetcodeId,
     )
     .map(({ candidate, reasons }) => ({ problemId: candidate.id, reasons }));
+}
+
+export function matchesDifficultyPreference(
+  difficulty: FreshCandidate["difficulty"],
+  preference: ProblemDifficultyPreference,
+): boolean {
+  if (preference === "EASIER") return difficulty !== "HARD";
+  if (preference === "MEDIUM_ONLY") return difficulty === "MEDIUM";
+  return true;
+}
+
+function difficultyPriority(
+  candidate: FreshCandidate,
+  preference: ProblemDifficultyPreference,
+): number {
+  if (preference !== "EASIER") return 0;
+  return { EASY: 0, MEDIUM: 1, HARD: 2 }[candidate.difficulty];
 }
 
 export function getPatternEvidence(

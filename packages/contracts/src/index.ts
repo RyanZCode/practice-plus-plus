@@ -16,6 +16,9 @@ export const reasoningEffortValues = ["none", "minimal", "low", "medium", "high"
 export const reasoningEffortSchema = z.enum(reasoningEffortValues);
 export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
 
+export const problemDifficultyPreferenceSchema = z.enum(["ANY", "EASIER", "MEDIUM_ONLY"]);
+export type ProblemDifficultyPreference = z.infer<typeof problemDifficultyPreferenceSchema>;
+
 export const openAiModels = [
   "gpt-6-astra",
   "gpt-5.6-luna",
@@ -184,6 +187,9 @@ export const attemptAssessmentRequestSchema = z.strictObject({
   selection: providerSelectionSchema,
   apiKey: z.string().regex(/^[\x21-\x7e]{1,4096}$/),
   attemptId: z.uuid(),
+  completedCode: z.string().max(16000).nullable().optional(),
+  currentSummary: attemptSummaryInputSchema.nullable().optional(),
+  tutorMessages: contextRequestSchema.shape.messages.unwrap().max(12).optional(),
 });
 export type AttemptAssessmentRequest = z.infer<typeof attemptAssessmentRequestSchema>;
 
@@ -234,6 +240,8 @@ export const practiceSettingsSchema = z
     defaultAiModel: modelNameSchema,
     reasoningEffort: reasoningEffortSchema.nullable().default(null),
     attemptTimerMinutes: z.number().int().min(1).max(180),
+    allowPremiumProblems: z.boolean(),
+    difficultyPreference: problemDifficultyPreferenceSchema,
     dailyTarget: z.number().int().min(1).max(10),
     redoIntervals: z.strictObject({
       high: wholeDaysSchema,
@@ -352,15 +360,39 @@ export const catalogProblemSchema = z.strictObject({
   availability: z.enum(["AVAILABLE", "PAID_ONLY", "UNAVAILABLE"]),
 });
 
+export const catalogListProblemSchema = catalogProblemSchema.extend({
+  solved: z.boolean(),
+});
+
+export const catalogPageSize = 100;
+export const catalogSortSchema = z.enum(["DIFFICULTY", "LEETCODE_ID", "TITLE"]);
+export const catalogSortDirectionSchema = z.enum(["ASC", "DESC"]);
+export const catalogListQuerySchema = z.strictObject({
+  query: z.string().trim().max(100),
+  difficulty: z.array(catalogProblemSchema.shape.difficulty).max(3),
+  availability: z.array(catalogProblemSchema.shape.availability).max(3),
+  hideSolved: z.boolean(),
+  sort: catalogSortSchema,
+  sortDirection: catalogSortDirectionSchema,
+  page: z.number().int().nonnegative(),
+});
+
 export const catalogResponseSchema = z.strictObject({
-  problems: z.array(catalogProblemSchema),
+  problems: z.array(catalogListProblemSchema).max(catalogPageSize),
+  total: z.number().int().nonnegative(),
+  nextPage: z.number().int().nonnegative().nullable(),
+});
+
+export const catalogProblemDetailsResponseSchema = z.strictObject({
+  problem: catalogProblemSchema,
+  patterns: z.array(z.enum(mvpPatternNames)).max(3),
 });
 
 export type CatalogProblem = z.infer<typeof catalogProblemSchema>;
+export type CatalogListProblem = z.infer<typeof catalogListProblemSchema>;
+export type CatalogListQuery = z.infer<typeof catalogListQuerySchema>;
 export type CatalogResponse = z.infer<typeof catalogResponseSchema>;
-
-export const catalogPreferencesSchema = z.strictObject({ hidePaidProblems: z.boolean() });
-export type CatalogPreferences = z.infer<typeof catalogPreferencesSchema>;
+export type CatalogProblemDetailsResponse = z.infer<typeof catalogProblemDetailsResponseSchema>;
 
 export const catalogReviewStatusSchema = z.enum(["DRAFT", "APPROVED", "REJECTED"]);
 
@@ -644,7 +676,7 @@ export const dailyPlanSchema = z
           problem: catalogProblemSchema,
           kind: z.enum(["DIAGNOSTIC", "FRESH", "REDO", "TRANSFER"]),
           explanation: z.string(),
-          status: z.enum(["PENDING", "ACTIVE", "FINISHED"]),
+          status: z.enum(["PENDING", "ACTIVE", "FINISHED", "INCOMPLETE"]),
         }),
       )
       .max(10),

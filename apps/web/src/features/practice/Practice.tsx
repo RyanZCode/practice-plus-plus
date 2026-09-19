@@ -12,8 +12,6 @@ import {
   loadSavedDailyPlan,
   loadActiveAttempt,
   loadProblems,
-  loadCatalogPreferences,
-  saveCatalogPreferences,
   pauseTimer,
   resumeTimer,
   skipTimer,
@@ -58,7 +56,6 @@ export function Practice({
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [problems, setProblems] = useState<CatalogProblem[]>([]);
   const [attempt, setAttempt] = useState<Attempt | null>(null);
-  const [hidePaid, setHidePaid] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [tutorBusy, setTutorBusy] = useState(false);
@@ -109,14 +106,12 @@ export function Practice({
       loadSavedDailyPlan(apiUrl, token),
       loadProblems(apiUrl, token),
       loadActiveAttempt(apiUrl, token),
-      loadCatalogPreferences(apiUrl, token),
     ])
-      .then(([dailyPlan, catalog, current, preferences]) => {
+      .then(([dailyPlan, catalog, current]) => {
         if (active) {
           setPlan(dailyPlan);
           setProblems(catalog);
           setAttempt(current);
-          setHidePaid(preferences.hidePaidProblems);
         }
       })
       .catch((reason: unknown) => {
@@ -191,19 +186,6 @@ export function Practice({
     }
   }
 
-  async function changePaidFilter(value: boolean) {
-    setBusy(true);
-    setError(undefined);
-    try {
-      const preferences = await saveCatalogPreferences(apiUrl, token, value);
-      setHidePaid(preferences.hidePaidProblems);
-    } catch (reason) {
-      setError(message(reason));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function generatePlan(personalized: boolean) {
     setBusy(true);
     setError(undefined);
@@ -231,7 +213,7 @@ export function Practice({
       browseCatalog(problems, {
         availability: catalogAvailabilities,
         difficulty: catalogDifficulties,
-        hidePaid,
+        hidePaid: false,
         query: catalogQuery,
         sort: catalogSort,
         sortDirection: catalogSortDirection,
@@ -242,11 +224,10 @@ export function Practice({
       catalogQuery,
       catalogSort,
       catalogSortDirection,
-      hidePaid,
       problems,
     ],
   );
-  const filterCount = catalogDifficulties.length + catalogAvailabilities.length + Number(hidePaid);
+  const filterCount = catalogDifficulties.length + catalogAvailabilities.length;
 
   function resetCatalogControls(): void {
     setCatalogQuery("");
@@ -254,13 +235,11 @@ export function Practice({
     setCatalogAvailabilities([]);
     setCatalogSort("LEETCODE_ID");
     setCatalogSortDirection("ASC");
-    if (hidePaid) void changePaidFilter(false);
   }
 
   function clearCatalogFilters(): void {
     setCatalogDifficulties([]);
     setCatalogAvailabilities([]);
-    if (hidePaid) void changePaidFilter(false);
   }
   return (
     <section className="practice">
@@ -678,7 +657,6 @@ export function Practice({
                         <input
                           type="checkbox"
                           checked={catalogAvailabilities.includes(option.value)}
-                          disabled={option.value === "PAID_ONLY" && hidePaid}
                           onChange={() =>
                             setCatalogAvailabilities((current) =>
                               toggleValue(current, option.value),
@@ -688,19 +666,6 @@ export function Practice({
                         {option.label}
                       </label>
                     ))}
-                  </fieldset>
-                  <fieldset>
-                    <legend>Preference</legend>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={hidePaid}
-                        disabled={busy || catalogAvailabilities.includes("PAID_ONLY")}
-                        onChange={(event) => void changePaidFilter(event.target.checked)}
-                      />
-                      Hide Premium problems
-                    </label>
-                    <p>Saved for future visits.</p>
                   </fieldset>
                   {filterCount > 0 ? (
                     <button

@@ -42,7 +42,7 @@ function reasons(history: FreshRankingAttempt[], date = today) {
 }
 
 describe("rankFreshCandidates", () => {
-  it("excludes every started problem and respects publication, availability, and paid preferences", () => {
+  it("excludes every started problem and respects publication, availability, and premium preferences", () => {
     const candidates = [
       candidate("active"),
       candidate("unconfirmed"),
@@ -61,10 +61,25 @@ describe("rankFreshCandidates", () => {
     ];
     expect(
       rankFreshCandidates(candidates, history, today, false).map((item) => item.problemId),
-    ).toEqual(["paid", "free"]);
+    ).toEqual(["free"]);
     expect(
       rankFreshCandidates(candidates, history, today, true).map((item) => item.problemId),
-    ).toEqual(["free"]);
+    ).toEqual(["paid", "free"]);
+  });
+
+  it("filters difficulty preferences and prioritizes easier candidates", () => {
+    const candidates = [
+      { ...candidate("hard", ["hard"], 1), difficulty: "HARD" as const },
+      { ...candidate("medium", ["medium"], 2), difficulty: "MEDIUM" as const },
+      { ...candidate("easy", ["easy"], 3), difficulty: "EASY" as const },
+    ];
+
+    expect(
+      rankFreshCandidates(candidates, [], today, true, "EASIER").map((item) => item.problemId),
+    ).toEqual(["easy", "medium"]);
+    expect(
+      rankFreshCandidates(candidates, [], today, true, "MEDIUM_ONLY").map((item) => item.problemId),
+    ).toEqual(["medium"]);
   });
 
   it("uses only confirmed, non-incomplete fresh attempts for coverage", () => {

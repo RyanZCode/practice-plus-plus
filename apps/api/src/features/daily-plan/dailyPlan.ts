@@ -1,5 +1,9 @@
 import { dailyPlanSchema, type DailyPlan } from "@practice-plus-plus/contracts";
-import { buildDailyPlan, getPracticeDate } from "@practice-plus-plus/scheduling";
+import {
+  buildDailyPlan,
+  getPracticeDate,
+  matchesDifficultyPreference,
+} from "@practice-plus-plus/scheduling";
 import { Router } from "express";
 import { catalogProblemSelect, toCatalogProblem } from "../catalog/catalog.js";
 import { HttpError } from "../../shared/errors.js";
@@ -19,7 +23,7 @@ const select = {
       kind: true,
       reason: true,
       problem: { select: catalogProblemSelect },
-      attempt: { select: { confirmedAt: true } },
+      attempt: { select: { confirmedAt: true, outcome: true } },
     },
   },
 } as const;
@@ -73,10 +77,6 @@ export function createPrismaDailyPlanStore(client: PrismaClient): DailyPlanStore
       const settings = await tx.practiceSettings.findUnique({ where: { userProfileId } });
       if (settings === null)
         throw new HttpError(409, "Save practice settings before generating a plan.");
-      const profile = await tx.userProfile.findUniqueOrThrow({
-        where: { id: userProfileId },
-        select: { hidePaidProblems: true },
-      });
       const practiceDate = practiceDateFor(now, settings);
       const problems = await tx.problem.findMany({
         select: {
@@ -110,7 +110,8 @@ export function createPrismaDailyPlanStore(client: PrismaClient): DailyPlanStore
       const planInput = {
         target: settings.dailyTarget,
         practiceDate,
-        hidePaidProblems: profile.hidePaidProblems,
+        allowPremiumProblems: settings.allowPremiumProblems,
+        difficultyPreference: settings.difficultyPreference,
         candidates: problems.map((p) => ({
           ...p,
           patternIds: p.problemPatterns.map((tag) => tag.patternId),
@@ -142,7 +143,8 @@ export function createPrismaDailyPlanStore(client: PrismaClient): DailyPlanStore
               (problem) =>
                 problem.published &&
                 problem.availability !== "UNAVAILABLE" &&
-                !(profile.hidePaidProblems && problem.availability === "PAID_ONLY") &&
+                (settings.allowPremiumProblems || problem.availability !== "PAID_ONLY") &&
+                matchesDifficultyPreference(problem.difficulty, settings.difficultyPreference) &&
                 !attempts.some((attempt) => attempt.problemId === problem.id),
             )
             .map((problem) => problem.id),
@@ -209,7 +211,9 @@ function present(plan: Prisma.DailyPlanGetPayload<{ select: typeof select }>): D
           ? "PENDING"
           : item.attempt.confirmedAt === null
             ? "ACTIVE"
-            : "FINISHED",
+            : item.attempt.outcome === "INCOMPLETE"
+              ? "INCOMPLETE"
+              : "FINISHED",
     })),
   });
 }

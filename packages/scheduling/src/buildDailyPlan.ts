@@ -20,7 +20,8 @@ export type PlanSelection = {
 export function buildDailyPlan(input: {
   target: number;
   practiceDate: string;
-  hidePaidProblems: boolean;
+  allowPremiumProblems: boolean;
+  difficultyPreference: "ANY" | "EASIER" | "MEDIUM_ONLY";
   candidates: readonly FreshCandidate[];
   history: readonly FreshRankingAttempt[];
   reviews: readonly (ReviewCandidate & { problemId: string })[];
@@ -34,7 +35,8 @@ export function buildDailyPlan(input: {
     input.candidates,
     input.history,
     input.practiceDate,
-    input.hidePaidProblems,
+    input.allowPremiumProblems,
+    input.difficultyPreference,
   );
   const preferred = new Map(input.freshProblemIds?.map((id, index) => [id, index]));
   const fresh =
@@ -72,7 +74,7 @@ export function buildDailyPlan(input: {
         (p) =>
           p.published &&
           p.availability !== "UNAVAILABLE" &&
-          !(input.hidePaidProblems && p.availability === "PAID_ONLY"),
+          (input.allowPremiumProblems || p.availability !== "PAID_ONLY"),
       )
       .map((p) => p.id),
   );

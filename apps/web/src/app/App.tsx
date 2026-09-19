@@ -1,6 +1,7 @@
 import {
   practiceSettingsSchema,
   type PracticeSettings,
+  type ProblemDifficultyPreference,
   type ReasoningEffort,
 } from "@practice-plus-plus/contracts";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -27,8 +28,10 @@ interface AppProps {
 }
 
 interface SettingsDraft {
+  readonly allowPremiumProblems: boolean;
   readonly attemptTimerMinutes: string;
   readonly defaultAiModel: string;
+  readonly difficultyPreference: ProblemDifficultyPreference;
   readonly reasoningEffort: ReasoningEffort | "";
   readonly dailyTarget: string;
   readonly highInterval: string;
@@ -180,6 +183,8 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
       defaultAiModel: draft.defaultAiModel,
       reasoningEffort: draft.reasoningEffort === "" ? null : draft.reasoningEffort,
       attemptTimerMinutes: Number(draft.attemptTimerMinutes),
+      allowPremiumProblems: draft.allowPremiumProblems,
+      difficultyPreference: draft.difficultyPreference,
       dailyTarget: Number(draft.dailyTarget),
       redoIntervals: {
         high: Number(draft.highInterval),
@@ -435,6 +440,27 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
               </label>
 
               <label>
+                Automatic problem difficulty
+                <select
+                  value={draft.difficultyPreference}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      difficultyPreference: event.target.value as ProblemDifficultyPreference,
+                    })
+                  }
+                >
+                  <option value="ANY">Adaptive</option>
+                  <option value="EASIER">Easier</option>
+                  <option value="MEDIUM_ONLY">Medium only</option>
+                </select>
+                <span className="settings-help">
+                  Easier excludes Hard problems and lets AI include approachable Medium problems.
+                  Medium only restricts new selections to Medium problems.
+                </span>
+              </label>
+
+              <label>
                 Default attempt timer
                 <span className="settings-help">Minutes for newly started attempts.</span>
                 <input
@@ -447,6 +473,23 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
                     setDraft({ ...draft, attemptTimerMinutes: event.target.value })
                   }
                 />
+              </label>
+
+              <label className="premium-setting">
+                <input
+                  type="checkbox"
+                  checked={draft.allowPremiumProblems}
+                  onChange={(event) =>
+                    setDraft({ ...draft, allowPremiumProblems: event.target.checked })
+                  }
+                />
+                <span>
+                  Allow Premium problems in automatic selections
+                  <span className="settings-help">
+                    Premium problems remain visible in the catalog, but AI and non-AI planning will
+                    not select them when this is disabled.
+                  </span>
+                </span>
               </label>
 
               <div className="ai-control-grid">
@@ -573,7 +616,9 @@ function Navigation({ activeView, onNavigate }: NavigationProps) {
 
 function defaultDraft(): SettingsDraft {
   return {
+    allowPremiumProblems: true,
     defaultAiModel: "gpt-5.4-mini",
+    difficultyPreference: "ANY",
     reasoningEffort: "",
     attemptTimerMinutes: "30",
     dailyTarget: "2",
@@ -601,7 +646,9 @@ function timeZoneOptions(currentTimeZone: string): readonly string[] {
 
 function toDraft(settings: PracticeSettings): SettingsDraft {
   return {
+    allowPremiumProblems: settings.allowPremiumProblems,
     defaultAiModel: settings.defaultAiModel,
+    difficultyPreference: settings.difficultyPreference,
     reasoningEffort: settings.reasoningEffort ?? "",
     attemptTimerMinutes: String(settings.attemptTimerMinutes),
     dailyTarget: String(settings.dailyTarget),

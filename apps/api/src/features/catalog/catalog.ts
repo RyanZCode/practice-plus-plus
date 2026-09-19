@@ -1,15 +1,20 @@
 import {
+  catalogListQuerySchema,
+  catalogPageSize,
   catalogProblemSchema,
-  catalogPreferencesSchema,
-  type CatalogPreferences,
+  catalogProblemDetailsResponseSchema,
   catalogResponseSchema,
+  type CatalogListQuery,
+  type CatalogListProblem,
+  type CatalogProblemDetailsResponse,
+  type CatalogResponse,
   type CatalogProblem,
 } from "@practice-plus-plus/contracts";
 import { Router } from "express";
 
 import { HttpError } from "../../shared/errors.js";
 import { getApplicationProfile } from "../account/profile.js";
-import type { PrismaClient } from "../../shared/generated/prisma/client.js";
+import type { Prisma, PrismaClient } from "../../shared/generated/prisma/client.js";
 
 export const catalogProblemSelect = {
   id: true,
@@ -22,41 +27,82 @@ export const catalogProblemSelect = {
 } as const;
 
 export interface CatalogStore {
-  preferences(userProfileId: string): Promise<CatalogPreferences>;
-  savePreferences(
-    userProfileId: string,
-    preferences: CatalogPreferences,
-  ): Promise<CatalogPreferences>;
-  listPublished(): Promise<CatalogProblem[]>;
+  listPublished(userProfileId: string, query: CatalogListQuery): Promise<CatalogResponse>;
   findPublished(problemId: string): Promise<CatalogProblem | null>;
+  findSolvedDetails(
+    userProfileId: string,
+    problemId: string,
+  ): Promise<CatalogProblemDetailsResponse | null>;
 }
 
 export function createPrismaCatalogStore(client: PrismaClient): CatalogStore {
   return {
-    async preferences(userProfileId) {
-      return client.userProfile.findUniqueOrThrow({
-        where: { id: userProfileId },
-        select: { hidePaidProblems: true },
-      });
-    },
-    async savePreferences(userProfileId, preferences) {
-      return client.userProfile.update({
-        where: { id: userProfileId },
-        data: { hidePaidProblems: preferences.hidePaidProblems },
-        select: { hidePaidProblems: true },
-      });
-    },
-    async listPublished() {
-      return client.problem.findMany({
-        where: { published: true },
-        select: catalogProblemSelect,
-        orderBy: { leetcodeId: "asc" },
-      });
+    async listPublished(userProfileId, query) {
+      const where = catalogWhere(userProfileId, query);
+      const orderBy = catalogOrderBy(query);
+      const [total, problems] = await Promise.all([
+        client.problem.count({ where }),
+        client.problem.findMany({
+          where,
+          select: catalogProblemSelect,
+          orderBy,
+          skip: query.page * catalogPageSize,
+          take: catalogPageSize,
+        }),
+      ]);
+      const solvedAttempts =
+        problems.length === 0
+          ? []
+          : await client.attempt.findMany({
+              where: {
+                userProfileId,
+                problemId: { in: problems.map((problem) => problem.id) },
+                confirmedAt: { not: null },
+                outcome: { in: ["INDEPENDENT", "ASSISTED"] },
+              },
+              select: { problemId: true },
+            });
+      const solvedProblemIds = new Set(solvedAttempts.map((attempt) => attempt.problemId));
+
+      return {
+        problems: problems.map((problem) =>
+          toCatalogListProblem(problem, solvedProblemIds.has(problem.id)),
+        ),
+        total,
+        nextPage: (query.page + 1) * catalogPageSize < total ? query.page + 1 : null,
+      };
     },
     async findPublished(problemId) {
       return client.problem.findFirst({
         where: { id: problemId, published: true },
         select: catalogProblemSelect,
+      });
+    },
+    async findSolvedDetails(userProfileId, problemId) {
+      const problem = await client.problem.findFirst({
+        where: {
+          id: problemId,
+          published: true,
+          attempts: {
+            some: {
+              userProfileId,
+              confirmedAt: { not: null },
+              outcome: { in: ["INDEPENDENT", "ASSISTED"] },
+            },
+          },
+        },
+        select: {
+          ...catalogProblemSelect,
+          problemPatterns: {
+            select: { pattern: { select: { name: true } } },
+            orderBy: { pattern: { name: "asc" } },
+          },
+        },
+      });
+      if (problem === null) return null;
+      return catalogProblemDetailsResponseSchema.parse({
+        problem: toCatalogProblem(problem),
+        patterns: problem.problemPatterns.map(({ pattern }) => pattern.name),
       });
     },
   };
@@ -65,27 +111,24 @@ export function createPrismaCatalogStore(client: PrismaClient): CatalogStore {
 export function createCatalogRouter(store: CatalogStore): Router {
   const router = Router();
 
-  router.get("/preferences", async (request, response) => {
-    response.json(
-      catalogPreferencesSchema.parse(await store.preferences(getApplicationProfile(request).id)),
-    );
+  router.get("/problems", async (request, response) => {
+    const query = parseCatalogListQuery(request.query);
+    const page = await store.listPublished(getApplicationProfile(request).id, query);
+    response.json(catalogResponseSchema.parse(page));
   });
 
-  router.put("/preferences", async (request, response) => {
-    const parsed = catalogPreferencesSchema.safeParse(request.body);
-    if (!parsed.success) {
-      throw new HttpError(400, "Invalid catalog preferences");
+  router.get("/problems/:problemId/details", async (request, response) => {
+    const id = catalogProblemSchema.shape.id.safeParse(request.params.problemId);
+    if (!id.success) {
+      throw new HttpError(400, "Invalid catalog identifier");
     }
-    response.json(
-      catalogPreferencesSchema.parse(
-        await store.savePreferences(getApplicationProfile(request).id, parsed.data),
-      ),
-    );
-  });
 
-  router.get("/problems", async (_request, response) => {
-    const problems = await store.listPublished();
-    response.json(catalogResponseSchema.parse({ problems: problems.map(toCatalogProblem) }));
+    const details = await store.findSolvedDetails(getApplicationProfile(request).id, id.data);
+    if (details === null) {
+      throw new HttpError(404, "Solved catalog problem not found");
+    }
+
+    response.json(catalogProblemDetailsResponseSchema.parse(details));
   });
 
   router.get("/problems/:problemId", async (request, response) => {
@@ -105,6 +148,103 @@ export function createCatalogRouter(store: CatalogStore): Router {
   return router;
 }
 
+function parseCatalogListQuery(rawQuery: unknown): CatalogListQuery {
+  if (rawQuery === null || typeof rawQuery !== "object") {
+    throw new HttpError(400, "Invalid catalog query");
+  }
+
+  const query = rawQuery as Record<string, unknown>;
+  const parsed = catalogListQuerySchema.safeParse({
+    query: readQueryString(query.query) ?? "",
+    difficulty: readQueryList(query.difficulty),
+    availability: readQueryList(query.availability),
+    hideSolved: readQueryBoolean(query.hideSolved) ?? false,
+    sort: readQueryString(query.sort) ?? "LEETCODE_ID",
+    sortDirection: readQueryString(query.sortDirection) ?? "ASC",
+    page: readQueryPage(query.page),
+  });
+
+  if (!parsed.success) {
+    throw new HttpError(400, "Invalid catalog query");
+  }
+
+  return parsed.data;
+}
+
+function readQueryString(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") throw new HttpError(400, "Invalid catalog query");
+  return value;
+}
+
+function readQueryBoolean(value: unknown): boolean | undefined {
+  const stringValue = readQueryString(value);
+  if (stringValue === undefined) return undefined;
+  if (stringValue === "true") return true;
+  if (stringValue === "false") return false;
+  throw new HttpError(400, "Invalid catalog query");
+}
+
+function readQueryList(value: unknown): string[] {
+  if (value === undefined) return [];
+
+  const values = Array.isArray(value) ? value : [value];
+  if (!values.every((item) => typeof item === "string")) {
+    throw new HttpError(400, "Invalid catalog query");
+  }
+
+  return values.flatMap((item) => item.split(",")).filter((item) => item !== "");
+}
+
+function readQueryPage(value: unknown): number {
+  const stringValue = readQueryString(value);
+  if (stringValue === undefined) return 0;
+
+  const page = Number(stringValue);
+  if (!Number.isInteger(page) || page < 0) throw new HttpError(400, "Invalid catalog query");
+  return page;
+}
+
+function catalogWhere(userProfileId: string, query: CatalogListQuery): Prisma.ProblemWhereInput {
+  const filters: Prisma.ProblemWhereInput[] = [{ published: true }];
+  const numericQuery = /^\d+$/.test(query.query) ? Number(query.query) : null;
+
+  if (query.query !== "") {
+    filters.push(
+      numericQuery === null
+        ? { title: { contains: query.query, mode: "insensitive" } }
+        : { leetcodeId: numericQuery },
+    );
+  }
+  if (query.difficulty.length > 0) {
+    filters.push({ difficulty: { in: query.difficulty } });
+  }
+  if (query.availability.length > 0) {
+    filters.push({ availability: { in: query.availability } });
+  }
+  if (query.hideSolved) {
+    filters.push({
+      attempts: {
+        none: {
+          userProfileId,
+          confirmedAt: { not: null },
+          outcome: { in: ["INDEPENDENT", "ASSISTED"] },
+        },
+      },
+    });
+  }
+  return filters.length === 1 ? filters[0]! : { AND: filters };
+}
+
+function catalogOrderBy(query: CatalogListQuery): Prisma.ProblemOrderByWithRelationInput[] {
+  const direction = query.sortDirection === "ASC" ? "asc" : "desc";
+  const tieBreaker = { leetcodeId: direction } as const;
+
+  if (query.sort === "TITLE") return [{ title: direction }, tieBreaker];
+  if (query.sort === "DIFFICULTY") return [{ difficulty: direction }, tieBreaker];
+  return [tieBreaker];
+}
+
 export function toCatalogProblem(problem: CatalogProblem): CatalogProblem {
   return catalogProblemSchema.parse({
     id: problem.id,
@@ -115,4 +255,11 @@ export function toCatalogProblem(problem: CatalogProblem): CatalogProblem {
     url: problem.url,
     availability: problem.availability,
   });
+}
+
+function toCatalogListProblem(problem: CatalogProblem, solved: boolean): CatalogListProblem {
+  return {
+    ...toCatalogProblem(problem),
+    solved,
+  };
 }
