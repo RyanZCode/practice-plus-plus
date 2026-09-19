@@ -28,7 +28,8 @@ const history = (
 const input = {
   target: 5,
   practiceDate: "2026-09-09",
-  hidePaidProblems: false,
+  allowPremiumProblems: true,
+  difficultyPreference: "ANY" as const,
   candidates: [
     candidate("fresh1", 1),
     candidate("fresh2", 2),
@@ -122,10 +123,26 @@ describe("daily plan assembly", () => {
     const plan = buildDailyPlan({
       ...input,
       candidates,
-      hidePaidProblems: true,
+      allowPremiumProblems: false,
       history: [...input.history, history("redo1", null)],
     });
     expect(plan.map((p) => p.problemId)).toEqual(["redo2"]);
+  });
+
+  it("limits fresh selections to the configured difficulty", () => {
+    const plan = buildDailyPlan({
+      ...input,
+      target: 3,
+      reviews: [],
+      transfers: [],
+      difficultyPreference: "MEDIUM_ONLY",
+      candidates: [
+        { ...candidate("easy", 1), difficulty: "EASY" as const },
+        { ...candidate("medium", 2), difficulty: "MEDIUM" as const },
+        { ...candidate("hard", 3), difficulty: "HARD" as const },
+      ],
+    });
+    expect(plan.map((item) => item.problemId)).toEqual(["medium"]);
   });
   it("honors future overrides and unmatched transfers", () => {
     const plan = buildDailyPlan({

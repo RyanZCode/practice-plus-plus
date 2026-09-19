@@ -18,6 +18,8 @@ const settings = {
   highIntervalDays: 1,
   mediumIntervalDays: 3,
   lowIntervalDays: 7,
+  allowPremiumProblems: true,
+  difficultyPreference: "ANY",
 };
 function problem(n: number, patternId = id(100)) {
   return {
@@ -55,7 +57,6 @@ function attempt(n: number, problemId = 1, extra = {}) {
 }
 function database() {
   const tx = {
-    userProfile: { findUnique: vi.fn().mockResolvedValue({ hidePaidProblems: false }) },
     practiceSettings: { findUnique: vi.fn().mockResolvedValue(settings) },
     dailyPlan: { findUnique: vi.fn().mockResolvedValue(null) },
     problem: { findMany: vi.fn().mockResolvedValue([problem(1), problem(2), problem(3)]) },
@@ -124,7 +125,7 @@ describe("bounded context", () => {
 
   it("excludes every started problem and unavailable, draft and hidden paid candidates", async () => {
     const { tx, assemble } = database();
-    tx.userProfile.findUnique.mockResolvedValue({ hidePaidProblems: true });
+    tx.practiceSettings.findUnique.mockResolvedValue({ ...settings, allowPremiumProblems: false });
     tx.problem.findMany.mockResolvedValue([
       problem(1),
       { ...problem(2), published: false },
@@ -136,6 +137,24 @@ describe("bounded context", () => {
     const packet = await assemble();
     expect(packet.candidates.map((p) => p.id)).toEqual([id(5)]);
     expect(packet.history).toEqual([]);
+  });
+
+  it("filters fresh context candidates by the configured difficulty", async () => {
+    const { tx, assemble } = database();
+    tx.practiceSettings.findUnique.mockResolvedValue({
+      ...settings,
+      difficultyPreference: "MEDIUM_ONLY",
+    });
+    tx.problem.findMany.mockResolvedValue([
+      { ...problem(1), difficulty: "EASY" },
+      { ...problem(2), difficulty: "MEDIUM" },
+      { ...problem(3), difficulty: "HARD" },
+    ]);
+
+    const packet = await assemble();
+
+    expect(packet.profile.difficultyPreference).toBe("MEDIUM_ONLY");
+    expect(packet.candidates.map((candidate) => candidate.id)).toEqual([id(2)]);
   });
 
   it("ranks relevant confirmed facts before newer unrelated history and reports stale evidence", async () => {

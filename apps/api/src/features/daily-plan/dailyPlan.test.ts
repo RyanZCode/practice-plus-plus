@@ -40,11 +40,14 @@ function database() {
       }),
     },
     practiceSettings: {
-      findUnique: vi
-        .fn()
-        .mockResolvedValue({ timeZone: "America/Toronto", resetMinutes: 240, dailyTarget: 2 }),
+      findUnique: vi.fn().mockResolvedValue({
+        timeZone: "America/Toronto",
+        resetMinutes: 240,
+        dailyTarget: 2,
+        allowPremiumProblems: true,
+        difficultyPreference: "ANY",
+      }),
     },
-    userProfile: { findUniqueOrThrow: vi.fn().mockResolvedValue({ hidePaidProblems: false }) },
     problem: {
       findMany: vi
         .fn()
@@ -76,6 +79,8 @@ describe("daily plan persistence", () => {
       timeZone: "UTC",
       resetMinutes: 0,
       dailyTarget: 1,
+      allowPremiumProblems: true,
+      difficultyPreference: "ANY",
     });
     tx.problem.findMany.mockResolvedValue([]);
     expect(await store.current(userProfileId, new Date("2026-09-10T07:59:00Z"))).toEqual(first);
@@ -129,6 +134,26 @@ describe("daily plan persistence", () => {
       );
     }
     expect(tx.dailyPlan.create).not.toHaveBeenCalled();
+  });
+  it("keeps a confirmed incomplete item out of daily completion", async () => {
+    const { tx, store } = database();
+    tx.dailyPlan.findUnique.mockResolvedValue({
+      practiceDate: new Date("2026-09-09T00:00:00Z"),
+      timeZone: "UTC",
+      resetMinutes: 0,
+      target: 1,
+      items: [
+        {
+          id: "d3b65a55-1a50-43e1-82e0-e23a263925a5",
+          problem,
+          kind: "FRESH",
+          reason: "FRESH_PRACTICE",
+          attempt: { confirmedAt: now, outcome: "INCOMPLETE" },
+        },
+      ],
+    });
+
+    expect((await store.current(userProfileId, now)).items[0]?.status).toBe("INCOMPLETE");
   });
   it("keeps an empty plan stable and requires settings before generation", async () => {
     const { tx, store } = database();

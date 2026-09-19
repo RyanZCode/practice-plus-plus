@@ -6,6 +6,8 @@ const validSettings = {
   defaultAiModel: "gpt-5.4-mini",
   reasoningEffort: null,
   attemptTimerMinutes: 30,
+  allowPremiumProblems: true,
+  difficultyPreference: "ANY",
   dailyTarget: 2,
   redoIntervals: { high: 1, low: 7, medium: 3 },
   resetTime: "04:00",
@@ -20,6 +22,7 @@ describe("practice settings contract", () => {
   it.each([
     { ...validSettings, dailyTarget: 0 },
     { ...validSettings, attemptTimerMinutes: 0 },
+    { ...validSettings, difficultyPreference: "HARD" },
     { ...validSettings, attemptTimerMinutes: 181 },
     { ...validSettings, dailyTarget: 2.5 },
     { ...validSettings, dailyTarget: 11 },

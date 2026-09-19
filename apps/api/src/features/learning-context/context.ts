@@ -294,11 +294,6 @@ export function createPrismaContextAssembler(client: PrismaClient) {
       return client.$transaction(
         async (tx) => {
           const request = parsed.data;
-          const profile = await tx.userProfile.findUnique({
-            where: { id: userProfileId },
-            select: { hidePaidProblems: true },
-          });
-          if (profile === null) throw new HttpError(404, "Profile not found.");
           const settings = await tx.practiceSettings.findUnique({ where: { userProfileId } });
           if (settings === null)
             throw new HttpError(409, "Save practice settings before requesting context.");
@@ -361,13 +356,15 @@ export function createPrismaContextAssembler(client: PrismaClient) {
             candidates,
             history,
             practiceDate,
-            profile.hidePaidProblems,
+            settings.allowPremiumProblems,
+            settings.difficultyPreference,
           );
           const byId = new Map(problems.map((p) => [p.id, p]));
           const planInput = {
             target: savedPlan ? saved!.target : settings.dailyTarget,
             practiceDate,
-            hidePaidProblems: profile.hidePaidProblems,
+            allowPremiumProblems: settings.allowPremiumProblems,
+            difficultyPreference: settings.difficultyPreference,
             candidates,
             history,
             reviews: reviews.map((r) => ({
@@ -393,7 +390,9 @@ export function createPrismaContextAssembler(client: PrismaClient) {
                     ? "PENDING"
                     : attempts.find((a) => a.id === i.attemptId)?.confirmedAt == null
                       ? "ACTIVE"
-                      : "FINISHED",
+                      : attempts.find((a) => a.id === i.attemptId)?.outcome === "INCOMPLETE"
+                        ? "INCOMPLETE"
+                        : "FINISHED",
               }))
             : buildDailyPlan(planInput).map((selection) => ({ ...selection, status: "PENDING" }));
           const relevantPatterns = new Set(
@@ -616,7 +615,8 @@ export function createPrismaContextAssembler(client: PrismaClient) {
               highIntervalDays: settings.highIntervalDays,
               mediumIntervalDays: settings.mediumIntervalDays,
               lowIntervalDays: settings.lowIntervalDays,
-              hidePaidProblems: profile.hidePaidProblems,
+              allowPremiumProblems: settings.allowPremiumProblems,
+              difficultyPreference: settings.difficultyPreference,
             },
             goals,
             preferences,

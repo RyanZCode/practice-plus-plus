@@ -1,6 +1,12 @@
 import { createServer, type Server } from "node:http";
 
-import { catalogProblemSchema, type CatalogProblem } from "@practice-plus-plus/contracts";
+import {
+  catalogPageSize,
+  catalogProblemSchema,
+  type CatalogListQuery,
+  type CatalogListProblem,
+  type CatalogProblem,
+} from "@practice-plus-plus/contracts";
 import type { Express } from "express";
 import pino from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -19,6 +25,7 @@ const problem = {
   url: "https://leetcode.com/problems/two-sum/",
   availability: "AVAILABLE",
 } satisfies CatalogProblem;
+const listProblem = { ...problem, solved: true } satisfies CatalogListProblem;
 const hiddenProblem = {
   ...problem,
   patterns: ["Arrays & Hashing"],
@@ -28,14 +35,18 @@ const hiddenProblem = {
   reviewStatus: "APPROVED",
   published: true,
 };
+const problemDetails = { problem, patterns: ["Arrays & Hashing"] as const };
 const headers = { authorization: "Bearer valid-token" };
 
 function createStore(): CatalogStore {
   return {
-    preferences: vi.fn().mockResolvedValue({ hidePaidProblems: false }),
-    savePreferences: vi.fn().mockResolvedValue({ hidePaidProblems: true }),
-    listPublished: vi.fn().mockResolvedValue([hiddenProblem]),
+    listPublished: vi.fn().mockResolvedValue({
+      problems: [listProblem],
+      total: 1,
+      nextPage: null,
+    }),
     findPublished: vi.fn().mockResolvedValue(hiddenProblem),
+    findSolvedDetails: vi.fn().mockResolvedValue(problemDetails),
   };
 }
 
@@ -99,11 +110,52 @@ describe("catalog disclosure", () => {
       const detail = await fetch(`${url}/catalog/problems/${problem.id}${query}`, { headers });
 
       expect(list.status).toBe(200);
-      expect(await list.json()).toEqual({ problems: [problem] });
+      expect(await list.json()).toEqual({ problems: [listProblem], total: 1, nextPage: null });
       expect(detail.status).toBe(200);
       expect(await detail.json()).toEqual(problem);
+      const solvedDetails = await fetch(`${url}/catalog/problems/${problem.id}/details`, {
+        headers,
+      });
+      expect(solvedDetails.status).toBe(200);
+      expect(await solvedDetails.json()).toEqual(problemDetails);
     },
   );
+
+  it("passes catalog filters and page controls to the store", async () => {
+    const store = createStore();
+    const url = await startServer(createCatalogApp(store));
+
+    const response = await fetch(
+      `${url}/catalog/problems?query=tree&difficulty=MEDIUM,HARD&availability=AVAILABLE&hideSolved=true&sort=TITLE&sortDirection=DESC&page=2`,
+      { headers },
+    );
+
+    expect(response.status).toBe(200);
+    expect(store.listPublished).toHaveBeenCalledExactlyOnceWith(
+      "61a6afc6-d4de-4a61-879c-7ca6bdb5f6b1",
+      {
+        query: "tree",
+        difficulty: ["MEDIUM", "HARD"],
+        availability: ["AVAILABLE"],
+        hideSolved: true,
+        sort: "TITLE",
+        sortDirection: "DESC",
+        page: 2,
+      } satisfies CatalogListQuery,
+    );
+  });
+
+  it("rejects invalid catalog query parameters", async () => {
+    const store = createStore();
+    const url = await startServer(createCatalogApp(store));
+
+    for (const query of ["page=-1", "sort=RANK", "difficulty=EASY,MEDIUM,HARD,EXTRA"]) {
+      const response = await fetch(`${url}/catalog/problems?${query}`, { headers });
+      expect(response.status).toBe(400);
+    }
+
+    expect(store.listPublished).not.toHaveBeenCalled();
+  });
 
   it("rejects hidden fields in the shared learner contract", () => {
     expect(catalogProblemSchema.safeParse(hiddenProblem).success).toBe(false);
@@ -113,27 +165,42 @@ describe("catalog disclosure", () => {
   it("requires authentication before reading catalog data", async () => {
     const store = createStore();
     const url = await startServer(createCatalogApp(store));
-    for (const path of ["/catalog/problems", `/catalog/problems/${problem.id}`]) {
+    for (const path of [
+      "/catalog/problems",
+      `/catalog/problems/${problem.id}`,
+      `/catalog/problems/${problem.id}/details`,
+    ]) {
       expect((await fetch(`${url}${path}`)).status).toBe(401);
     }
     expect(store.listPublished).not.toHaveBeenCalled();
     expect(store.findPublished).not.toHaveBeenCalled();
+    expect(store.findSolvedDetails).not.toHaveBeenCalled();
   });
 
   it("handles an empty catalog, missing problems, and invalid identifiers", async () => {
     const store = createStore();
-    vi.mocked(store.listPublished).mockResolvedValue([]);
+    vi.mocked(store.listPublished).mockResolvedValue({
+      problems: [],
+      total: 0,
+      nextPage: null,
+    });
     vi.mocked(store.findPublished).mockResolvedValue(null);
+    vi.mocked(store.findSolvedDetails).mockResolvedValue(null);
     const url = await startServer(createCatalogApp(store));
 
     const list = await fetch(`${url}/catalog/problems`, { headers });
-    expect(await list.json()).toEqual({ problems: [] });
+    expect(await list.json()).toEqual({ problems: [], total: 0, nextPage: null });
     const missing = await fetch(`${url}/catalog/problems/${problem.id}`, { headers });
     expect(missing.status).toBe(404);
     expect(await missing.json()).toEqual({ error: "Catalog problem not found" });
     const invalid = await fetch(`${url}/catalog/problems/not-a-uuid`, { headers });
     expect(invalid.status).toBe(400);
     expect(store.findPublished).toHaveBeenCalledExactlyOnceWith(problem.id);
+    const missingDetails = await fetch(`${url}/catalog/problems/${problem.id}/details`, {
+      headers,
+    });
+    expect(missingDetails.status).toBe(404);
+    expect(await missingDetails.json()).toEqual({ error: "Solved catalog problem not found" });
   });
 
   it.each([
@@ -165,10 +232,13 @@ describe("catalog disclosure", () => {
 
 describe("Prisma catalog store", () => {
   it("restricts list and identifier queries to published metadata without loading tags", async () => {
+    const count = vi.fn().mockResolvedValue(1);
     const findMany = vi.fn().mockResolvedValue([problem]);
+    const solvedAttempts = vi.fn().mockResolvedValue([{ problemId: problem.id }]);
     const findFirst = vi.fn().mockResolvedValue(null);
     const store = createPrismaCatalogStore({
-      problem: { findMany, findFirst },
+      problem: { count, findMany, findFirst },
+      attempt: { findMany: solvedAttempts },
     } as unknown as PrismaClient);
     const select = {
       id: true,
@@ -180,80 +250,81 @@ describe("Prisma catalog store", () => {
       availability: true,
     };
 
-    await expect(store.listPublished()).resolves.toEqual([problem]);
+    const query = {
+      query: "",
+      difficulty: [],
+      availability: [],
+      hideSolved: false,
+      sort: "LEETCODE_ID",
+      sortDirection: "ASC",
+      page: 0,
+    } satisfies CatalogListQuery;
+
+    await expect(store.listPublished("user-id", query)).resolves.toEqual({
+      problems: [listProblem],
+      total: 1,
+      nextPage: null,
+    });
     await expect(store.findPublished(problem.id)).resolves.toBeNull();
+    expect(count).toHaveBeenCalledWith({ where: { published: true } });
     expect(findMany).toHaveBeenCalledWith({
       where: { published: true },
       select,
-      orderBy: { leetcodeId: "asc" },
+      orderBy: [{ leetcodeId: "asc" }],
+      skip: 0,
+      take: catalogPageSize,
+    });
+    expect(solvedAttempts).toHaveBeenCalledWith({
+      where: {
+        userProfileId: "user-id",
+        problemId: { in: [problem.id] },
+        confirmedAt: { not: null },
+        outcome: { in: ["INDEPENDENT", "ASSISTED"] },
+      },
+      select: { problemId: true },
     });
     expect(findFirst).toHaveBeenCalledWith({
       where: { id: problem.id, published: true },
       select,
     });
   });
-});
 
-describe("catalog preferences", () => {
-  it("requires authentication and saves only the verified user's preference", async () => {
-    const store = createStore();
-    const url = await startServer(createCatalogApp(store));
-    expect((await fetch(`${url}/catalog/preferences`)).status).toBe(401);
-    expect((await fetch(`${url}/catalog/preferences`, { method: "PUT" })).status).toBe(401);
-    const response = await fetch(`${url}/catalog/preferences`, { headers });
-    expect(await response.json()).toEqual({ hidePaidProblems: false });
-    const saved = await fetch(`${url}/catalog/preferences`, {
-      method: "PUT",
-      headers: { ...headers, "content-type": "application/json" },
-      body: JSON.stringify({ hidePaidProblems: true }),
+  it("returns patterns only for a user with a confirmed solve", async () => {
+    const findFirst = vi.fn().mockResolvedValue({
+      ...problem,
+      problemPatterns: [{ pattern: { name: "Arrays & Hashing" } }],
     });
-    expect(saved.status).toBe(200);
-    expect(await saved.json()).toEqual({ hidePaidProblems: true });
-    expect(store.preferences).toHaveBeenCalledExactlyOnceWith(
-      "61a6afc6-d4de-4a61-879c-7ca6bdb5f6b1",
-    );
-    expect(store.savePreferences).toHaveBeenCalledExactlyOnceWith(
-      "61a6afc6-d4de-4a61-879c-7ca6bdb5f6b1",
-      { hidePaidProblems: true },
-    );
-  });
-
-  it("rejects invalid values and supplied ownership", async () => {
-    const store = createStore();
-    const url = await startServer(createCatalogApp(store));
-    for (const body of [
-      {},
-      { hidePaidProblems: "true" },
-      { hidePaidProblems: true, userProfileId: "other" },
-    ]) {
-      const response = await fetch(`${url}/catalog/preferences`, {
-        method: "PUT",
-        headers: { ...headers, "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      expect(response.status).toBe(400);
-    }
-    expect(store.savePreferences).not.toHaveBeenCalled();
-  });
-
-  it("updates only the filter on the selected user profile", async () => {
-    const findUniqueOrThrow = vi.fn().mockResolvedValue({ hidePaidProblems: false });
-    const update = vi.fn().mockResolvedValue({ hidePaidProblems: true });
     const store = createPrismaCatalogStore({
-      userProfile: { findUniqueOrThrow, update },
+      problem: { count: vi.fn(), findMany: vi.fn(), findFirst },
+      attempt: { findMany: vi.fn() },
     } as unknown as PrismaClient);
-    await expect(store.preferences("user-one")).resolves.toEqual({ hidePaidProblems: false });
-    await expect(store.savePreferences("user-two", { hidePaidProblems: true })).resolves.toEqual({
-      hidePaidProblems: true,
-    });
-    expect(findUniqueOrThrow).toHaveBeenCalledWith({
-      where: { id: "user-one" },
-      select: { hidePaidProblems: true },
-    });
-    expect(update).toHaveBeenCalledWith({
-      where: { id: "user-two" },
-      data: { hidePaidProblems: true },
-      select: { hidePaidProblems: true },
+
+    await expect(store.findSolvedDetails("user-id", problem.id)).resolves.toEqual(problemDetails);
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        id: problem.id,
+        published: true,
+        attempts: {
+          some: {
+            userProfileId: "user-id",
+            confirmedAt: { not: null },
+            outcome: { in: ["INDEPENDENT", "ASSISTED"] },
+          },
+        },
+      },
+      select: {
+        id: true,
+        leetcodeId: true,
+        slug: true,
+        title: true,
+        difficulty: true,
+        url: true,
+        availability: true,
+        problemPatterns: {
+          select: { pattern: { select: { name: true } } },
+          orderBy: { pattern: { name: "asc" } },
+        },
+      },
     });
   });
 });

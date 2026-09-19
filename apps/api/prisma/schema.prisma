@@ -19,6 +19,12 @@ enum ProblemAvailability {
   UNAVAILABLE
 }
 
+enum ProblemDifficultyPreference {
+  ANY
+  EASIER
+  MEDIUM_ONLY
+}
+
 enum CatalogImportSource {
   CURATED
   LLM_GENERATED
@@ -39,7 +45,6 @@ model UserProfile {
   id                      String                   @id @default(uuid()) @db.Uuid
   authSubject             String                   @unique @map("auth_subject") @db.Uuid
   role                    UserRole                 @default(USER)
-  hidePaidProblems        Boolean                  @default(false) @map("hide_paid_problems")
   createdAt               DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
   dailyPlan               DailyPlan?
@@ -63,6 +68,8 @@ model PracticeSettings {
   defaultAiModel      String      @default("gpt-5.4-mini") @map("default_ai_model") @db.VarChar(200)
   reasoningEffort     String?     @map("reasoning_effort") @db.VarChar(20)
   attemptTimerMinutes Int         @default(30) @map("attempt_timer_minutes") @db.SmallInt
+  allowPremiumProblems Boolean     @default(true) @map("allow_premium_problems")
+  difficultyPreference ProblemDifficultyPreference @default(ANY) @map("difficulty_preference")
   timeZone            String      @map("time_zone") @db.VarChar(100)
   resetMinutes        Int         @map("reset_minutes") @db.SmallInt
   dailyTarget         Int         @map("daily_target") @db.SmallInt

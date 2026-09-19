@@ -36,6 +36,8 @@ describe("provider model discovery", () => {
         defaultAiModel: "enterprise-chat:v2",
         reasoningEffort: null,
         attemptTimerMinutes: 30,
+        allowPremiumProblems: true,
+        difficultyPreference: "ANY",
         dailyTarget: 2,
         redoIntervals: { high: 1, low: 7, medium: 3 },
         resetTime: "04:00",
