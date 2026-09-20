@@ -128,9 +128,6 @@ export function LearningContext({
           </nav>
           <section className="context-section" id="memory-supplied">
             <h3>Information you supplied</h3>
-            <p className="settings-help">
-              Goals and teaching preferences stay here until you change them.
-            </p>
             <h4>Goals</h4>
             {context.userSupplied.goals.length === 0 ? <p>No goals saved yet.</p> : null}
             <ul className="context-list">

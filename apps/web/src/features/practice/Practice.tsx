@@ -751,9 +751,6 @@ export function Practice({
                 {plan.items.filter((item) => item.status === "FINISHED").length} of{" "}
                 {plan.items.length} finished · Target {plan.target}
               </p>
-              <p className="settings-help">
-                Today’s selections stay fixed. Settings changes apply to the next plan.
-              </p>
               {plan.items.length === 0 ? (
                 <p>No eligible work is available for today’s plan.</p>
               ) : (
