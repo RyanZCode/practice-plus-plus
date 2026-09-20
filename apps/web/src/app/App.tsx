@@ -118,6 +118,9 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [saved, setSaved] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>("practice");
+  const [visitedViews, setVisitedViews] = useState<ReadonlySet<ActiveView>>(
+    () => new Set(["practice"]),
+  );
   const [focusMemoryInferences, setFocusMemoryInferences] = useState(false);
   const [reloadCount, setReloadCount] = useState(0);
 
@@ -228,6 +231,14 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
     }
   }
 
+  function navigate(view: ActiveView): void {
+    setActiveView(view);
+    setVisitedViews((views) => {
+      if (views.has(view)) return views;
+      return new Set([...views, view]);
+    });
+  }
+
   const showNavigation = !isLoading && !loadFailed && !isOnboarding;
 
   return (
@@ -239,7 +250,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
             type="button"
             aria-label="Practice++, open today’s practice"
             aria-current={showNavigation && activeView === "practice" ? "page" : undefined}
-            onClick={() => setActiveView("practice")}
+            onClick={() => navigate("practice")}
           >
             <span className="brand-mark" aria-hidden="true">
               P++
@@ -248,7 +259,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
           </button>
         </h1>
 
-        {showNavigation ? <Navigation activeView={activeView} onNavigate={setActiveView} /> : null}
+        {showNavigation ? <Navigation activeView={activeView} onNavigate={navigate} /> : null}
 
         <div className="account-summary">
           <p className="account-email">
@@ -272,7 +283,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
               className="mobile-brand"
               type="button"
               aria-label="Practice++, open today’s practice"
-              onClick={() => setActiveView("practice")}
+              onClick={() => navigate("practice")}
             >
               Practice++
             </button>
@@ -289,7 +300,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
 
         {showNavigation ? (
           <div className="mobile-navigation">
-            <Navigation activeView={activeView} onNavigate={setActiveView} />
+            <Navigation activeView={activeView} onNavigate={navigate} />
           </div>
         ) : null}
 
@@ -334,30 +345,38 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
               defaultReasoningEffort={savedSettings?.reasoningEffort ?? null}
               onReviewMemory={() => {
                 setFocusMemoryInferences(true);
-                setActiveView("learning");
+                navigate("learning");
               }}
             />
           </div>
 
-          {!isLoading && !loadFailed && !isOnboarding && activeView === "history" ? (
-            <AttemptHistory apiUrl={apiUrl} token={session.access_token} />
+          {!isLoading && !loadFailed && !isOnboarding && visitedViews.has("history") ? (
+            <div hidden={activeView !== "history"}>
+              <AttemptHistory apiUrl={apiUrl} token={session.access_token} />
+            </div>
           ) : null}
 
-          {!isLoading && !loadFailed && !isOnboarding && activeView === "analytics" ? (
-            <Analytics apiUrl={apiUrl} token={session.access_token} />
+          {!isLoading && !loadFailed && !isOnboarding && visitedViews.has("analytics") ? (
+            <div hidden={activeView !== "analytics"}>
+              <Analytics apiUrl={apiUrl} token={session.access_token} />
+            </div>
           ) : null}
 
-          {!isLoading && !loadFailed && !isOnboarding && activeView === "learning" ? (
-            <LearningContext
-              apiUrl={apiUrl}
-              token={session.access_token}
-              focusInferences={focusMemoryInferences}
-              onFocusHandled={() => setFocusMemoryInferences(false)}
-            />
+          {!isLoading && !loadFailed && !isOnboarding && visitedViews.has("learning") ? (
+            <div hidden={activeView !== "learning"}>
+              <LearningContext
+                apiUrl={apiUrl}
+                token={session.access_token}
+                focusInferences={focusMemoryInferences}
+                onFocusHandled={() => setFocusMemoryInferences(false)}
+              />
+            </div>
           ) : null}
 
-          {!isLoading && !loadFailed && !isOnboarding && activeView === "external-ai" ? (
-            <ExternalAiExport apiUrl={apiUrl} token={session.access_token} />
+          {!isLoading && !loadFailed && !isOnboarding && visitedViews.has("external-ai") ? (
+            <div hidden={activeView !== "external-ai"}>
+              <ExternalAiExport apiUrl={apiUrl} token={session.access_token} />
+            </div>
           ) : null}
 
           {!isLoading &&
@@ -382,6 +401,9 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
                 <h2>{isOnboarding ? "Set up your practice" : "Practice settings"}</h2>
                 <p className="settings-help">
                   These settings determine when a practice day starts and how much work is planned.
+                </p>
+                <p className="settings-help">
+                  Today’s selections stay fixed. Settings changes apply to the next plan.
                 </p>
               </div>
 
@@ -498,7 +520,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
                   disabled={isSaving}
                   onChange={(defaultAiModel) => setDraft({ ...draft, defaultAiModel })}
                   label="Default OpenAI model"
-                  help="Used when you open Coach or Attempt tutor. Availability depends on your OpenAI API account."
+                  help="Used when you open Coach or Attempt tutor."
                 />
 
                 <ReasoningEffortSelect

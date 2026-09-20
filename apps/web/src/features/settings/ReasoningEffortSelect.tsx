@@ -49,11 +49,7 @@ export function ReasoningEffortSelect({
           This model does not support the saved effort. Requests use the provider default, and the
           saved setting is unchanged.
         </span>
-      ) : (
-        <span className="settings-help">
-          Leave this at the provider default unless you want to override the model’s effort.
-        </span>
-      )}
+      ) : null}
     </label>
   );
 }

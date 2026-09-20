@@ -88,7 +88,6 @@ export function AnalyticsView({
       <header className="analytics-heading">
         <div>
           <h2 id="analytics-heading">Practice analytics</h2>
-          <p>Evidence through practice date {formatDate(analytics.asOfPracticeDate)}.</p>
         </div>
         <p className={`review-work-summary${overdue > 0 ? " review-work-overdue" : ""}`}>
           <strong>{overdue}</strong> overdue review {overdue === 1 ? "item" : "items"}
@@ -432,7 +431,7 @@ export function StreakCalendarView({
       <div className="streak-heading">
         <div>
           <h2 id="streak-heading">Daily target streak</h2>
-          <p>Complete every saved plan item to fulfill a practice day.</p>
+          <p>Complete every plan item to complete a practice day.</p>
         </div>
         <div className="streak-stat" aria-label={`Current streak: ${streakLabel}`}>
           <strong>{calendar.currentStreak}</strong>

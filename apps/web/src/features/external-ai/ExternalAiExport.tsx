@@ -126,8 +126,7 @@ export function ExternalAiExport({ apiUrl, token }: { apiUrl: string; token: str
     <section className="external-ai page-surface">
       <h2>External AI context</h2>
       <p className="settings-help">
-        Create a bounded Markdown package for an AI conversation outside Practice++. It can include
-        hidden pattern tags, but the package is never displayed on this page.
+        Create a bounded Markdown package for an AI conversation outside Practice++.
       </p>
       <form className="settings-form" onSubmit={(event) => void generate(event)}>
         <label>
@@ -164,10 +163,6 @@ export function ExternalAiExport({ apiUrl, token }: { apiUrl: string; token: str
             />
           </label>
         ) : null}
-        <p className="settings-help">
-          Copying or downloading context is not assistance. Report any help you actually receive
-          when you record the attempt.
-        </p>
         {error ? (
           <p className="auth-message" role="alert">
             {error}

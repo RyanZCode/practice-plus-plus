@@ -7,7 +7,7 @@ export function OpenAIModelSelect({
   disabled,
   onChange,
   label = "OpenAI model",
-  help = "Availability depends on your OpenAI API account.",
+  help = "",
 }: {
   value: string;
   disabled: boolean;
@@ -49,7 +49,7 @@ export function OpenAIModelSelect({
           ))}
         </select>
       </label>
-      <p className="settings-help">{help}</p>
+      {help ? <p className="settings-help">{help}</p> : null}
       {discovery.status === "idle" ? (
         <p className="settings-help">Add an OpenAI API key to discover models for this account.</p>
       ) : null}
