@@ -55,10 +55,8 @@ export function createPrismaCatalogStore(client: PrismaClient): CatalogStore {
           ? []
           : await client.attempt.findMany({
               where: {
-                userProfileId,
+                ...solvedAttemptFilter(userProfileId),
                 problemId: { in: problems.map((problem) => problem.id) },
-                confirmedAt: { not: null },
-                outcome: { in: ["INDEPENDENT", "ASSISTED"] },
               },
               select: { problemId: true },
             });
@@ -84,11 +82,7 @@ export function createPrismaCatalogStore(client: PrismaClient): CatalogStore {
           id: problemId,
           published: true,
           attempts: {
-            some: {
-              userProfileId,
-              confirmedAt: { not: null },
-              outcome: { in: ["INDEPENDENT", "ASSISTED"] },
-            },
+            some: solvedAttemptFilter(userProfileId),
           },
         },
         select: {
@@ -158,7 +152,7 @@ function parseCatalogListQuery(rawQuery: unknown): CatalogListQuery {
     query: readQueryString(query.query) ?? "",
     difficulty: readQueryList(query.difficulty),
     availability: readQueryList(query.availability),
-    hideSolved: readQueryBoolean(query.hideSolved) ?? false,
+    progress: readQueryList(query.progress),
     sort: readQueryString(query.sort) ?? "LEETCODE_ID",
     sortDirection: readQueryString(query.sortDirection) ?? "ASC",
     page: readQueryPage(query.page),
@@ -175,14 +169,6 @@ function readQueryString(value: unknown): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== "string") throw new HttpError(400, "Invalid catalog query");
   return value;
-}
-
-function readQueryBoolean(value: unknown): boolean | undefined {
-  const stringValue = readQueryString(value);
-  if (stringValue === undefined) return undefined;
-  if (stringValue === "true") return true;
-  if (stringValue === "false") return false;
-  throw new HttpError(400, "Invalid catalog query");
 }
 
 function readQueryList(value: unknown): string[] {
@@ -222,18 +208,23 @@ function catalogWhere(userProfileId: string, query: CatalogListQuery): Prisma.Pr
   if (query.availability.length > 0) {
     filters.push({ availability: { in: query.availability } });
   }
-  if (query.hideSolved) {
+  if (query.progress.length === 1) {
     filters.push({
-      attempts: {
-        none: {
-          userProfileId,
-          confirmedAt: { not: null },
-          outcome: { in: ["INDEPENDENT", "ASSISTED"] },
-        },
-      },
+      attempts:
+        query.progress[0] === "SOLVED"
+          ? { some: solvedAttemptFilter(userProfileId) }
+          : { none: solvedAttemptFilter(userProfileId) },
     });
   }
   return filters.length === 1 ? filters[0]! : { AND: filters };
+}
+
+function solvedAttemptFilter(userProfileId: string): Prisma.AttemptWhereInput {
+  return {
+    userProfileId,
+    confirmedAt: { not: null },
+    outcome: { in: ["INDEPENDENT", "ASSISTED"] },
+  };
 }
 
 function catalogOrderBy(query: CatalogListQuery): Prisma.ProblemOrderByWithRelationInput[] {

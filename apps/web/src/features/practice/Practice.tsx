@@ -2,6 +2,7 @@ import type {
   Attempt,
   AttemptAssessmentDraft,
   CatalogListProblem,
+  CatalogProgress,
   DailyPlan,
   MemorySuggestion,
   ReasoningEffort,
@@ -87,7 +88,7 @@ export function Practice({
   const [catalogQuery, setCatalogQuery] = useState("");
   const [catalogDifficulties, setCatalogDifficulties] = useState<CatalogDifficulty[]>([]);
   const [catalogAvailabilities, setCatalogAvailabilities] = useState<CatalogAvailability[]>([]);
-  const [hideSolved, setHideSolved] = useState(false);
+  const [catalogProgress, setCatalogProgress] = useState<CatalogProgress[]>([]);
   const [selectedCatalogProblemId, setSelectedCatalogProblemId] = useState<string | null>(null);
   const [catalogSort, setCatalogSort] = useState<CatalogSort>("LEETCODE_ID");
   const [catalogSortDirection, setCatalogSortDirection] = useState<CatalogSortDirection>("ASC");
@@ -143,6 +144,12 @@ export function Practice({
   }, [apiUrl, token, reload]);
 
   useEffect(() => {
+    if (saved === null) return;
+    const timeout = window.setTimeout(() => setSaved(null), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [saved]);
+
+  useEffect(() => {
     let active = true;
     catalogLoadingMoreRef.current = false;
     setCatalogLoading(true);
@@ -156,7 +163,7 @@ export function Practice({
       query: catalogQuery,
       difficulty: catalogDifficulties,
       availability: catalogAvailabilities,
-      hideSolved,
+      progress: catalogProgress,
       sort: catalogSort,
       sortDirection: catalogSortDirection,
       page: 0,
@@ -186,7 +193,7 @@ export function Practice({
     catalogQuery,
     catalogSort,
     catalogSortDirection,
-    hideSolved,
+    catalogProgress,
   ]);
 
   useEffect(() => {
@@ -214,7 +221,7 @@ export function Practice({
         query: catalogQuery,
         difficulty: catalogDifficulties,
         availability: catalogAvailabilities,
-        hideSolved,
+        progress: catalogProgress,
         sort: catalogSort,
         sortDirection: catalogSortDirection,
         page: nextPage,
@@ -269,7 +276,7 @@ export function Practice({
     catalogQuery,
     catalogSort,
     catalogSortDirection,
-    hideSolved,
+    catalogProgress,
   ]);
 
   useEffect(() => {
@@ -391,7 +398,7 @@ export function Practice({
 
   const visible = problems;
   const filterCount =
-    catalogDifficulties.length + catalogAvailabilities.length + Number(hideSolved);
+    catalogDifficulties.length + catalogAvailabilities.length + catalogProgress.length;
   const planComplete =
     plan !== null &&
     plan.items.length > 0 &&
@@ -403,7 +410,7 @@ export function Practice({
     setCatalogQuery("");
     setCatalogDifficulties([]);
     setCatalogAvailabilities([]);
-    setHideSolved(false);
+    setCatalogProgress([]);
     setCatalogSort("LEETCODE_ID");
     setCatalogSortDirection("ASC");
   }
@@ -411,7 +418,7 @@ export function Practice({
   function clearCatalogFilters(): void {
     setCatalogDifficulties([]);
     setCatalogAvailabilities([]);
-    setHideSolved(false);
+    setCatalogProgress([]);
   }
 
   async function startExtra(personalized: boolean): Promise<void> {
@@ -456,11 +463,17 @@ export function Practice({
           aria-atomic="true"
         >
           <div className="attempt-confirmation-popup">
+            <button
+              className="attempt-confirmation-close"
+              type="button"
+              aria-label="Dismiss attempt confirmation"
+              autoFocus
+              onClick={() => setSaved(null)}
+            >
+              ×
+            </button>
             <h3 id="attempt-confirmation-heading">Attempt confirmed</h3>
             <p>Your result was saved.</p>
-            <button type="button" autoFocus onClick={() => setSaved(null)}>
-              Continue
-            </button>
           </div>
         </div>
       ) : null}
@@ -503,7 +516,9 @@ export function Practice({
               Open on LeetCode ↗
             </a>
           </header>
-          {attempt.patterns?.length ? (
+          {attempt.outcome !== null &&
+          attempt.outcome !== "INCOMPLETE" &&
+          attempt.patterns?.length ? (
             <section className="revealed-patterns" aria-labelledby="revealed-patterns-heading">
               <p className="attempt-phase-label" id="revealed-patterns-heading">
                 Patterns
@@ -914,28 +929,6 @@ export function Practice({
                         ) : null}
                       </button>
                     ))}
-                    <div className="catalog-direction-control" aria-label="Sort direction">
-                      <button
-                        type="button"
-                        className="catalog-direction-button"
-                        aria-label="Sort ascending"
-                        title="Sort ascending"
-                        aria-pressed={catalogSortDirection === "ASC"}
-                        onClick={() => setCatalogSortDirection("ASC")}
-                      >
-                        <span aria-hidden="true">↑</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="catalog-direction-button"
-                        aria-label="Sort descending"
-                        title="Sort descending"
-                        aria-pressed={catalogSortDirection === "DESC"}
-                        onClick={() => setCatalogSortDirection("DESC")}
-                      >
-                        <span aria-hidden="true">↓</span>
-                      </button>
-                    </div>
                   </div>
                 </details>
                 <details
@@ -986,14 +979,18 @@ export function Practice({
                     </fieldset>
                     <fieldset>
                       <legend>Progress</legend>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={hideSolved}
-                          onChange={(event) => setHideSolved(event.target.checked)}
-                        />
-                        Hide solved problems
-                      </label>
+                      {catalogProgressOptions.map((option) => (
+                        <label key={option.value}>
+                          <input
+                            type="checkbox"
+                            checked={catalogProgress.includes(option.value)}
+                            onChange={() =>
+                              setCatalogProgress((current) => toggleValue(current, option.value))
+                            }
+                          />
+                          {option.label}
+                        </label>
+                      ))}
                     </fieldset>
                     {filterCount > 0 ? (
                       <button
@@ -1130,6 +1127,14 @@ const catalogAvailabilityOptions: ReadonlyArray<{
 }> = [
   { label: "Free", value: "AVAILABLE" },
   { label: "Premium", value: "PAID_ONLY" },
+];
+
+const catalogProgressOptions: ReadonlyArray<{
+  readonly label: string;
+  readonly value: CatalogProgress;
+}> = [
+  { label: "Solved", value: "SOLVED" },
+  { label: "Unsolved", value: "UNSOLVED" },
 ];
 
 const catalogSortOptions: ReadonlyArray<{

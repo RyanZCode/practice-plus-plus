@@ -126,7 +126,7 @@ describe("catalog disclosure", () => {
     const url = await startServer(createCatalogApp(store));
 
     const response = await fetch(
-      `${url}/catalog/problems?query=tree&difficulty=MEDIUM,HARD&availability=AVAILABLE&hideSolved=true&sort=TITLE&sortDirection=DESC&page=2`,
+      `${url}/catalog/problems?query=tree&difficulty=MEDIUM,HARD&availability=AVAILABLE&progress=SOLVED&sort=TITLE&sortDirection=DESC&page=2`,
       { headers },
     );
 
@@ -137,7 +137,7 @@ describe("catalog disclosure", () => {
         query: "tree",
         difficulty: ["MEDIUM", "HARD"],
         availability: ["AVAILABLE"],
-        hideSolved: true,
+        progress: ["SOLVED"],
         sort: "TITLE",
         sortDirection: "DESC",
         page: 2,
@@ -149,7 +149,12 @@ describe("catalog disclosure", () => {
     const store = createStore();
     const url = await startServer(createCatalogApp(store));
 
-    for (const query of ["page=-1", "sort=RANK", "difficulty=EASY,MEDIUM,HARD,EXTRA"]) {
+    for (const query of [
+      "page=-1",
+      "sort=RANK",
+      "difficulty=EASY,MEDIUM,HARD,EXTRA",
+      "progress=SOLVED,UNKNOWN",
+    ]) {
       const response = await fetch(`${url}/catalog/problems?${query}`, { headers });
       expect(response.status).toBe(400);
     }
@@ -254,7 +259,7 @@ describe("Prisma catalog store", () => {
       query: "",
       difficulty: [],
       availability: [],
-      hideSolved: false,
+      progress: [],
       sort: "LEETCODE_ID",
       sortDirection: "ASC",
       page: 0,
@@ -288,6 +293,56 @@ describe("Prisma catalog store", () => {
       select,
     });
   });
+
+  it.each(["SOLVED", "UNSOLVED"] as const)(
+    "filters catalog problems by %s progress",
+    async (progress) => {
+      const count = vi.fn().mockResolvedValue(0);
+      const findMany = vi.fn().mockResolvedValue([]);
+      const store = createPrismaCatalogStore({
+        problem: { count, findMany, findFirst: vi.fn() },
+        attempt: { findMany: vi.fn() },
+      } as unknown as PrismaClient);
+      const query = {
+        query: "",
+        difficulty: [],
+        availability: [],
+        progress: [progress],
+        sort: "LEETCODE_ID",
+        sortDirection: "ASC",
+        page: 0,
+      } satisfies CatalogListQuery;
+      const solvedAttempt = {
+        userProfileId: "user-id",
+        confirmedAt: { not: null },
+        outcome: { in: ["INDEPENDENT", "ASSISTED"] },
+      };
+      const attempts = progress === "SOLVED" ? { some: solvedAttempt } : { none: solvedAttempt };
+      const where = { AND: [{ published: true }, { attempts }] };
+
+      await expect(store.listPublished("user-id", query)).resolves.toEqual({
+        problems: [],
+        total: 0,
+        nextPage: null,
+      });
+      expect(count).toHaveBeenCalledWith({ where });
+      expect(findMany).toHaveBeenCalledWith({
+        where,
+        select: {
+          id: true,
+          leetcodeId: true,
+          slug: true,
+          title: true,
+          difficulty: true,
+          url: true,
+          availability: true,
+        },
+        orderBy: [{ leetcodeId: "asc" }],
+        skip: 0,
+        take: catalogPageSize,
+      });
+    },
+  );
 
   it("returns patterns only for a user with a confirmed solve", async () => {
     const findFirst = vi.fn().mockResolvedValue({

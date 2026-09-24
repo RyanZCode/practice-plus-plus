@@ -1,4 +1,4 @@
-import type { CatalogProblem } from "@practice-plus-plus/contracts";
+import type { CatalogProblem, CatalogProgress } from "@practice-plus-plus/contracts";
 
 export type CatalogAvailability = CatalogProblem["availability"];
 export type CatalogDifficulty = CatalogProblem["difficulty"];
@@ -8,7 +8,7 @@ export type CatalogSortDirection = "ASC" | "DESC";
 export interface CatalogBrowseOptions {
   readonly availability: readonly CatalogAvailability[];
   readonly difficulty: readonly CatalogDifficulty[];
-  readonly hideSolved: boolean;
+  readonly progress: readonly CatalogProgress[];
   readonly query: string;
   readonly sort: CatalogSort;
   readonly sortDirection: CatalogSortDirection;
@@ -40,7 +40,8 @@ export function browseCatalog(
         (options.difficulty.length === 0 || options.difficulty.includes(problem.difficulty)) &&
         (options.availability.length === 0 ||
           options.availability.includes(problem.availability)) &&
-        (!options.hideSolved || problem.solved !== true)
+        (options.progress.length === 0 ||
+          options.progress.includes(problem.solved === true ? "SOLVED" : "UNSOLVED"))
       );
     })
     .sort((left, right) => {

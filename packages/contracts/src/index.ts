@@ -375,13 +375,14 @@ export const catalogListProblemSchema = catalogProblemSchema.extend({
 });
 
 export const catalogPageSize = 100;
+export const catalogProgressSchema = z.enum(["SOLVED", "UNSOLVED"]);
 export const catalogSortSchema = z.enum(["DIFFICULTY", "LEETCODE_ID", "TITLE"]);
 export const catalogSortDirectionSchema = z.enum(["ASC", "DESC"]);
 export const catalogListQuerySchema = z.strictObject({
   query: z.string().trim().max(100),
   difficulty: z.array(catalogProblemSchema.shape.difficulty).max(3),
   availability: z.array(catalogProblemSchema.shape.availability).max(3),
-  hideSolved: z.boolean(),
+  progress: z.array(catalogProgressSchema).max(2),
   sort: catalogSortSchema,
   sortDirection: catalogSortDirectionSchema,
   page: z.number().int().nonnegative(),
@@ -400,6 +401,7 @@ export const catalogProblemDetailsResponseSchema = z.strictObject({
 
 export type CatalogProblem = z.infer<typeof catalogProblemSchema>;
 export type CatalogListProblem = z.infer<typeof catalogListProblemSchema>;
+export type CatalogProgress = z.infer<typeof catalogProgressSchema>;
 export type CatalogListQuery = z.infer<typeof catalogListQuerySchema>;
 export type CatalogResponse = z.infer<typeof catalogResponseSchema>;
 export type CatalogProblemDetailsResponse = z.infer<typeof catalogProblemDetailsResponseSchema>;
