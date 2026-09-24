@@ -896,16 +896,26 @@ describe("attempt persistence", () => {
     },
   );
 
-  it("queries tags only through the authenticated user's resolved problem history", async () => {
+  it("reveals tags only after the current attempt has a resolved outcome", async () => {
     const { tx, store } = database();
-    tx.attempt.findFirst.mockResolvedValue(record);
+    tx.attempt.findFirst.mockResolvedValue({ ...record, type: "REDO" });
     expect(await store.active(userId)).not.toHaveProperty("patterns");
+    expect(tx.problemPattern.findMany).not.toHaveBeenCalled();
+
+    tx.attempt.findFirst.mockResolvedValue({
+      ...record,
+      type: "REDO",
+      outcome: "INDEPENDENT",
+    });
+    tx.problemPattern.findMany.mockResolvedValue([{ pattern: { name: "Arrays & Hashing" } }]);
+    expect(await store.active(userId)).toMatchObject({ patterns: ["Arrays & Hashing"] });
     expect(tx.problemPattern.findMany).toHaveBeenCalledExactlyOnceWith({
       where: {
         problemId,
         problem: {
           attempts: {
             some: {
+              id: attempt.id,
               userProfileId: userId,
               outcome: { in: ["INDEPENDENT", "ASSISTED", "GAVE_UP"] },
             },
@@ -915,6 +925,7 @@ describe("attempt persistence", () => {
       select: { pattern: { select: { name: true } } },
       orderBy: { pattern: { name: "asc" } },
     });
+    tx.attempt.findFirst.mockResolvedValue(record);
     tx.attempt.update.mockResolvedValue({
       ...record,
       outcome: "INCOMPLETE",

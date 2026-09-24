@@ -96,12 +96,19 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
     userProfileId: string,
     record: AttemptRecord,
   ) {
+    if (record.outcome === null || record.outcome === "INCOMPLETE") {
+      return attemptSchema.parse(toAttempt(record));
+    }
     const tags = await db.problemPattern.findMany({
       where: {
         problemId: record.problem.id,
         problem: {
           attempts: {
-            some: { userProfileId, outcome: { in: ["INDEPENDENT", "ASSISTED", "GAVE_UP"] } },
+            some: {
+              id: record.id,
+              userProfileId,
+              outcome: { in: ["INDEPENDENT", "ASSISTED", "GAVE_UP"] },
+            },
           },
         },
       },

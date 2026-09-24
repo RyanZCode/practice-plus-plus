@@ -45,10 +45,10 @@ export async function loadProblems(apiUrl: string, token: string, query: Catalog
     sort: query.sort,
     sortDirection: query.sortDirection,
     page: String(query.page),
-    hideSolved: String(query.hideSolved),
   });
   if (query.difficulty.length > 0) params.set("difficulty", query.difficulty.join(","));
   if (query.availability.length > 0) params.set("availability", query.availability.join(","));
+  if (query.progress.length > 0) params.set("progress", query.progress.join(","));
 
   return catalogResponseSchema.parse(
     await request(apiUrl, token, `/catalog/problems?${params.toString()}`),
