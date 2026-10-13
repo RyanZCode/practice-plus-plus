@@ -98,18 +98,18 @@ body {
 }
 
 .brand-mark {
-  display: grid;
+  display: block;
   flex: 0 0 auto;
   width: 2.4rem;
   height: 2.4rem;
   margin-right: 0.7rem;
-  place-items: center;
   border-radius: 0.65rem;
-  color: #ffffff;
-  background: #00599c;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
+  background: #13171e;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
 }
 
 .workspace-navigation {
@@ -500,6 +500,8 @@ button.secondary-button:disabled {
   }
 
   .mobile-brand {
+    display: flex;
+    align-items: center;
     min-height: auto;
     margin: 0;
     padding: 0;
