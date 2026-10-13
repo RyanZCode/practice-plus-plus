@@ -28,7 +28,7 @@ export function buildDailyPlan(input: {
   transfers: readonly TransferCandidate[];
   freshProblemIds?: readonly string[];
 }): PlanSelection[] {
-  if (!Number.isInteger(input.target) || input.target < 1 || input.target > 10) {
+  if (!Number.isInteger(input.target) || input.target < 1 || input.target > 20) {
     throw new RangeError("Invalid daily target.");
   }
   const deterministicFresh = rankFreshCandidates(

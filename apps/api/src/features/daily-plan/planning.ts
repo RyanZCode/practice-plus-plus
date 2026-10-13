@@ -34,7 +34,7 @@ const responseSchema = {
     planningStateId: { type: "string", pattern: "^[a-f0-9]{64}$" },
     freshProblemIds: {
       type: "array",
-      maxItems: 10,
+      maxItems: 20,
       items: { type: "string", format: "uuid" },
     },
   },

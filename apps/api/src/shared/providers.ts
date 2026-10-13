@@ -3,7 +3,6 @@ import {
   openAiModels,
   providerIdSchema,
   providerSelectionSchema,
-  reasoningEffortValues,
   type ProviderId,
   type ProviderModelDiscoveryRequest,
   type ReasoningEffort,
@@ -22,12 +21,24 @@ const providers: Record<ProviderId, { name: string; endpoint: string; modelsEndp
 };
 
 const compatibleChatModels = new Set<string>(openAiModels);
+const standardReasoningEfforts = ["none", "low", "medium", "high", "xhigh", "max"] as const;
+const reasoningEffortsByModel: Record<string, readonly ReasoningEffort[]> = {
+  "gpt-6-luna": standardReasoningEfforts,
+  "gpt-6.1-sol": ["low", "medium", "high", "xhigh", "max"],
+  "gpt-6-astra": ["low", "medium", "high", "xhigh", "max"],
+  "gpt-5.6-luna": standardReasoningEfforts,
+  "gpt-5.6-terra": standardReasoningEfforts,
+  "gpt-5.6-sol": standardReasoningEfforts,
+  "gpt-5.5": ["none", "low", "medium", "high", "xhigh"],
+};
 
 export function supportedReasoningEfforts(
   providerId: ProviderId,
   model: string,
 ): readonly ReasoningEffort[] {
-  return providerId === "openai" && compatibleChatModels.has(model) ? reasoningEffortValues : [];
+  return providerId === "openai" && compatibleChatModels.has(model)
+    ? (reasoningEffortsByModel[model] ?? [])
+    : [];
 }
 
 export function getProviders(): ProvidersResponse {
@@ -303,7 +314,6 @@ function parseModelList(body: string): readonly string[] {
     throw new ProviderError("invalid_response");
   }
 
-  const models: string[] = [];
   const seen = new Set<string>();
   for (const entry of payload.data) {
     if (!isRecord(entry) || typeof entry.id !== "string") continue;
@@ -312,9 +322,8 @@ function parseModelList(body: string): readonly string[] {
       continue;
     }
     seen.add(parsedId.data);
-    models.push(parsedId.data);
   }
-  return models;
+  return openAiModels.filter((model) => seen.has(model));
 }
 
 async function readResponseBody(

@@ -119,7 +119,7 @@ export const contextPacketSchema = z
     profile: z.strictObject({
       timeZone: z.string().max(100),
       resetMinutes: z.number().int().min(0).max(1439),
-      dailyTarget: z.number().int().min(1).max(10),
+      dailyTarget: z.number().int().min(1).max(20),
       highIntervalDays: z.number().int().min(1).max(90),
       mediumIntervalDays: z.number().int().min(1).max(90),
       lowIntervalDays: z.number().int().min(1).max(90),
@@ -155,8 +155,8 @@ export const contextPacketSchema = z
       .max(contextLimits.reviews),
     current: z.strictObject({
       savedPlan: z.boolean(),
-      selections: z.array(selectionSchema).max(10),
-      problems: z.array(problemSchema).max(10),
+      selections: z.array(selectionSchema).max(20),
+      problems: z.array(problemSchema).max(20),
       attempt: factSchema
         .extend({
           problem: problemSchema,

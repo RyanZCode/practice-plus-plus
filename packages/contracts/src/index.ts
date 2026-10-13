@@ -12,7 +12,15 @@ export * from "./context.js";
 export const providerIdSchema = z.enum(["openai"]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
-export const reasoningEffortValues = ["none", "minimal", "low", "medium", "high", "xhigh"] as const;
+export const reasoningEffortValues = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
 export const reasoningEffortSchema = z.enum(reasoningEffortValues);
 export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
 
@@ -20,6 +28,8 @@ export const problemDifficultyPreferenceSchema = z.enum(["ANY", "EASIER", "MEDIU
 export type ProblemDifficultyPreference = z.infer<typeof problemDifficultyPreferenceSchema>;
 
 export const openAiModels = [
+  "gpt-6-luna",
+  "gpt-6.1-sol",
   "gpt-6-astra",
   "gpt-5.6-luna",
   "gpt-5.6-terra",
@@ -49,6 +59,7 @@ export type ProviderModel = z.infer<typeof providerModelSchema>;
 export const providerModelDiscoveryRequestSchema = z.strictObject({
   providerId: providerIdSchema,
   apiKey: z.string().regex(/^[\x21-\x7e]{1,4096}$/),
+  refresh: z.boolean().optional(),
 });
 export type ProviderModelDiscoveryRequest = z.infer<typeof providerModelDiscoveryRequestSchema>;
 
@@ -252,7 +263,7 @@ export const practiceSettingsSchema = z
     attemptTimerMinutes: z.number().int().min(1).max(180),
     allowPremiumProblems: z.boolean(),
     difficultyPreference: problemDifficultyPreferenceSchema,
-    dailyTarget: z.number().int().min(1).max(10),
+    dailyTarget: z.number().int().min(1).max(20),
     redoIntervals: z.strictObject({
       high: wholeDaysSchema,
       low: wholeDaysSchema,
@@ -680,7 +691,7 @@ export type PatternEvidenceResponse = z.infer<typeof patternEvidenceResponseSche
 export const dailyPlanSchema = z
   .strictObject({
     practiceDate: z.iso.date(),
-    target: z.number().int().min(1).max(10),
+    target: z.number().int().min(1).max(20),
     items: z
       .array(
         z.strictObject({
@@ -691,7 +702,7 @@ export const dailyPlanSchema = z
           status: z.enum(["PENDING", "ACTIVE", "FINISHED", "INCOMPLETE"]),
         }),
       )
-      .max(10),
+      .max(20),
   })
   .refine((plan) => plan.items.length <= plan.target);
 export type DailyPlan = z.infer<typeof dailyPlanSchema>;
@@ -717,8 +728,8 @@ export const streakCalendarResponseSchema = z.strictObject({
       date: z.iso.date(),
       status: z.enum(["COMPLETED", "MISSED", "CURRENT", "FUTURE", "NEUTRAL", "UNTRACKED"]),
       isCurrent: z.boolean(),
-      requiredCount: z.number().int().min(0).max(10).nullable(),
-      completedCount: z.number().int().min(0).max(10).nullable(),
+      requiredCount: z.number().int().min(0).max(20).nullable(),
+      completedCount: z.number().int().min(0).max(20).nullable(),
       neutralReason: dailyCompletionNeutralReasonSchema.nullable(),
     }),
   ),
@@ -730,7 +741,7 @@ export type StreakCalendarResponse = z.infer<typeof streakCalendarResponseSchema
 export const planningRecommendationSchema = z.strictObject({
   version: z.literal(1),
   planningStateId: z.string().regex(/^[a-f0-9]{64}$/),
-  freshProblemIds: z.array(z.string().uuid()).max(10),
+  freshProblemIds: z.array(z.string().uuid()).max(20),
 });
 export type PlanningRecommendation = z.infer<typeof planningRecommendationSchema>;
 
@@ -761,6 +772,6 @@ export const planningPreviewSchema = z.strictObject({
         availability: z.enum(["AVAILABLE", "PAID_ONLY", "UNAVAILABLE"]),
       }),
     )
-    .max(10),
+    .max(20),
 });
 export type PlanningPreview = z.infer<typeof planningPreviewSchema>;

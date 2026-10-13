@@ -35,8 +35,7 @@ export function Analytics({ apiUrl, token }: { apiUrl: string; token: string }) 
         if (active) setAnalytics(result);
       })
       .catch((reason: unknown) => {
-        if (active)
-          setError(reason instanceof Error ? reason.message : "Unable to load analytics.");
+        if (active) setError(reason instanceof Error ? reason.message : "Unable to load progress.");
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -46,7 +45,7 @@ export function Analytics({ apiUrl, token }: { apiUrl: string; token: string }) 
     };
   }, [apiUrl, token, reload]);
 
-  if (loading) return <p role="status">Loading analytics…</p>;
+  if (loading) return <p role="status">Loading progress…</p>;
   if (error !== undefined)
     return (
       <div className="page-surface">
@@ -87,7 +86,7 @@ export function AnalyticsView({
     <section className="analytics-page" aria-labelledby="analytics-heading">
       <header className="analytics-heading">
         <div>
-          <h2 id="analytics-heading">Practice analytics</h2>
+          <h2 id="analytics-heading">Progress</h2>
         </div>
         <p className={`review-work-summary${overdue > 0 ? " review-work-overdue" : ""}`}>
           <strong>{overdue}</strong> overdue review {overdue === 1 ? "item" : "items"}

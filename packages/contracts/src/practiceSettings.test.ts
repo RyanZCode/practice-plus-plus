@@ -19,13 +19,19 @@ describe("practice settings contract", () => {
     expect(practiceSettingsSchema.parse(validSettings)).toEqual(validSettings);
   });
 
+  it.each([1, 11, 20])("accepts a daily target of %i", (dailyTarget) => {
+    expect(practiceSettingsSchema.parse({ ...validSettings, dailyTarget }).dailyTarget).toBe(
+      dailyTarget,
+    );
+  });
+
   it.each([
     { ...validSettings, dailyTarget: 0 },
     { ...validSettings, attemptTimerMinutes: 0 },
     { ...validSettings, difficultyPreference: "HARD" },
     { ...validSettings, attemptTimerMinutes: 181 },
     { ...validSettings, dailyTarget: 2.5 },
-    { ...validSettings, dailyTarget: 11 },
+    { ...validSettings, dailyTarget: 21 },
     { ...validSettings, defaultAiModel: "model with spaces" },
     { ...validSettings, reasoningEffort: "invalid" },
     { ...validSettings, resetTime: "24:00" },

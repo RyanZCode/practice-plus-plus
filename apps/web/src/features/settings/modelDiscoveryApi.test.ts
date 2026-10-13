@@ -30,7 +30,7 @@ describe("model discovery API", () => {
           authorization: "Bearer session-token",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ providerId: "openai", apiKey: "private-key" }),
+        body: JSON.stringify({ providerId: "openai", apiKey: "private-key", refresh: true }),
       }),
     );
   });

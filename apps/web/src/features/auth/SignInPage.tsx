@@ -27,11 +27,8 @@ export function SignInPage() {
   return (
     <main className="auth-page">
       <section className="auth-card">
-        <h1 className="auth-brand">
-          <img className="brand-mark" src="/practice-plus-plus.svg" alt="" />
-          Practice++
-        </h1>
-        <p>Sign in to continue.</p>
+        <img className="brand-mark" src="/practice-plus-plus.svg" alt="" />
+        <h1>Sign in to Practice++</h1>
 
         {error === undefined ? null : (
           <p className="auth-message" role="alert">
