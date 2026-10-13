@@ -57,15 +57,48 @@ describe("model discovery service", () => {
     });
   });
 
+  it("refreshes the same credential and replaces its cached model list", async () => {
+    const discoverModels = vi
+      .fn()
+      .mockResolvedValueOnce(["gpt-6-luna"])
+      .mockResolvedValueOnce(["gpt-6-luna", "gpt-6.1-sol"]);
+    const service = createModelDiscoveryService({ provider: { discoverModels } });
+    await service.discover("profile-a", request);
+    const refreshed = await service.discover("profile-a", { ...request, refresh: true });
+    expect(refreshed.models.map((model) => model.id)).toEqual(["gpt-6-luna", "gpt-6.1-sol"]);
+    expect(await service.discover("profile-a", request)).toEqual(refreshed);
+    expect(discoverModels).toHaveBeenCalledTimes(2);
+  });
+
+  it("invalidates cached credentials when a fresh discovery rejects the key", async () => {
+    const discoverModels = vi
+      .fn()
+      .mockResolvedValueOnce(["gpt-6-luna"])
+      .mockRejectedValueOnce(new ProviderError("invalid_credentials"))
+      .mockResolvedValueOnce([]);
+    const service = createModelDiscoveryService({ provider: { discoverModels } });
+    await service.discover("profile-a", request);
+    await expect(
+      service.discover("profile-a", { ...request, refresh: true }),
+    ).rejects.toMatchObject({ code: "invalid_credentials" });
+    expect((await service.discover("profile-a", request)).state).toBe("EMPTY");
+    expect(discoverModels).toHaveBeenCalledTimes(3);
+  });
+
   it("reports reasoning capabilities for supported discovered models", async () => {
     const provider: ProviderModelDiscoveryAdapter = {
-      discoverModels: vi.fn().mockResolvedValue(["gpt-5.5", "gpt-4.1"]),
+      discoverModels: vi
+        .fn()
+        .mockResolvedValue(["gpt-6-luna", "gpt-6.1-sol", "gpt-6-astra", "gpt-5.5", "gpt-4.1"]),
     };
     const service = createModelDiscoveryService({ provider });
 
     await expect(service.discover("profile-a", request)).resolves.toMatchObject({
       models: [
-        { id: "gpt-5.5", reasoningEfforts: ["none", "minimal", "low", "medium", "high", "xhigh"] },
+        { id: "gpt-6-luna", reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"] },
+        { id: "gpt-6.1-sol", reasoningEfforts: ["low", "medium", "high", "xhigh", "max"] },
+        { id: "gpt-6-astra", reasoningEfforts: ["low", "medium", "high", "xhigh", "max"] },
+        { id: "gpt-5.5", reasoningEfforts: ["none", "low", "medium", "high", "xhigh"] },
         { id: "gpt-4.1", reasoningEfforts: [] },
       ],
     });

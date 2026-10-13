@@ -90,7 +90,7 @@ describe("daily plan assembly", () => {
   });
   it("never exceeds capacity or duplicates problems and leaves overflow unchanged", () => {
     const before = JSON.stringify(input);
-    for (let target = 1; target <= 10; target++) {
+    for (let target = 1; target <= 20; target++) {
       const plan = buildDailyPlan({ ...input, target });
       expect(plan.length).toBeLessThanOrEqual(target);
       expect(new Set(plan.map((p) => p.problemId)).size).toBe(plan.length);
@@ -100,6 +100,21 @@ describe("daily plan assembly", () => {
       "fresh1",
       "redo1",
     ]);
+  });
+  it("fills a daily target of twenty when enough problems are available", () => {
+    const candidates = Array.from({ length: 20 }, (_, index) =>
+      candidate(`fresh${index}`, index + 1),
+    );
+    const plan = buildDailyPlan({
+      ...input,
+      target: 20,
+      candidates,
+      reviews: [],
+      transfers: [],
+      history: [],
+    });
+    expect(plan).toHaveLength(20);
+    expect(new Set(plan.map((item) => item.problemId)).size).toBe(20);
   });
   it("keeps the sole fresh match as the reserved diagnostic", () => {
     expect(
@@ -172,7 +187,7 @@ describe("daily plan assembly", () => {
     ).toEqual(plan);
   });
   it("rejects invalid targets and handles an empty catalog", () => {
-    for (const target of [0, 11, 1.5])
+    for (const target of [0, 21, 1.5])
       expect(() => buildDailyPlan({ ...input, target })).toThrow(RangeError);
     expect(buildDailyPlan({ ...input, candidates: [] })).toEqual([]);
   });

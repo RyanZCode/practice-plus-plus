@@ -31,4 +31,17 @@ describe("streak calendar contracts", () => {
       expect(streakCalendarQuerySchema.safeParse(query).success).toBe(false);
     },
   );
+  it("accepts twenty completed problems and rejects counts above twenty", () => {
+    const calendar = {
+      ...response,
+      days: [{ ...response.days[0], requiredCount: 20, completedCount: 20 }],
+    };
+    expect(streakCalendarResponseSchema.safeParse(calendar).success).toBe(true);
+    expect(
+      streakCalendarResponseSchema.safeParse({
+        ...calendar,
+        days: [{ ...calendar.days[0], requiredCount: 21 }],
+      }).success,
+    ).toBe(false);
+  });
 });

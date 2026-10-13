@@ -46,6 +46,9 @@ describe("provider adapter", () => {
           data: [
             { id: "text-embedding-3-small" },
             { id: "gpt-6-astra" },
+            { id: "gpt-6-luna" },
+            { id: "gpt-6-luna" },
+            { id: "gpt-6.1-sol" },
             { id: "gpt-5.6-luna" },
             { id: "gpt-5.6-luna" },
             { id: "gpt-5.6-terra" },
@@ -68,6 +71,8 @@ describe("provider adapter", () => {
     });
 
     expect(models).toEqual([
+      "gpt-6-luna",
+      "gpt-6.1-sol",
       "gpt-6-astra",
       "gpt-5.6-luna",
       "gpt-5.6-terra",
@@ -140,6 +145,37 @@ describe("provider adapter", () => {
       reasoning_effort: "high",
     });
   });
+
+  it.each(["gpt-6-luna", "gpt-6.1-sol", "gpt-6-astra"])(
+    "sends max reasoning for %s",
+    async (model) => {
+      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(streamResponse(complete));
+      await collect(fetcher, {
+        ...request,
+        selection: { providerId: "openai", model, reasoningEffort: "max" },
+      });
+      expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toMatchObject({
+        model,
+        reasoning_effort: "max",
+      });
+    },
+  );
+
+  it.each([
+    { model: "gpt-6-astra", reasoningEffort: "none" as const },
+    { model: "gpt-6.1-sol", reasoningEffort: "none" as const },
+    { model: "gpt-6-luna", reasoningEffort: "minimal" as const },
+    { model: "gpt-5.5", reasoningEffort: "max" as const },
+  ])(
+    "preserves the provider default for unsupported $model effort $reasoningEffort",
+    async (selection) => {
+      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(streamResponse(complete));
+      await collect(fetcher, { ...request, selection: { providerId: "openai", ...selection } });
+      expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).not.toHaveProperty(
+        "reasoning_effort",
+      );
+    },
+  );
 
   it("omits an unsupported reasoning effort and preserves provider defaults", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(streamResponse(complete));

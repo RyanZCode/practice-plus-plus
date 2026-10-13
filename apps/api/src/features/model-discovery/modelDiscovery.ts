@@ -58,9 +58,11 @@ export function createModelDiscoveryService({
         if (entry.expiresAt <= currentTime) cache.delete(key);
       }
       const cached = cache.get(cacheKey);
-      if (cached !== undefined) {
+      if (cached !== undefined && !parsed.data.refresh) {
         return toResponse(parsed.data.providerId, cached.models);
       }
+
+      cache.delete(cacheKey);
 
       const models = await provider.discoverModels({
         ...parsed.data,

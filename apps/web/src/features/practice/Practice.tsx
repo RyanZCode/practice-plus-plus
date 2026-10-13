@@ -454,7 +454,7 @@ export function Practice({
   }
   return (
     <section className="practice">
-      <h2>Practice</h2>
+      <h2>Today</h2>
       {saved ? (
         <div
           className="attempt-confirmation-backdrop"

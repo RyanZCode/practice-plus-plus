@@ -85,7 +85,7 @@ it("renders decision-oriented analytics with definitions and no skill-score clai
     }),
   );
 
-  expect(html).toContain("Practice analytics");
+  expect(html).toContain("Progress");
   expect(html).toContain("3</strong> overdue review items");
   expect(html).toContain("75%");
   expect(html).toContain("Graphs");

@@ -26,6 +26,7 @@ export async function discoverModels(
   const request = providerModelDiscoveryRequestSchema.parse({
     providerId: "openai",
     apiKey,
+    refresh: true,
   });
   const response = await fetcher(`${apiUrl.replace(/\/$/, "")}/ai/models`, {
     body: JSON.stringify(request),
