@@ -252,9 +252,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
             aria-current={showNavigation && activeView === "practice" ? "page" : undefined}
             onClick={() => navigate("practice")}
           >
-            <span className="brand-mark" aria-hidden="true">
-              P++
-            </span>
+            <img className="brand-mark" src="/practice-plus-plus.svg" alt="" />
             <strong>Practice++</strong>
           </button>
         </h1>
@@ -285,6 +283,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
               aria-label="Practice++, open today’s practice"
               onClick={() => navigate("practice")}
             >
+              <img className="brand-mark" src="/practice-plus-plus.svg" alt="" />
               Practice++
             </button>
           </h1>
