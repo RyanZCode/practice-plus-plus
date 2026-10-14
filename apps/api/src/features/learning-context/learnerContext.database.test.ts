@@ -28,7 +28,7 @@ describe.skipIf(databaseUrl === undefined)("learner context database", () => {
     await client.connect();
     await client.query(`CREATE SCHEMA "${schema}"`);
     await client.query(`SET search_path TO "${schema}"`);
-    const migrations = new URL("../prisma/migrations/", import.meta.url);
+    const migrations = new URL("../../../prisma/migrations/", import.meta.url);
     for (const directory of (await readdir(migrations, { withFileTypes: true }))
       .filter((entry) => entry.isDirectory())
       .sort((a, b) => a.name.localeCompare(b.name))) {

@@ -441,6 +441,354 @@
   margin: 0;
 }
 
+.practice .attempt-workspace .attempt-header {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.attempt-workspace .attempt-header h3 {
+  font-size: 1.65rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.attempt-header-meta,
+.attempt-steps,
+.tutor-help-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.attempt-header-meta .practice-type {
+  margin: 0;
+}
+
+.attempt-steps {
+  list-style: none;
+  margin: 1.3rem 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.attempt-steps [aria-current="step"] {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.attempt-split {
+  display: grid;
+  grid-template-columns: minmax(17rem, 0.8fr) minmax(0, 1.35fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.attempt-sidebar,
+.attempt-main {
+  min-width: 0;
+}
+
+.attempt-sidebar {
+  display: grid;
+  gap: 1.2rem;
+  position: sticky;
+  top: 1.5rem;
+}
+
+.attempt-sidebar .page-surface,
+.attempt-workspace .attempt-tutor,
+.attempt-workspace .outcome-form {
+  margin: 0;
+  padding: 1.4rem;
+}
+
+.attempt-sidebar h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.attempt-sidebar .countdown {
+  margin: 0.75rem 0;
+  font-size: 2.7rem;
+}
+
+.attempt-sidebar .attempt-phase-label {
+  margin-top: 0;
+}
+
+.attempt-workspace .attempt-controls,
+.attempt-workspace .attempt-status {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.attempt-workspace .attempt-controls > *,
+.attempt-workspace .attempt-status > * {
+  margin: 0;
+}
+
+.attempt-status ul {
+  padding-left: 1.2rem;
+}
+
+.attempt-status li + li {
+  margin-top: 0.35rem;
+}
+
+.attempt-workspace .attempt-header > div,
+.attempt-tutor-heading > div {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.attempt-workspace .attempt-header h3,
+.attempt-workspace .attempt-tutor-heading h3,
+.attempt-workspace .attempt-tutor-heading p {
+  margin: 0;
+}
+
+.attempt-workspace .attempt-tutor {
+  display: grid;
+  gap: 1rem;
+}
+
+.attempt-workspace .attempt-tutor > * {
+  margin: 0;
+}
+
+.tutor-unavailable {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.tutor-unavailable button {
+  justify-self: start;
+}
+
+.attempt-workspace .revealed-patterns {
+  margin: 1.2rem 0;
+  padding: 1rem;
+  border-color: var(--border);
+}
+
+.attempt-workspace .catalog-pattern-list li {
+  padding: 0;
+  font-size: 1.25rem;
+  background: transparent;
+  color: var(--accent);
+}
+
+.attempt-result-actions,
+.attempt-review-actions {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1.2rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--border);
+}
+
+.attempt-workspace button,
+.attempt-workspace .account-actions button {
+  min-height: 2.6rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+}
+
+.attempt-workspace .text-button {
+  justify-self: start;
+  padding: 0.4rem 0;
+}
+
+.attempt-discard-action {
+  margin-top: 0.75rem;
+}
+
+.attempt-workspace .text-button.danger-button {
+  color: light-dark(#9b3341, #ffb4bc);
+  background: transparent;
+}
+
+.attempt-workspace .text-button.danger-button:is(:hover, :active):not(:disabled) {
+  color: light-dark(#9b3341, #ffb4bc);
+  background: transparent;
+  border-color: transparent;
+  text-decoration: underline;
+}
+
+.attempt-tutor-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+
+.attempt-tutor-settings {
+  position: relative;
+}
+
+.attempt-tutor-settings > summary {
+  color: var(--accent);
+  padding: 0.35rem 0;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.attempt-tutor-settings-panel {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  width: min(20rem, 75vw);
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+.attempt-tutor-settings-panel label + label {
+  margin-top: 0.8rem;
+}
+
+.attempt-workspace .tutor-hint-panel {
+  display: grid;
+  gap: 0.75rem;
+  background: var(--accent-soft);
+  border-color: var(--border);
+}
+
+.tutor-help-actions button[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.attempt-workspace .tutor-workspace > .settings-form {
+  display: grid;
+}
+
+.attempt-workspace .coach-messages {
+  margin: 0;
+}
+
+.attempt-workspace .coach-messages:empty {
+  display: none;
+}
+
+.attempt-outcomes {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.outcome-form .attempt-outcomes label {
+  display: flex;
+  align-items: start;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.attempt-outcomes label:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.attempt-outcomes label:has(input:disabled) {
+  opacity: 0.55;
+}
+
+.attempt-outcomes input {
+  margin-top: 0.25rem;
+}
+
+.attempt-outcomes .settings-help {
+  display: block;
+  margin-top: 0.2rem;
+}
+
+.attempt-workspace .outcome-form > fieldset > legend {
+  font-size: 1.2rem;
+}
+
+.attempt-workspace .outcome-form details {
+  margin-top: 1rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.attempt-dialog {
+  width: min(32rem, calc(100% - 2rem));
+  max-height: calc(100% - 2rem);
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 24%);
+}
+
+.attempt-dialog::backdrop {
+  background: rgb(0 0 0 / 50%);
+}
+
+.attempt-dialog[open] {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.attempt-dialog[open] > * {
+  margin: 0;
+}
+
+.attempt-dialog h3 {
+  margin: 0;
+  font-weight: 500;
+}
+
+@media (max-width: 58rem) {
+  .attempt-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .attempt-sidebar {
+    position: static;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 38rem) {
+  .attempt-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .attempt-tutor-settings-panel {
+    right: 0;
+    left: 0;
+    width: 100%;
+  }
+
+  .attempt-tutor-heading {
+    position: relative;
+  }
+
+  .attempt-tutor-settings {
+    position: static;
+  }
+}
+
+@media (pointer: coarse) {
+  .attempt-workspace button,
+  .attempt-workspace summary {
+    min-height: 44px;
+  }
+}
+
 @media (max-width: 58rem) {
   .today-layout {
     grid-template-columns: minmax(0, 1fr);

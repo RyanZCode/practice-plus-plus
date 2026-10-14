@@ -26,7 +26,7 @@ describe.skipIf(databaseUrl === undefined)("learning context screen database", (
     await sql.connect();
     await sql.query(`CREATE SCHEMA "${schema}"`);
     await sql.query(`SET search_path TO "${schema}"`);
-    const migrations = new URL("../prisma/migrations/", import.meta.url);
+    const migrations = new URL("../../../prisma/migrations/", import.meta.url);
     for (const directory of (await readdir(migrations, { withFileTypes: true }))
       .filter((entry) => entry.isDirectory())
       .sort((a, b) => a.name.localeCompare(b.name)))

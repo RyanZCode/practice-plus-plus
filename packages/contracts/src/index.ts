@@ -35,6 +35,8 @@ export const openAiModels = [
   "gpt-5.6-terra",
   "gpt-5.6-sol",
   "gpt-5.5",
+  "gpt-5.4-mini",
+  "gpt-5.4",
 ] as const;
 export const modelNameSchema = z
   .string()
@@ -83,15 +85,10 @@ export const coachRequestSchema = z
   .refine((request) => request.messages.at(-1)?.role === "user");
 export type CoachRequest = z.infer<typeof coachRequestSchema>;
 
-export const tutorHintNames = [
-  "Small nudge",
-  "Key idea",
-  "Approach outline",
-  "Solution and explanation",
-] as const;
+export const tutorHintNames = ["Small nudge", "Key idea", "Approach outline"] as const;
 
 export const tutorHelpSchema = z.discriminatedUnion("type", [
-  z.strictObject({ type: z.literal("CONCEPTUAL_HINT"), hintLevel: z.number().int().min(1).max(4) }),
+  z.strictObject({ type: z.literal("CONCEPTUAL_HINT"), hintLevel: z.number().int().min(1).max(3) }),
   z.strictObject({
     type: z.enum(["CLARIFICATION", "DEBUGGING", "OPTIMIZATION", "SOLUTION_REVIEW"]),
   }),

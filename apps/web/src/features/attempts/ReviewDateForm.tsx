@@ -1,4 +1,4 @@
-import type { ReviewObligation } from "@practice-plus-plus/contracts";
+import type { Attempt, ReviewObligation } from "@practice-plus-plus/contracts";
 import { useState } from "react";
 import { overrideReview } from "./attemptsApi";
 
@@ -7,11 +7,13 @@ export function ReviewDateForm({
   token,
   attemptId,
   review,
+  onSaved,
 }: {
   apiUrl: string;
   token: string;
   attemptId: string;
   review: ReviewObligation;
+  onSaved?: (attempt: Attempt) => void;
 }) {
   const [saved, setSaved] = useState(review);
   const [date, setDate] = useState(review.manualDueDate ?? review.generatedDueDate);
@@ -31,6 +33,7 @@ export function ReviewDateForm({
         setSaved(result.review);
         setDate(result.review.manualDueDate ?? result.review.generatedDueDate);
         setMessage("Review date saved.");
+        onSaved?.(result);
       }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to save review date.");

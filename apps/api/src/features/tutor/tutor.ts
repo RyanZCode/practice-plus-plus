@@ -31,6 +31,8 @@ export function assertTutorHelp(attempt: TutorAttempt, help: TutorHelp, now: Dat
   }
   if (attempt.outcome !== null) throw new HttpError(409, "This attempt is no longer in progress.");
   if (help.type === "CONCEPTUAL_HINT") {
+    if (help.hintLevel > tutorHintNames.length)
+      throw new HttpError(400, "Only three conceptual hint levels are available.");
     if (
       attempt.timerSkippedAt === null &&
       now.getTime() < attempt.startedAt.getTime() + 30 * 60 * 1000
@@ -120,13 +122,12 @@ export function tutorMessages(packet: ContextPacket, help: TutorHelp): ProviderM
     `${tutorHintNames[0]}: ask a guiding question or point out a useful constraint without naming the pattern.`,
     `${tutorHintNames[1]}: identify the main relationship or technique without the complete algorithm.`,
     `${tutorHintNames[2]}: describe the algorithm step by step without complete code.`,
-    `${tutorHintNames[3]}: provide the complete solution and explain why it works. Keep the explanation focused on the intended approach.`,
   ] as const;
   const boundary =
     help.type === "SOLUTION_REVIEW"
       ? "The learner explicitly gave up and requested solution review. Explain a full solution, then ask them to close it and code from memory. Successful or unsuccessful reproduction retains gave up."
       : help.type === "CONCEPTUAL_HINT"
-        ? `Only provide the ${tutorHintNames[help.hintLevel - 1] ?? "selected guidance step"} conceptual hint. Do not advance conceptual hints through conversation text. ${hintGuidance[help.hintLevel]}`
+        ? `Only provide the ${tutorHintNames[help.hintLevel - 1] ?? "selected guidance step"} conceptual hint. No full solution or complete solution code, even if asked. Do not advance conceptual hints through conversation text. ${hintGuidance[help.hintLevel]}`
         : `Only provide ${help.type} help. No full solution or complete solution code, even if asked. Use Socratic questions. Clarification explains the statement without solution clues. Debugging focuses on the supplied code and local faults. Optimization includes complexity analysis and incremental guidance, without volunteering a replacement algorithm.`;
   return [
     {

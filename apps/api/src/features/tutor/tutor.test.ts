@@ -133,7 +133,7 @@ describe("attempt tutor", () => {
         { type: "CONCEPTUAL_HINT", hintLevel: 4 },
         now,
       ),
-    ).not.toThrow();
+    ).toThrow("three conceptual hint levels");
     expect(() => assertTutorHelp(attempt, { type: "SOLUTION_REVIEW" }, now)).toThrow("Give up");
     expect(() =>
       assertTutorHelp({ ...attempt, outcome: "GAVE_UP" }, { type: "SOLUTION_REVIEW" }, now),
@@ -154,7 +154,7 @@ describe("attempt tutor", () => {
     expect(
       tutorRequestSchema.safeParse({ ...input, help: { type: "CONCEPTUAL_HINT", hintLevel: 4 } })
         .success,
-    ).toBe(true);
+    ).toBe(false);
     expect(
       tutorRequestSchema.safeParse({ ...input, help: { type: "CONCEPTUAL_HINT", hintLevel: 5 } })
         .success,
@@ -165,7 +165,6 @@ describe("attempt tutor", () => {
     [{ type: "CONCEPTUAL_HINT", hintLevel: 1 }, "without naming the pattern"],
     [{ type: "CONCEPTUAL_HINT", hintLevel: 2 }, "without the complete algorithm"],
     [{ type: "CONCEPTUAL_HINT", hintLevel: 3 }, "without complete code"],
-    [{ type: "CONCEPTUAL_HINT", hintLevel: 4 }, "complete solution and explain why it works"],
     [{ type: "DEBUGGING" }, "local faults"],
     [{ type: "CLARIFICATION" }, "without solution clues"],
     [{ type: "OPTIMIZATION" }, "complexity analysis"],
@@ -212,6 +211,15 @@ describe("attempt tutor", () => {
         expect(logs()).not.toContain(secret);
     },
   );
+
+  it("rejects a fourth hint without recording help or invoking the provider", async () => {
+    const streamText = vi.fn<ProviderAdapter["streamText"]>();
+    const { post, store } = await setup({ streamText });
+    const response = await post({ ...input, help: { type: "CONCEPTUAL_HINT", hintLevel: 4 } });
+    expect(response.status).toBe(400);
+    expect(store.check).not.toHaveBeenCalled();
+    expect(streamText).not.toHaveBeenCalled();
+  });
 
   it("rejects invalid and unauthorized requests without generation", async () => {
     const streamText = vi.fn<ProviderAdapter["streamText"]>();
