@@ -923,7 +923,7 @@ button.secondary-button:disabled {
 
   .mobile-navigation .workspace-navigation {
     flex: 1;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0.25rem;
     margin: 0;
   }
@@ -940,7 +940,7 @@ button.secondary-button:disabled {
   }
 
   .mobile-navigation .mobile-more {
-    width: 20%;
+    width: 16.6667%;
   }
 
   .mobile-menu {

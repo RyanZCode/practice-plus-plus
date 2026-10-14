@@ -1,15 +1,17 @@
 import type {
   AttemptHistoryResponse,
   CatalogProblemDetailsResponse,
+  CatalogListProblem,
 } from "@practice-plus-plus/contracts";
 import { useEffect, useState } from "react";
 import { loadAttemptHistory, loadCatalogProblemDetails } from "../attempts/attemptsApi";
 import { HistoryPagination } from "../attempts/AttemptHistory";
 import { ReviewDateForm } from "../attempts/ReviewDateForm";
+import { PracticeType } from "./Today";
 
 const labels: Record<string, string> = {
-  INDEPENDENT: "Independent",
-  ASSISTED: "Assisted",
+  INDEPENDENT: "Solved without help",
+  ASSISTED: "Solved with help",
   GAVE_UP: "Gave up",
   INCOMPLETE: "Incomplete",
   CONFIDENT: "Confident",
@@ -27,12 +29,16 @@ const labels: Record<string, string> = {
 export function CatalogProblemDetails({
   apiUrl,
   token,
-  problemId,
+  problem,
+  disabled,
+  onStart,
   onBack,
 }: {
   readonly apiUrl: string;
   readonly token: string;
-  readonly problemId: string;
+  readonly problem: CatalogListProblem;
+  readonly disabled: boolean;
+  readonly onStart: (problemId: string) => void;
   readonly onBack: () => void;
 }) {
   const [details, setDetails] = useState<CatalogProblemDetailsResponse>();
@@ -49,8 +55,10 @@ export function CatalogProblemDetails({
     setDetails(undefined);
     setHistory(undefined);
     void Promise.all([
-      loadCatalogProblemDetails(apiUrl, token, problemId),
-      loadAttemptHistory(apiUrl, token, { page: pageNumber, problemId }),
+      problem.solved
+        ? loadCatalogProblemDetails(apiUrl, token, problem.id)
+        : Promise.resolve({ problem, patterns: [] }),
+      loadAttemptHistory(apiUrl, token, { page: pageNumber, problemId: problem.id }),
     ])
       .then(([problemDetails, attemptHistory]) => {
         if (!active) return;
@@ -67,7 +75,7 @@ export function CatalogProblemDetails({
     return () => {
       active = false;
     };
-  }, [apiUrl, pageNumber, problemId, reload, token]);
+  }, [apiUrl, pageNumber, problem, reload, token]);
 
   return (
     <section
@@ -79,7 +87,7 @@ export function CatalogProblemDetails({
         type="button"
         onClick={onBack}
       >
-        Back to catalog
+        Back to problems
       </button>
       {loading ? <p role="status">Loading problem details…</p> : null}
       {error ? (
@@ -96,7 +104,7 @@ export function CatalogProblemDetails({
         <>
           <header className="catalog-problem-details-header">
             <div>
-              <p className="attempt-phase-label">Solved problem</p>
+              {problem.solved ? <p className="attempt-phase-label">Solved problem</p> : null}
               <h3 id="problem-details-heading">
                 {details.problem.leetcodeId}. {details.problem.title}
               </h3>
@@ -109,14 +117,29 @@ export function CatalogProblemDetails({
               Open on LeetCode
             </a>
           </header>
-          <section className="catalog-problem-details-section" aria-labelledby="patterns-heading">
-            <h4 id="patterns-heading">Patterns</h4>
-            <ul className="catalog-pattern-list">
-              {details.patterns.map((pattern) => (
-                <li key={pattern}>{pattern}</li>
-              ))}
-            </ul>
-          </section>
+          <div className="account-actions">
+            <button
+              type="button"
+              disabled={disabled || problem.availability === "UNAVAILABLE"}
+              onClick={() => onStart(problem.id)}
+            >
+              {problem.availability === "UNAVAILABLE" ? "Unavailable" : "Start problem"}
+            </button>
+          </div>
+          {details.patterns.length > 0 ? (
+            <section className="catalog-problem-details-section" aria-labelledby="patterns-heading">
+              <h4 id="patterns-heading">Patterns</h4>
+              <ul className="catalog-pattern-list">
+                {details.patterns.map((pattern) => (
+                  <li key={pattern}>{pattern}</li>
+                ))}
+              </ul>
+            </section>
+          ) : (
+            <p className="settings-help">
+              Patterns are revealed after you report a solve or give up.
+            </p>
+          )}
           <section
             className="catalog-problem-details-section"
             aria-labelledby="problem-attempts-heading"
@@ -136,10 +159,9 @@ export function CatalogProblemDetails({
               <ol className="history-list catalog-attempt-history">
                 {history.attempts.map((attempt) => (
                   <li key={attempt.id}>
-                    <h5>
-                      {labels[attempt.outcome]} · {attempt.type === "FRESH" ? "Fresh" : "Redo"}
-                    </h5>
+                    <h5>{labels[attempt.outcome]}</h5>
                     <p>Practice date: {attempt.practiceDate}</p>
+                    <PracticeType redo={attempt.type === "REDO"} />
                     {attempt.review !== null ? (
                       <ReviewDateForm
                         apiUrl={apiUrl}

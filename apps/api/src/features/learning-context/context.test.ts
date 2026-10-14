@@ -228,6 +228,26 @@ describe("bounded context", () => {
     );
   });
 
+  it("allows planning again for an empty saved plan while retaining its target and boundary", async () => {
+    const { tx, assemble } = database();
+    tx.dailyPlan.findUnique.mockResolvedValue({
+      practiceDate: new Date("2026-09-12"),
+      target: 1,
+      timeZone: "America/Toronto",
+      resetMinutes: 240,
+      items: [],
+    });
+    const packet = await assemble();
+    expect(packet.current.savedPlan).toBe(false);
+    expect(packet.current.selections).toHaveLength(1);
+    expect(packet.profile).toMatchObject({
+      dailyTarget: 1,
+      timeZone: "America/Toronto",
+      resetMinutes: 240,
+    });
+    expect(packet.candidates).toHaveLength(3);
+  });
+
   it("preserves a saved plan and changes its state fingerprint after eligibility changes", async () => {
     const { tx, assemble } = database();
     tx.dailyPlan.findUnique.mockResolvedValue({

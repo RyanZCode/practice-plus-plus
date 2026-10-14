@@ -13,6 +13,7 @@ function database() {
       createMany: vi.fn().mockResolvedValue({ count: 0 }),
       create: vi.fn().mockResolvedValue({}),
       update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     dailyPlanItem: { findFirst: vi.fn().mockResolvedValue(null) },
   };
@@ -109,6 +110,33 @@ describe("daily completion lifecycle", () => {
     });
 
     expect(tx.dailyCompletion.findFirst).not.toHaveBeenCalled();
+    expect(tx.dailyCompletion.create).not.toHaveBeenCalled();
+  });
+
+  it("activates only the empty-plan neutral quota when an explicit retry finds work", async () => {
+    const { tx } = database();
+    const practiceDate = new Date("2026-09-17T00:00:00.000Z");
+    vi.mocked(tx.dailyCompletion.findUnique).mockResolvedValue({ practiceDate } as never);
+    const plan = { practiceDate, target: 2, timeZone: "UTC", resetMinutes: 0, itemCount: 1 };
+    await ensureDailyCompletion(tx, userProfileId, null, plan);
+    await ensureDailyCompletion(tx, userProfileId, null, {
+      ...plan,
+      retryEmpty: true,
+      itemCount: 0,
+    });
+    expect(tx.dailyCompletion.updateMany).not.toHaveBeenCalled();
+    await ensureDailyCompletion(tx, userProfileId, plan, { ...plan, retryEmpty: true });
+    expect(tx.dailyCompletion.updateMany).toHaveBeenCalledExactlyOnceWith({
+      where: {
+        userProfileId,
+        practiceDate,
+        state: "NEUTRAL",
+        neutralReason: "NO_PRACTICE_AVAILABLE",
+        requiredCount: 0,
+        completedCount: 0,
+      },
+      data: { requiredCount: 1, state: "ACTIVE", neutralReason: null },
+    });
     expect(tx.dailyCompletion.create).not.toHaveBeenCalled();
   });
 

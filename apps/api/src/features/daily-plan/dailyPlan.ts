@@ -62,7 +62,8 @@ export function createPrismaDailyPlanStore(client: PrismaClient): DailyPlanStore
     return client.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM user_profiles WHERE id = ${userProfileId}::uuid FOR UPDATE`;
       const saved = await tx.dailyPlan.findUnique({ where: { userProfileId }, select });
-      if (saved !== null && practiceDateFor(now, saved) === date(saved.practiceDate)) {
+      const current = saved !== null && practiceDateFor(now, saved) === date(saved.practiceDate);
+      if (current && saved.items.length > 0) {
         if (freshProblemIds !== undefined)
           throw new HttpError(409, "Today's plan has already been saved.");
         await ensureDailyCompletion(tx, userProfileId, saved, {
@@ -77,7 +78,9 @@ export function createPrismaDailyPlanStore(client: PrismaClient): DailyPlanStore
       const settings = await tx.practiceSettings.findUnique({ where: { userProfileId } });
       if (settings === null)
         throw new HttpError(409, "Save practice settings before generating a plan.");
-      const practiceDate = practiceDateFor(now, settings);
+      const boundary = current ? saved : settings;
+      const target = current ? saved.target : settings.dailyTarget;
+      const practiceDate = practiceDateFor(now, boundary);
       const problems = await tx.problem.findMany({
         select: {
           ...catalogProblemSelect,
@@ -108,7 +111,7 @@ export function createPrismaDailyPlanStore(client: PrismaClient): DailyPlanStore
         where: { resolvedAt: null, attemptId: null, sourceAttempt: { userProfileId } },
       });
       const planInput = {
-        target: settings.dailyTarget,
+        target,
         practiceDate,
         allowPremiumProblems: settings.allowPremiumProblems,
         difficultyPreference: settings.difficultyPreference,
@@ -149,7 +152,7 @@ export function createPrismaDailyPlanStore(client: PrismaClient): DailyPlanStore
             )
             .map((problem) => problem.id),
         );
-        const expected = Math.min(settings.dailyTarget, eligible.size);
+        const expected = Math.min(target, eligible.size);
         if (
           freshProblemIds.length !== expected ||
           new Set(freshProblemIds).size !== freshProblemIds.length ||
@@ -158,12 +161,14 @@ export function createPrismaDailyPlanStore(client: PrismaClient): DailyPlanStore
           throw new HttpError(409, "The planning recommendation is no longer valid.");
       }
       const selections = buildDailyPlan(planInput);
+      if (current && selections.length === 0) return present(saved);
       await ensureDailyCompletion(tx, userProfileId, saved, {
         practiceDate: new Date(`${practiceDate}T00:00:00.000Z`),
-        target: settings.dailyTarget,
-        timeZone: settings.timeZone,
-        resetMinutes: settings.resetMinutes,
+        target,
+        timeZone: boundary.timeZone,
+        resetMinutes: boundary.resetMinutes,
         itemCount: selections.length,
+        retryEmpty: current,
       });
       await tx.dailyPlan.deleteMany({ where: { userProfileId } });
       return present(
@@ -171,9 +176,9 @@ export function createPrismaDailyPlanStore(client: PrismaClient): DailyPlanStore
           data: {
             userProfileId,
             practiceDate: new Date(`${practiceDate}T00:00:00.000Z`),
-            target: settings.dailyTarget,
-            timeZone: settings.timeZone,
-            resetMinutes: settings.resetMinutes,
+            target,
+            timeZone: boundary.timeZone,
+            resetMinutes: boundary.resetMinutes,
             items: { create: selections.map((item, position) => ({ ...item, position })) },
           },
           select,

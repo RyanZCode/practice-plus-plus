@@ -1,6 +1,7 @@
 import {
   tutorHintNames,
   type Attempt,
+  type DailyPlan,
   type ExternalAiExportRequest,
 } from "@practice-plus-plus/contracts";
 import { useEffect, useState, type FormEvent } from "react";
@@ -23,7 +24,17 @@ type Selection =
   | "SOLUTION_REVIEW"
   | "RESULT";
 
-export function ExternalAiExport({ apiUrl, token }: { apiUrl: string; token: string }) {
+export function ExternalAiExport({
+  apiUrl,
+  token,
+  planningOnly = false,
+  onPlanSaved,
+}: {
+  apiUrl: string;
+  token: string;
+  planningOnly?: boolean;
+  onPlanSaved?: (plan: DailyPlan) => void;
+}) {
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [selection, setSelection] = useState<Selection>("PLANNING");
   const [currentCode, setCurrentCode] = useState("");
@@ -35,6 +46,7 @@ export function ExternalAiExport({ apiUrl, token }: { apiUrl: string; token: str
   const [preview, setPreview] = useState<PlanningPreview | null>(null);
 
   useEffect(() => {
+    if (planningOnly) return;
     let active = true;
     void loadActiveAttempt(apiUrl, token)
       .then((value) => {
@@ -47,7 +59,7 @@ export function ExternalAiExport({ apiUrl, token }: { apiUrl: string; token: str
     return () => {
       active = false;
     };
-  }, [apiUrl, token]);
+  }, [apiUrl, token, planningOnly]);
 
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -109,10 +121,11 @@ export function ExternalAiExport({ apiUrl, token }: { apiUrl: string; token: str
     setBusy(true);
     setError(undefined);
     try {
-      await confirmExternalPlan(apiUrl, token, preview.recommendation);
+      const plan = await confirmExternalPlan(apiUrl, token, preview.recommendation);
       setPreview(null);
       setRecommendation("");
-      setStatus("Today’s plan was saved. Open Practice to begin.");
+      setStatus("Today’s plan was saved. Open Today to begin.");
+      onPlanSaved?.(plan);
     } catch (reason) {
       setPreview(null);
       setError(reason instanceof Error ? reason.message : "The recommendation could not be saved.");
@@ -124,12 +137,14 @@ export function ExternalAiExport({ apiUrl, token }: { apiUrl: string; token: str
   const choices = selections(attempt);
   return (
     <section className="external-ai page-surface">
-      <h2>External AI context</h2>
+      {planningOnly ? <h3>Plan with your own AI chat</h3> : <h2>External AI context</h2>}
       <p className="settings-help">
-        Create a bounded Markdown package for an AI conversation outside Practice++.
+        {planningOnly
+          ? "Copy your planning context into your AI chat, then return its plan recommendation here."
+          : "Create a Markdown package for an AI conversation outside Practice++."}
       </p>
       <form className="settings-form" onSubmit={(event) => void generate(event)}>
-        <label>
+        <label hidden={planningOnly}>
           Conversation stage
           <select
             value={selection}
