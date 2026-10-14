@@ -73,7 +73,9 @@ export function OpenAIModelSelect({
           {discovery.error ?? "Model discovery failed. Check your API key and try again."}
         </p>
       ) : null}
-      {discovery.status === "stale" || discovery.status === "error" ? (
+      {discovery.status === "empty" ||
+      discovery.status === "stale" ||
+      discovery.status === "error" ? (
         <div className="model-selector-actions">
           <button
             className="secondary-button"

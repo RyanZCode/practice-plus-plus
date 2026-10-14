@@ -55,6 +55,7 @@ describe("provider adapter", () => {
             { id: "gpt-5.6-sol" },
             { id: "gpt-5.5" },
             { id: "gpt-5.4" },
+            { id: "gpt-5.4-mini" },
             { id: "gpt-4.1" },
             { id: "dall-e-3" },
             { id: "unknown-model" },
@@ -78,6 +79,8 @@ describe("provider adapter", () => {
       "gpt-5.6-terra",
       "gpt-5.6-sol",
       "gpt-5.5",
+      "gpt-5.4-mini",
+      "gpt-5.4",
     ]);
     expect(fetcher).toHaveBeenCalledWith(
       "https://api.openai.com/v1/models",
@@ -90,6 +93,32 @@ describe("provider adapter", () => {
         },
       }),
     );
+  });
+
+  it("discovers the application's default model for an account without newer models", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ id: "gpt-5.4-mini" }] }), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    await expect(
+      createProviderAdapter(fetcher).discoverModels({
+        providerId: "openai",
+        apiKey: "private-key",
+      }),
+    ).resolves.toEqual(["gpt-5.4-mini"]);
+  });
+
+  it.each(["gpt-5.4-mini", "gpt-5.4"])("sends supported reasoning for %s", async (model) => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(streamResponse(complete));
+    await collect(fetcher, {
+      ...request,
+      selection: { providerId: "openai", model, reasoningEffort: "high" },
+    });
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toMatchObject({
+      model,
+      reasoning_effort: "high",
+    });
   });
 
   it("normalizes discovery failures without reading the upstream body", async () => {

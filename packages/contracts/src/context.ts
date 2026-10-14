@@ -32,7 +32,7 @@ export const contextPolicySchema = z.discriminatedUnion("mode", [
       attemptId: z.uuid(),
       phase: z.enum(["INDEPENDENT", "HELP", "SOLUTION_REVIEW", "RESULT"]),
       help: z.enum(["CLARIFICATION", "CONCEPTUAL_HINT", "DEBUGGING", "OPTIMIZATION"]).optional(),
-      hintLevel: z.number().int().min(1).max(4).optional(),
+      hintLevel: z.number().int().min(1).max(3).optional(),
     })
     .superRefine((policy, ctx) => {
       if ((policy.phase === "HELP") !== (policy.help !== undefined))

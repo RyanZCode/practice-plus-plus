@@ -26,12 +26,7 @@ import {
 } from "./tutorConversationStorage";
 import { openAiSelection } from "../../shared/aiSelection";
 
-const actions = [
-  "Get a small nudge",
-  "Show me the key idea",
-  "Outline the approach",
-  "Show the solution and explanation",
-];
+const actions = ["Get a small nudge", "Show me the key idea", "Outline the approach"];
 type Message = StoredTutorMessage;
 
 export function AttemptTutor({
@@ -45,6 +40,7 @@ export function AttemptTutor({
   disabled,
   onRefresh,
   onBusy,
+  onAiSetup,
 }: {
   apiUrl: string;
   token: string;
@@ -56,17 +52,21 @@ export function AttemptTutor({
   disabled: boolean;
   onRefresh: () => Promise<void>;
   onBusy: (busy: boolean) => void;
+  onAiSetup: () => void;
 }) {
   const { browserKey } = useAuth();
   const { models } = useModelDiscovery();
   const keyState = useSyncExternalStore(browserKey.subscribe, browserKey.getSnapshot);
   const [model, setModel] = useState(defaultModel);
+  const canUseAi = keyState.hasKey && models.some((entry) => entry.id === model);
   useEffect(() => setModel(defaultModel), [defaultModel]);
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | null>(
     defaultReasoningEffort,
   );
   useEffect(() => setReasoningEffort(defaultReasoningEffort), [defaultReasoningEffort]);
   const [draft, setDraft] = useState("");
+  const messageInput = useRef<HTMLTextAreaElement>(null);
+  const settingsMenu = useRef<HTMLDetailsElement>(null);
   const stored = useRef(loadTutorConversation(window.sessionStorage, userId, attempt.id));
   const [messages, setMessages] = useState<Message[]>(stored.current.messages);
   const [help, setHelp] = useState<TutorHelp>({ type: "CLARIFICATION" });
@@ -117,10 +117,15 @@ export function AttemptTutor({
     ),
   );
   const gaveUp = attempt.outcome === "GAVE_UP";
-  const [workspaceOpen, setWorkspaceOpen] = useState(hintsAvailable || gaveUp);
   useEffect(() => {
-    if (hintsAvailable || gaveUp) setWorkspaceOpen(true);
-  }, [gaveUp, hintsAvailable]);
+    const close = (event: PointerEvent) => {
+      if (event.target instanceof Node && !settingsMenu.current?.contains(event.target)) {
+        if (settingsMenu.current) settingsMenu.current.open = false;
+      }
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, []);
   const checkpointReady =
     messages.slice(checkpointIndex).filter((message) => message.complete).length >= 2;
 
@@ -160,7 +165,7 @@ export function AttemptTutor({
   }
 
   async function send(requested: TutorHelp, defaultMessage?: string) {
-    if (active.current || disabled || checkpointBusy) return;
+    if (active.current || disabled || checkpointBusy || !canUseAi) return;
     const label =
       requested.type === "CONCEPTUAL_HINT"
         ? tutorHintNames[requested.hintLevel - 1]!
@@ -248,26 +253,23 @@ export function AttemptTutor({
 
   return (
     <section className="coach attempt-tutor">
-      <p className="attempt-phase-label">AI support</p>
-      <h3>Attempt tutor</h3>
-      <p className="settings-help">
-        Ask for clarification, debugging help, or progressive hints. Messages and pasted code are
-        sent to OpenAI and kept in this browser session. Only the help category and selected
-        guidance step are saved.
-      </p>
-      {!keyState.hasKey ? (
-        <p role="status">Add your OpenAI API key in Practice settings to use the tutor.</p>
-      ) : null}
-      <details
-        className="tutor-workspace"
-        open={workspaceOpen}
-        onToggle={(event) => setWorkspaceOpen(event.currentTarget.open)}
-      >
-        <summary>
-          {hintsAvailable || gaveUp ? "Tutor workspace" : "Ask for clarification or debugging help"}
-        </summary>
-        <div className="settings-form">
-          <div className="ai-control-grid">
+      <div className="attempt-tutor-heading">
+        <div>
+          <h3>Attempt tutor</h3>
+          <p className="settings-help">Help only when you ask.</p>
+        </div>
+        <details
+          ref={settingsMenu}
+          className="attempt-tutor-settings"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector("summary")?.focus();
+            }
+          }}
+        >
+          <summary>Tutor settings</summary>
+          <div className="attempt-tutor-settings-panel">
             <OpenAIModelSelect
               value={model}
               disabled={busy || checkpointBusy || disabled}
@@ -279,33 +281,65 @@ export function AttemptTutor({
               disabled={busy || checkpointBusy || disabled}
               onChange={setReasoningEffort}
             />
-            {!gaveUp ? (
-              <label>
-                Help category
-                <select
-                  value={help.type === "SOLUTION_REVIEW" ? "CLARIFICATION" : help.type}
-                  disabled={busy || disabled}
-                  onChange={(event) =>
-                    setHelp(
-                      event.target.value === "CONCEPTUAL_HINT"
-                        ? { type: "CONCEPTUAL_HINT", hintLevel: highest }
-                        : {
-                            type: event.target.value as
-                              "CLARIFICATION" | "DEBUGGING" | "OPTIMIZATION",
-                          },
-                    )
-                  }
-                >
-                  <option value="CLARIFICATION">Clarification</option>
-                  <option value="DEBUGGING">Debugging pasted code</option>
-                  <option value="OPTIMIZATION">Complexity analysis and optimization</option>
-                  {highest > 0 ? (
-                    <option value="CONCEPTUAL_HINT">Discuss {tutorHintNames[highest - 1]}</option>
-                  ) : null}
-                </select>
-              </label>
-            ) : null}
           </div>
+        </details>
+      </div>
+      <p className="settings-help">
+        Messages and code are sent to OpenAI and kept in this browser session. Help categories and
+        requested hint levels are recorded.
+      </p>
+      {!keyState.hasKey ? (
+        <div className="tutor-unavailable" role="status">
+          <p>Add an API key to use the tutor. You can keep solving without AI.</p>
+          <button type="button" className="secondary-button" onClick={onAiSetup}>
+            Open AI settings
+          </button>
+        </div>
+      ) : null}
+      {keyState.hasKey && !canUseAi ? (
+        <p role="status">Choose a discovered model in Tutor settings before requesting help.</p>
+      ) : null}
+      <div className="tutor-workspace">
+        <div className="settings-form">
+          {!gaveUp ? (
+            <div className="tutor-help-actions" role="group" aria-label="Tutor help">
+              {(
+                [
+                  ["CLARIFICATION", "Clarification"],
+                  ["DEBUGGING", "Debugging"],
+                  ["OPTIMIZATION", "Complexity and optimization"],
+                ] as const
+              ).map(([type, label]) => (
+                <button
+                  key={type}
+                  type="button"
+                  className="secondary-button"
+                  aria-pressed={help.type === type}
+                  disabled={busy || checkpointBusy || disabled || !canUseAi}
+                  onClick={() => {
+                    setHelp({ type });
+                    messageInput.current?.focus();
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+              {highest > 0 ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  aria-pressed={help.type === "CONCEPTUAL_HINT"}
+                  disabled={busy || checkpointBusy || disabled || !canUseAi}
+                  onClick={() => {
+                    setHelp({ type: "CONCEPTUAL_HINT", hintLevel: highest });
+                    messageInput.current?.focus();
+                  }}
+                >
+                  Discuss {tutorHintNames[highest - 1]}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {!gaveUp && hintsAvailable ? (
             <div className="tutor-hint-panel">
               <div>
@@ -318,7 +352,7 @@ export function AttemptTutor({
                 <div className="account-actions">
                   <button
                     type="button"
-                    disabled={busy || disabled || !keyState.hasKey}
+                    disabled={busy || disabled || !canUseAi}
                     onClick={() =>
                       void send(
                         { type: "CONCEPTUAL_HINT", hintLevel: highest + 1 },
@@ -332,7 +366,7 @@ export function AttemptTutor({
                     <button
                       className="secondary-button"
                       type="button"
-                      disabled={busy || disabled || !keyState.hasKey}
+                      disabled={busy || disabled || !canUseAi}
                       onClick={() =>
                         void send(
                           { type: "CONCEPTUAL_HINT", hintLevel: highest },
@@ -346,19 +380,21 @@ export function AttemptTutor({
                 </div>
               ) : (
                 <div>
-                  <p>Keep working independently, or ask for another solution and explanation.</p>
+                  <p>
+                    Keep solving, discuss the outline, or give up before reviewing a full solution.
+                  </p>
                   <button
                     className="secondary-button"
                     type="button"
-                    disabled={busy || disabled || !keyState.hasKey}
+                    disabled={busy || disabled || !canUseAi}
                     onClick={() =>
                       void send(
                         { type: "CONCEPTUAL_HINT", hintLevel: highest },
-                        "Explain the solution and why it works again.",
+                        "Discuss the approach outline without revealing a full solution or complete code.",
                       )
                     }
                   >
-                    Ask for another solution and explanation
+                    Discuss the approach outline
                   </button>
                 </div>
               )}
@@ -387,10 +423,22 @@ export function AttemptTutor({
               </li>
             ))}
           </ol>
+          {messages.length === 0 ? (
+            <p className="settings-help">
+              {gaveUp
+                ? "Request a solution, then close the reference and try it from memory."
+                : help.type === "DEBUGGING"
+                  ? "Paste your code and describe what you expected to happen."
+                  : help.type === "OPTIMIZATION"
+                    ? "Describe your approach and the complexity you want to check."
+                    : "Ask about the statement or a constraint without requesting a solution."}
+            </p>
+          ) : null}
           <label>
-            Message or code to send
+            {help.type === "DEBUGGING" ? "Code and question" : "Your question"}
             <textarea
-              rows={4}
+              ref={messageInput}
+              rows={3}
               maxLength={16000}
               value={draft}
               disabled={busy || disabled}
@@ -435,7 +483,7 @@ export function AttemptTutor({
               title="Send message (Ctrl+Enter)"
               aria-keyshortcuts="Control+Enter"
               disabled={
-                busy || checkpointBusy || disabled || !keyState.hasKey || draft.trim().length === 0
+                busy || checkpointBusy || disabled || !canUseAi || draft.trim().length === 0
               }
               onClick={() => void send(gaveUp ? { type: "SOLUTION_REVIEW" } : help)}
             >
@@ -446,7 +494,7 @@ export function AttemptTutor({
                 type="button"
                 className="secondary-button"
                 disabled={
-                  busy || checkpointBusy || disabled || !keyState.hasKey || draft.trim().length > 0
+                  busy || checkpointBusy || disabled || !canUseAi || draft.trim().length > 0
                 }
                 onClick={() =>
                   void send(
@@ -462,7 +510,7 @@ export function AttemptTutor({
               <button
                 type="button"
                 className="secondary-button"
-                disabled={busy || checkpointBusy || disabled || !keyState.hasKey}
+                disabled={busy || checkpointBusy || disabled || !canUseAi}
                 onClick={() => void checkpoint(messages.slice(checkpointIndex), messages.length)}
               >
                 {checkpointBusy ? "Saving checkpoint…" : "Save learning checkpoint"}
@@ -496,7 +544,7 @@ export function AttemptTutor({
             </p>
           ) : null}
         </div>
-      </details>
+      </div>
     </section>
   );
 }

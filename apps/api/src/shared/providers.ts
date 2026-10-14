@@ -30,6 +30,8 @@ const reasoningEffortsByModel: Record<string, readonly ReasoningEffort[]> = {
   "gpt-5.6-terra": standardReasoningEfforts,
   "gpt-5.6-sol": standardReasoningEfforts,
   "gpt-5.5": ["none", "low", "medium", "high", "xhigh"],
+  "gpt-5.4-mini": ["none", "low", "medium", "high", "xhigh"],
+  "gpt-5.4": ["none", "low", "medium", "high", "xhigh"],
 };
 
 export function supportedReasoningEfforts(

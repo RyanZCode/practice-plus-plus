@@ -35,6 +35,8 @@ export function AttemptOutcomeForm({
   completedCode,
   onCompletedCodeChange,
   onDraftAssessment,
+  initialIncomplete,
+  onLearningProfile,
 }: {
   attempt: Attempt;
   busy: boolean;
@@ -46,9 +48,13 @@ export function AttemptOutcomeForm({
   onDraftAssessment: (input: DraftAssessmentInput) => Promise<void>;
   onConfirm: (input: ConfirmAttempt) => Promise<void>;
   onReport: (input: ReportAttempt) => Promise<void>;
+  initialIncomplete: boolean;
+  onLearningProfile: () => void;
 }) {
   const [outcome, setOutcome] = useState<ConfirmAttempt["outcome"] | "">(
-    assessmentDraft?.outcome ?? attempt.outcome ?? suggestedOutcome(attempt.assistance) ?? "",
+    initialIncomplete && attempt.outcome === null
+      ? "INCOMPLETE"
+      : (assessmentDraft?.outcome ?? attempt.outcome ?? suggestedOutcome(attempt.assistance) ?? ""),
   );
   const [assistance, setAssistance] = useState<Assistance[]>([]);
   const [reproduced, setReproduced] = useState<boolean | null>(
@@ -69,7 +75,7 @@ export function AttemptOutcomeForm({
   });
   const successfulRedo =
     attempt.type === "REDO" && (outcome === "INDEPENDENT" || outcome === "ASSISTED");
-  const nextActionType = selectedAction ?? "";
+  const nextActionType = selectedAction ?? (outcome === "ASSISTED" ? "REPEAT" : "COMPLETE");
   const required = suggestedOutcome([...attempt.assistance, ...assistance]);
   const reviewed = required === "GAVE_UP";
   const canConfirm = outcome === "INCOMPLETE" || attempt.outcome !== null;
@@ -131,34 +137,49 @@ export function AttemptOutcomeForm({
       }}
     >
       <fieldset disabled={busy}>
-        <legend>Confirm attempt outcome</legend>
-        <label>
-          Outcome
-          <select
-            required
-            value={outcome}
-            onChange={(event) => setOutcome(event.target.value as typeof outcome)}
-          >
-            <option value="" disabled>
-              Select an outcome
-            </option>
-            <option
-              value="INDEPENDENT"
-              disabled={
-                required !== null || attempt.outcome === "ASSISTED" || attempt.outcome === "GAVE_UP"
-              }
-            >
-              Independent: solved without substantive help
-            </option>
-            <option value="ASSISTED" disabled={reviewed || attempt.outcome === "GAVE_UP"}>
-              Assisted: solved with help
-            </option>
-            <option value="GAVE_UP">Gave up</option>
-            <option value="INCOMPLETE" disabled={reviewed || attempt.outcome !== null}>
-              Incomplete: stopped without a result
-            </option>
-          </select>
-        </label>
+        <legend>{canConfirm ? "Review and confirm" : "Report your result"}</legend>
+        <div className="attempt-outcomes" role="group" aria-label="Outcome">
+          {(
+            [
+              ["INDEPENDENT", "Independent", "Solved without substantive help"],
+              ["ASSISTED", "Assisted", "Solved with substantive help"],
+              ["GAVE_UP", "Gave up", "Ended solving without a solve"],
+              ["INCOMPLETE", "Incomplete", "Stopped without a final result"],
+            ] as const
+          ).map(([value, label, description]) => (
+            <label key={value}>
+              <input
+                type="radio"
+                name="outcome"
+                value={value}
+                required
+                checked={outcome === value}
+                disabled={
+                  value === "INDEPENDENT"
+                    ? required !== null ||
+                      attempt.outcome === "ASSISTED" ||
+                      attempt.outcome === "GAVE_UP"
+                    : value === "ASSISTED"
+                      ? reviewed || attempt.outcome === "GAVE_UP"
+                      : value === "INCOMPLETE"
+                        ? reviewed || attempt.outcome !== null
+                        : false
+                }
+                onChange={() => setOutcome(value)}
+              />
+              <span>
+                <strong>{label}</strong>
+                <span className="settings-help">{description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        {outcome === "INCOMPLETE" ? (
+          <p className="settings-help">
+            Save unfinished work and schedule a retry. Patterns stay hidden, and this assignment
+            does not count toward daily completion.
+          </p>
+        ) : null}
         {!canConfirm ? (
           <button
             type="button"
@@ -177,7 +198,8 @@ export function AttemptOutcomeForm({
           </p>
         ) : null}
         {attempt.outcome !== null ? (
-          <div>
+          <details>
+            <summary>AI assessment (optional)</summary>
             <label>
               Completed code (optional)
               <textarea
@@ -216,7 +238,7 @@ export function AttemptOutcomeForm({
                 .
               </p>
             ) : null}
-          </div>
+          </details>
         ) : null}
         {attempt.assistance.length > 0 ? (
           <p>
@@ -270,8 +292,8 @@ export function AttemptOutcomeForm({
           ) : null}
         </details>
         {reviewed ? (
-          <details>
-            <summary>Try the solution from memory (optional)</summary>
+          <fieldset className="attempt-reproduction">
+            <legend>Try the solution from memory</legend>
             <p>
               Close the reference and try coding the solution without looking. Either result keeps
               the outcome gave up, or you can leave this unanswered.
@@ -294,18 +316,18 @@ export function AttemptOutcomeForm({
               />{" "}
               I could not reproduce it
             </label>
-          </details>
+          </fieldset>
         ) : null}
         {canConfirm && successfulRedo ? (
           <fieldset>
-            <legend>Next action (optional)</legend>
+            <legend>After this redo</legend>
             {outcome === "ASSISTED" ? (
               <p>
-                Leave this unchanged to schedule the normal assisted review, or choose another
-                action.
+                Repeat is suggested because this solve used help. Confirm this choice or select
+                another action.
               </p>
             ) : (
-              <p>Leave this unchanged to complete the redo without another follow-up.</p>
+              <p>Confirm no follow-up, or choose more practice.</p>
             )}
             <label>
               After this redo
@@ -313,7 +335,6 @@ export function AttemptOutcomeForm({
                 value={nextActionType}
                 onChange={(event) => setSelectedAction(event.target.value)}
               >
-                <option value="">Use automatic follow-up</option>
                 <option value="REPEAT">Repeat this problem using my review interval</option>
                 <option value="TRANSFER">Practice a fresh problem with the same pattern</option>
                 <option value="COMPLETE">Complete with no follow-up</option>
@@ -453,11 +474,18 @@ export function AttemptOutcomeForm({
                 </li>
               ))}
             </ul>
+            <button type="button" className="text-button" onClick={onLearningProfile}>
+              Review in Learning profile
+            </button>
           </fieldset>
         ) : null}
         {canConfirm ? (
           <button type="submit" disabled={busy || outcome === ""}>
-            {successfulRedo ? "Confirm outcome and next action" : "Confirm outcome"}
+            {busy
+              ? "Saving…"
+              : successfulRedo
+                ? "Confirm outcome and next action"
+                : "Confirm outcome"}
           </button>
         ) : null}
       </fieldset>

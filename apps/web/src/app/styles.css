@@ -96,6 +96,7 @@ body {
 
 .app-sidebar {
   position: sticky;
+  z-index: 6;
   top: 0;
   display: flex;
   flex-direction: column;

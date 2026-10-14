@@ -18,7 +18,6 @@ type Selection =
   | "HINT_1"
   | "HINT_2"
   | "HINT_3"
-  | "HINT_4"
   | "DEBUGGING"
   | "OPTIMIZATION"
   | "SOLUTION_REVIEW"
@@ -273,7 +272,6 @@ function selections(attempt: Attempt | null): [Selection, string][] {
       ["HINT_1", tutorHintNames[0]],
       ["HINT_2", tutorHintNames[1]],
       ["HINT_3", tutorHintNames[2]],
-      ["HINT_4", tutorHintNames[3]],
       ["DEBUGGING", "Debug current code"],
       ["OPTIMIZATION", "Complexity and optimization"],
     ]);

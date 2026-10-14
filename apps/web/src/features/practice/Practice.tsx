@@ -24,6 +24,8 @@ import {
   confirmAttempt,
   reportAttempt,
 } from "../attempts/attemptsApi";
+import { AttemptWorkspace } from "../attempts/AttemptWorkspace";
+import { ReviewDateForm } from "../attempts/ReviewDateForm";
 import { AttemptOutcomeForm } from "../attempts/AttemptOutcomeForm";
 import {
   attemptDocumentTitle,
@@ -45,7 +47,7 @@ import {
   type CatalogSortDirection,
 } from "./catalogBrowse";
 import { CatalogProblemDetails } from "./CatalogProblemDetails";
-import { Today, PracticeType } from "./Today";
+import { Today } from "./Today";
 import { ExternalAiExport } from "../external-ai/ExternalAiExport";
 import { openAiSelection } from "../../shared/aiSelection";
 import "./practice.css";
@@ -64,7 +66,7 @@ export function Practice({
   view: "today" | "problems";
   settings: PracticeSettings;
   refresh: number;
-  onNavigate: (view: "practice" | "problems" | "settings") => void;
+  onNavigate: (view: "practice" | "problems" | "settings" | "learning") => void;
   apiUrl: string;
   token: string;
   userId: string;
@@ -94,6 +96,10 @@ export function Practice({
   const [reload, setReload] = useState(0);
   const [now, setNow] = useState(Date.now());
   const [classifying, setClassifying] = useState(false);
+  const [incomplete, setIncomplete] = useState(false);
+  const [decision, setDecision] = useState<"cancel" | "give-up" | null>(null);
+  const decisionDialog = useRef<HTMLDialogElement>(null);
+  const completionDialog = useRef<HTMLDialogElement>(null);
   const [saved, setSaved] = useState<Attempt | null>(null);
   const [memorySuggestions, setMemorySuggestions] = useState<MemorySuggestion[]>([]);
   const [assessmentDraft, setAssessmentDraft] = useState<AttemptAssessmentDraft | null>(null);
@@ -163,10 +169,18 @@ export function Practice({
   }, [apiUrl, token, reload, refresh]);
 
   useEffect(() => {
-    if (saved === null) return;
-    const timeout = window.setTimeout(() => setSaved(null), 3000);
-    return () => window.clearTimeout(timeout);
-  }, [saved]);
+    const dialog = decisionDialog.current;
+    if (decision !== null && view === "today") {
+      if (!dialog?.open) dialog?.showModal();
+    } else dialog?.close();
+  }, [decision, view]);
+
+  useEffect(() => {
+    const dialog = completionDialog.current;
+    if (saved !== null && view === "today") {
+      if (!dialog?.open) dialog?.showModal();
+    } else dialog?.close();
+  }, [saved, view]);
 
   useEffect(() => {
     let active = true;
@@ -372,21 +386,24 @@ export function Practice({
       setShowAttempt(true);
       setSaved(null);
       setNow(Date.now());
+      return true;
     } catch (reason) {
       setError(message(reason));
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
   async function cancelAttempt(): Promise<void> {
-    if (attempt === null || !window.confirm("Cancel this attempt? It will be discarded.")) return;
+    if (attempt === null) return;
     setBusy(true);
     setError(undefined);
     try {
       await cancelActiveAttempt(apiUrl, token, attempt.id);
       setAttempt(null);
       setClassifying(false);
+      setDecision(null);
       setSaved(null);
       setReload((value) => value + 1);
     } catch (reason) {
@@ -466,6 +483,9 @@ export function Practice({
       }
       setAttempt(next);
       setShowAttempt(true);
+      setClassifying(false);
+      setIncomplete(false);
+      setShowExtra(false);
       setExtraPracticeDate(plan?.practiceDate ?? null);
       setSaved(null);
     } catch (reason) {
@@ -476,6 +496,8 @@ export function Practice({
   }
 
   function startProblem(problemId: string): void {
+    setClassifying(false);
+    setIncomplete(false);
     onNavigate("practice");
     void update(() => startAttempt(apiUrl, token, problemId));
   }
@@ -499,28 +521,181 @@ export function Practice({
           </button>
         </header>
       ) : null}
-      {saved ? (
-        <div
-          className="attempt-confirmation-backdrop"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          <div className="attempt-confirmation-popup">
-            <button
-              className="attempt-confirmation-close"
-              type="button"
-              aria-label="Dismiss attempt confirmation"
-              autoFocus
-              onClick={() => setSaved(null)}
-            >
-              ×
-            </button>
-            <h3 id="attempt-confirmation-heading">Attempt confirmed</h3>
-            <p>Your result was saved.</p>
-          </div>
+      <dialog
+        ref={decisionDialog}
+        className="attempt-dialog"
+        onCancel={(event) => {
+          if (busy) event.preventDefault();
+          else setDecision(null);
+        }}
+        onClose={() => setDecision(null)}
+        aria-labelledby="attempt-decision-heading"
+      >
+        <h3 id="attempt-decision-heading">
+          {decision === "cancel" ? "Discard this attempt?" : "Give up and review?"}
+        </h3>
+        <p>
+          {decision === "cancel"
+            ? "This deletes the attempt and its linked help, drafts, and summaries. No result or retry is saved. Today's assignment becomes available to start again."
+            : "This reports gave up and reveals the patterns. You can review a solution and try it from memory. Either recall result keeps the outcome gave up."}
+        </p>
+        {decision === "cancel" ? (
+          <p className="settings-help">
+            To keep unfinished work and schedule a retry, save it as incomplete instead.
+          </p>
+        ) : null}
+        <div className="account-actions">
+          <button
+            type="button"
+            disabled={busy || tutorBusy}
+            className={decision === "cancel" ? "danger-button" : "primary-button"}
+            onClick={() => {
+              if (decision === "cancel") void cancelAttempt();
+              else if (attempt !== null)
+                void update(() =>
+                  reportAttempt(apiUrl, token, attempt.id, { outcome: "GAVE_UP" }),
+                ).then((updated) => {
+                  if (updated) {
+                    setClassifying(false);
+                    setIncomplete(false);
+                    setDecision(null);
+                  }
+                });
+            }}
+          >
+            {busy ? "Saving…" : decision === "cancel" ? "Discard attempt" : "Give up and continue"}
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={busy}
+            onClick={() => setDecision(null)}
+          >
+            Keep attempt
+          </button>
         </div>
-      ) : null}
+        {error ? (
+          <p className="auth-message" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </dialog>
+      <dialog
+        ref={completionDialog}
+        className="attempt-dialog"
+        onCancel={() => setSaved(null)}
+        onClose={() => setSaved(null)}
+        aria-labelledby="attempt-confirmation-heading"
+      >
+        {saved ? (
+          <>
+            <h3 id="attempt-confirmation-heading">Attempt confirmed</h3>
+            <p>
+              {saved.problem.title} · {saved.outcome?.toLowerCase().replaceAll("_", " ")}
+            </p>
+            {loading ? (
+              <p role="status">Updating daily progress…</p>
+            ) : error !== undefined ? (
+              <div role="alert">
+                <p>The result was saved, but daily progress could not be refreshed.</p>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setReload((value) => value + 1)}
+                >
+                  Reload progress
+                </button>
+              </div>
+            ) : (
+              <p>
+                {plan === null
+                  ? "Outside a saved daily plan"
+                  : `${plan.items.filter((item) => item.status === "FINISHED").length} / ${plan.items.length} assigned problems complete`}
+              </p>
+            )}
+            {saved.outcome === "INCOMPLETE" ? (
+              <p className="settings-help">
+                Incomplete work does not count toward daily completion. The saved plan will not
+                replace this assignment.
+              </p>
+            ) : null}
+            {saved.review !== null ? (
+              <>
+                <p>
+                  Next {saved.outcome === "INCOMPLETE" ? "retry" : "review"}:{" "}
+                  {saved.review.manualDueDate ?? saved.review.generatedDueDate}
+                </p>
+                <details>
+                  <summary>Change due date</summary>
+                  <ReviewDateForm
+                    apiUrl={apiUrl}
+                    token={token}
+                    attemptId={saved.id}
+                    review={saved.review}
+                    onSaved={(updated) =>
+                      setSaved((previous) =>
+                        previous === null ? null : { ...previous, review: updated.review },
+                      )
+                    }
+                  />
+                </details>
+              </>
+            ) : (
+              <p>
+                {saved.nextAction?.type === "TRANSFER"
+                  ? `Fresh same-pattern transfer: ${saved.nextAction.pattern}. Eligible ${saved.nextAction.dueDate ?? "7 calendar days after this attempt"}. A matching problem is selected when a daily plan has space.`
+                  : "No automatic follow-up."}
+              </p>
+            )}
+            <div className="account-actions">
+              {!loading &&
+              error === undefined &&
+              plan?.items.find((item) => item.status === "PENDING") ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = plan.items.find((item) => item.status === "PENDING");
+                    if (next) {
+                      setSaved(null);
+                      startProblem(next.problem.id);
+                    }
+                  }}
+                  disabled={
+                    busy ||
+                    plan.items.find((item) => item.status === "PENDING")?.problem.availability ===
+                      "UNAVAILABLE"
+                  }
+                >
+                  Start next problem
+                </button>
+              ) : null}
+              {!loading && error === undefined && planComplete ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSaved(null);
+                    setShowExtra(true);
+                    setExtraPracticeDismissedDate(null);
+                  }}
+                >
+                  Choose extra practice
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  if (planComplete) stopExtra();
+                  setSaved(null);
+                }}
+              >
+                {" "}
+                {planComplete ? "Finish for today" : "Back to Today"}
+              </button>
+            </div>
+          </>
+        ) : null}
+      </dialog>
       {loading ? <p role="status">Loading practice…</p> : null}
       {error === undefined ? null : (
         <div className="practice-error">
@@ -538,234 +713,121 @@ export function Practice({
       )}
       {!loading && attempt !== null ? (
         <div className="active-attempt" hidden={view !== "today" || !showAttempt}>
-          <header className="attempt-header">
-            <div>
-              <p className="attempt-eyebrow">{attempt.practiceDate}</p>
-              <h3>{attempt.problem.title}</h3>
-              <PracticeType redo={attempt.type === "REDO"} />
-              <p className="attempt-metadata">
-                {attempt.problem.difficulty.charAt(0) +
-                  attempt.problem.difficulty.slice(1).toLocaleLowerCase()}
-                {attempt.problem.availability === "PAID_ONLY" ? " · LeetCode Premium required" : ""}
-              </p>
-            </div>
-            <a
-              className="attempt-problem-link"
-              href={attempt.problem.url}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open on LeetCode ↗
-            </a>
-          </header>
-          {attempt.outcome !== null &&
-          attempt.outcome !== "INCOMPLETE" &&
-          attempt.patterns?.length ? (
-            <section className="revealed-patterns" aria-labelledby="revealed-patterns-heading">
-              <p className="attempt-phase-label" id="revealed-patterns-heading">
-                Patterns
-              </p>
-              <ul className="catalog-pattern-list">
-                {attempt.patterns.map((pattern) => (
-                  <li key={pattern}>{pattern}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-          {attempt.solutionReviewedAt !== null ? (
-            <p>
-              <a
-                href={`https://leetcode.com/problems/${attempt.problem.slug}/solutions/`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Review LeetCode solutions ↗
-              </a>
-            </p>
-          ) : attempt.outcome === "GAVE_UP" ? (
-            <p>
-              <button
-                type="button"
-                disabled={busy || tutorBusy}
-                onClick={() => void update(() => reviewSolution(apiUrl, token, attempt.id))}
-              >
-                Review LeetCode solutions
-              </button>
-            </p>
-          ) : attempt.outcome !== null ? null : seconds > 0 ? (
-            <section className="attempt-phase" aria-labelledby="independent-attempt-heading">
-              <p className="attempt-phase-label" id="independent-attempt-heading">
-                Independent attempt
-              </p>
-              <p
-                className="countdown"
-                role="timer"
-                aria-label="Independent practice time remaining"
-              >
-                {formatRemainingSeconds(seconds)}
-              </p>
-              <p>
-                {attempt.timerPausedAt == null
-                  ? "Work independently before seeking help."
-                  : "Timer paused."}
-              </p>
-              <div className="account-actions">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void update(() =>
-                      attempt.timerPausedAt == null
-                        ? pauseTimer(apiUrl, token, attempt.id)
-                        : resumeTimer(apiUrl, token, attempt.id),
-                    )
+          <AttemptWorkspace
+            attempt={attempt}
+            seconds={seconds}
+            busy={busy || tutorBusy}
+            recording={classifying}
+            completed={plan?.items.filter((item) => item.status === "FINISHED").length ?? 0}
+            required={plan?.items.length ?? null}
+            onPause={() =>
+              void update(() =>
+                attempt.timerPausedAt == null
+                  ? pauseTimer(apiUrl, token, attempt.id)
+                  : resumeTimer(apiUrl, token, attempt.id),
+              )
+            }
+            onSkip={() => void update(() => skipTimer(apiUrl, token, attempt.id))}
+            onReport={(unfinished) => {
+              setIncomplete(unfinished);
+              setClassifying(true);
+            }}
+            onReturn={() => setClassifying(false)}
+            onGiveUp={() => setDecision("give-up")}
+            onCancel={() => setDecision("cancel")}
+            onReview={() => void update(() => reviewSolution(apiUrl, token, attempt.id))}
+            tutor={
+              <AttemptTutor
+                key={attempt.id}
+                apiUrl={apiUrl}
+                token={token}
+                userId={userId}
+                defaultModel={defaultModel}
+                defaultReasoningEffort={defaultReasoningEffort}
+                attempt={attempt}
+                hintsAvailable={seconds === 0}
+                disabled={busy}
+                onAiSetup={() => onNavigate("settings")}
+                onBusy={setTutorBusy}
+                onRefresh={async () => {
+                  try {
+                    setAttempt(await loadActiveAttempt(apiUrl, token));
+                  } catch {
+                    setError("Reload practice to refresh recorded assistance before confirming.");
                   }
-                >
-                  {attempt.timerPausedAt == null ? "Pause timer" : "Resume timer"}
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void update(() => skipTimer(apiUrl, token, attempt.id))}
-                >
-                  Skip timer
-                </button>
-              </div>
-            </section>
-          ) : (
-            <section className="attempt-phase attempt-phase-complete" role="status">
-              <p className="attempt-phase-label">Independent timer complete</p>
-              <h4>Keep solving, or ask for the smallest useful hint</h4>
-              <p>
-                There is no deadline. Continue independently, or use the progressive tutor below.
-                Solution review remains available only after you explicitly give up.
-              </p>
-            </section>
-          )}
-          {attempt.outcome === null || attempt.outcome === "GAVE_UP" ? (
-            <AttemptTutor
-              key={attempt.id}
-              apiUrl={apiUrl}
-              token={token}
-              userId={userId}
-              defaultModel={defaultModel}
-              defaultReasoningEffort={defaultReasoningEffort}
-              attempt={attempt}
-              hintsAvailable={seconds === 0}
-              disabled={busy}
-              onBusy={setTutorBusy}
-              onRefresh={async () => {
-                try {
-                  setAttempt(await loadActiveAttempt(apiUrl, token));
-                } catch {
-                  setError("Reload practice to refresh recorded assistance before confirming.");
-                }
-              }}
-            />
-          ) : null}
-          {(classifying || attempt.outcome !== null) && assessmentLoadedFor !== attempt.id ? (
-            <p role="status">Loading assessment draft…</p>
-          ) : classifying || attempt.outcome !== null ? (
-            <AttemptOutcomeForm
-              key={`${attempt.id}-${attempt.solutionReviewedAt ?? "solving"}-${JSON.stringify(attempt.summary)}-${assessmentDraft?.updatedAt ?? "no-draft"}`}
-              attempt={attempt}
-              memorySuggestions={memorySuggestions}
-              assessmentDraft={assessmentDraft}
-              canDraftAssessment={keyState.hasKey}
-              completedCode={completedCode}
-              onCompletedCodeChange={setCompletedCode}
-              onDraftAssessment={async ({ completedCode: code, currentSummary }) => {
-                setBusy(true);
-                setError(undefined);
-                try {
-                  const tutorConversation = loadTutorConversation(
-                    window.sessionStorage,
-                    userId,
-                    attempt.id,
-                  );
-                  const tutorMessages = recentCoachMessages(
-                    tutorConversation.messages
-                      .slice(tutorConversation.checkpointIndex)
-                      .filter((message) => message.complete)
-                      .map(({ role, content }) => ({ role, content })),
-                  );
-                  setAssessmentDraft(
-                    await generateAssessmentDraft(apiUrl, token, {
-                      selection: openAiSelection(defaultModel, models, defaultReasoningEffort),
-                      apiKey: browserKey.getKey(userId) ?? "",
-                      attemptId: attempt.id,
-                      completedCode: code,
-                      currentSummary,
-                      tutorMessages,
-                    }),
-                  );
-                } catch (reason) {
-                  setError(message(reason));
-                } finally {
-                  setBusy(false);
-                }
-              }}
-              busy={busy || tutorBusy}
-              onReport={(input) => update(() => reportAttempt(apiUrl, token, attempt.id, input))}
-              onConfirm={async (input) => {
-                setBusy(true);
-                setError(undefined);
-                try {
-                  const confirmed = await confirmAttempt(apiUrl, token, attempt.id, input);
-                  setAttempt(null);
-                  setSelectedCatalogProblem(null);
-                  setClassifying(false);
-                  setSaved(confirmed);
-                  setReload((value) => value + 1);
-                } catch (reason) {
-                  setError(message(reason));
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            />
-          ) : (
-            <div className="attempt-completion-actions">
-              <div>
-                <strong>Finished working?</strong>
-                <p className="settings-help">
-                  Record what happened, or explicitly give up before reviewing a solution.
-                </p>
-              </div>
-              <div className="account-actions">
-                <button
-                  className="primary-button"
-                  type="button"
-                  disabled={busy || tutorBusy}
-                  onClick={() => setClassifying(true)}
-                >
-                  Record outcome
-                </button>
-                {attempt.solutionReviewedAt === null ? (
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    disabled={busy || tutorBusy}
-                    onClick={() =>
-                      void update(() =>
-                        reportAttempt(apiUrl, token, attempt.id, { outcome: "GAVE_UP" }),
-                      )
-                    }
-                  >
-                    Give up and review a solution
-                  </button>
-                ) : null}
-                <button
-                  className="danger-button"
-                  type="button"
-                  disabled={busy || tutorBusy}
-                  onClick={() => void cancelAttempt()}
-                >
-                  Cancel attempt
-                </button>
-              </div>
-            </div>
-          )}
+                }}
+              />
+            }
+          >
+            {(classifying || attempt.outcome !== null) && assessmentLoadedFor !== attempt.id ? (
+              <p role="status">Loading assessment draft…</p>
+            ) : classifying || attempt.outcome !== null ? (
+              <AttemptOutcomeForm
+                key={`${attempt.id}-${attempt.solutionReviewedAt ?? "solving"}-${JSON.stringify(attempt.summary)}-${assessmentDraft?.updatedAt ?? "no-draft"}-${incomplete}`}
+                attempt={attempt}
+                initialIncomplete={incomplete}
+                onLearningProfile={() => onNavigate("learning")}
+                memorySuggestions={memorySuggestions}
+                assessmentDraft={assessmentDraft}
+                canDraftAssessment={keyState.hasKey}
+                completedCode={completedCode}
+                onCompletedCodeChange={setCompletedCode}
+                onDraftAssessment={async ({ completedCode: code, currentSummary }) => {
+                  setBusy(true);
+                  setError(undefined);
+                  try {
+                    const tutorConversation = loadTutorConversation(
+                      window.sessionStorage,
+                      userId,
+                      attempt.id,
+                    );
+                    const tutorMessages = recentCoachMessages(
+                      tutorConversation.messages
+                        .slice(tutorConversation.checkpointIndex)
+                        .filter((message) => message.complete)
+                        .map(({ role, content }) => ({ role, content })),
+                    );
+                    setAssessmentDraft(
+                      await generateAssessmentDraft(apiUrl, token, {
+                        selection: openAiSelection(defaultModel, models, defaultReasoningEffort),
+                        apiKey: browserKey.getKey(userId) ?? "",
+                        attemptId: attempt.id,
+                        completedCode: code,
+                        currentSummary,
+                        tutorMessages,
+                      }),
+                    );
+                  } catch (reason) {
+                    setError(message(reason));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                busy={busy || tutorBusy}
+                onReport={async (input) => {
+                  await update(() => reportAttempt(apiUrl, token, attempt.id, input));
+                }}
+                onConfirm={async (input) => {
+                  setBusy(true);
+                  setError(undefined);
+                  try {
+                    const confirmed = await confirmAttempt(apiUrl, token, attempt.id, input);
+                    setAttempt(null);
+                    setSelectedCatalogProblem(null);
+                    setClassifying(false);
+                    setLoading(true);
+                    setShowAttempt(false);
+                    setSaved(confirmed);
+                    setReload((value) => value + 1);
+                  } catch (reason) {
+                    setError(message(reason));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              />
+            ) : null}
+          </AttemptWorkspace>
         </div>
       ) : null}
       {!loading ? (
@@ -817,8 +879,8 @@ export function Practice({
                   </h3>
                   <p>
                     {extraPracticeStarted
-                      ? "Great work. Keep the momentum going with one more eligible problem, or stop whenever you are ready."
-                      : "Congratulations! You completed every saved plan item. Extra practice is optional and does not change your daily target or streak."}
+                      ? "Choose one more eligible problem, or finish for today."
+                      : "Extra practice is optional and stays outside today’s plan, target, and streak."}
                   </p>
                   {extraPracticeError === undefined ? null : (
                     <p className="auth-message" role="alert">
