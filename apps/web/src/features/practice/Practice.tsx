@@ -6,6 +6,7 @@ import type {
   DailyPlan,
   MemorySuggestion,
   ReasoningEffort,
+  PracticeSettings,
 } from "@practice-plus-plus/contracts";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
@@ -44,7 +45,10 @@ import {
   type CatalogSortDirection,
 } from "./catalogBrowse";
 import { CatalogProblemDetails } from "./CatalogProblemDetails";
+import { Today, PracticeType } from "./Today";
+import { ExternalAiExport } from "../external-ai/ExternalAiExport";
 import { openAiSelection } from "../../shared/aiSelection";
+import "./practice.css";
 
 export function Practice({
   apiUrl,
@@ -52,7 +56,15 @@ export function Practice({
   userId,
   defaultModel,
   defaultReasoningEffort,
+  view,
+  settings,
+  onNavigate,
+  refresh,
 }: {
+  view: "today" | "problems";
+  settings: PracticeSettings;
+  refresh: number;
+  onNavigate: (view: "practice" | "problems" | "settings") => void;
   apiUrl: string;
   token: string;
   userId: string;
@@ -62,6 +74,10 @@ export function Practice({
   const { browserKey } = useAuth();
   const { models } = useModelDiscovery();
   const keyState = useSyncExternalStore(browserKey.subscribe, browserKey.getSnapshot);
+  const [showAttempt, setShowAttempt] = useState(false);
+  const [showExtra, setShowExtra] = useState(false);
+  const [externalPlanning, setExternalPlanning] = useState(false);
+  const [planRefresh, setPlanRefresh] = useState(0);
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [problems, setProblems] = useState<CatalogListProblem[]>([]);
   const [catalogTotal, setCatalogTotal] = useState(0);
@@ -72,6 +88,7 @@ export function Practice({
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
   const [tutorBusy, setTutorBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [reload, setReload] = useState(0);
@@ -89,7 +106,9 @@ export function Practice({
   const [catalogDifficulties, setCatalogDifficulties] = useState<CatalogDifficulty[]>([]);
   const [catalogAvailabilities, setCatalogAvailabilities] = useState<CatalogAvailability[]>([]);
   const [catalogProgress, setCatalogProgress] = useState<CatalogProgress[]>([]);
-  const [selectedCatalogProblemId, setSelectedCatalogProblemId] = useState<string | null>(null);
+  const [selectedCatalogProblem, setSelectedCatalogProblem] = useState<CatalogListProblem | null>(
+    null,
+  );
   const [catalogSort, setCatalogSort] = useState<CatalogSort>("LEETCODE_ID");
   const [catalogSortDirection, setCatalogSortDirection] = useState<CatalogSortDirection>("ASC");
   const catalogSortMenu = useRef<HTMLDetailsElement>(null);
@@ -141,7 +160,7 @@ export function Practice({
     return () => {
       active = false;
     };
-  }, [apiUrl, token, reload]);
+  }, [apiUrl, token, reload, refresh]);
 
   useEffect(() => {
     if (saved === null) return;
@@ -198,6 +217,7 @@ export function Practice({
 
   useEffect(() => {
     if (
+      view !== "problems" ||
       catalogLoading ||
       catalogNextPage === null ||
       catalogLoadingMore ||
@@ -272,6 +292,7 @@ export function Practice({
     catalogError,
     catalogLoading,
     catalogLoadingMore,
+    view,
     catalogNextPage,
     catalogQuery,
     catalogSort,
@@ -348,6 +369,7 @@ export function Practice({
     setError(undefined);
     try {
       setAttempt(await action());
+      setShowAttempt(true);
       setSaved(null);
       setNow(Date.now());
     } catch (reason) {
@@ -376,6 +398,7 @@ export function Practice({
 
   async function generatePlan(personalized: boolean) {
     setBusy(true);
+    setGeneratingPlan(true);
     setError(undefined);
     setExtraPracticeError(undefined);
     try {
@@ -389,9 +412,11 @@ export function Practice({
             )
           : await loadDailyPlan(apiUrl, token),
       );
+      setPlanRefresh((value) => value + 1);
     } catch (reason) {
       setError(message(reason));
     } finally {
+      setGeneratingPlan(false);
       setBusy(false);
     }
   }
@@ -440,6 +465,7 @@ export function Practice({
         return;
       }
       setAttempt(next);
+      setShowAttempt(true);
       setExtraPracticeDate(plan?.practiceDate ?? null);
       setSaved(null);
     } catch (reason) {
@@ -449,12 +475,30 @@ export function Practice({
     }
   }
 
+  function startProblem(problemId: string): void {
+    onNavigate("practice");
+    void update(() => startAttempt(apiUrl, token, problemId));
+  }
+
+  function resumeAttempt(): void {
+    setShowAttempt(true);
+    onNavigate("practice");
+  }
+
   function stopExtra(): void {
+    setShowExtra(false);
     if (plan !== null) setExtraPracticeDismissedDate(plan.practiceDate);
   }
   return (
     <section className="practice">
-      <h2>Today</h2>
+      {view === "today" && showAttempt && attempt !== null ? (
+        <header className="practice-workspace-heading">
+          <h2>Practice</h2>
+          <button type="button" className="secondary-button" onClick={() => setShowAttempt(false)}>
+            Back to Today
+          </button>
+        </header>
+      ) : null}
       {saved ? (
         <div
           className="attempt-confirmation-backdrop"
@@ -493,14 +537,12 @@ export function Practice({
         </div>
       )}
       {!loading && attempt !== null ? (
-        <div className="active-attempt">
+        <div className="active-attempt" hidden={view !== "today" || !showAttempt}>
           <header className="attempt-header">
             <div>
-              <p className="attempt-eyebrow">
-                {attempt.type === "FRESH" ? "Fresh attempt" : "Redo attempt"} ·{" "}
-                {attempt.practiceDate}
-              </p>
+              <p className="attempt-eyebrow">{attempt.practiceDate}</p>
               <h3>{attempt.problem.title}</h3>
+              <PracticeType redo={attempt.type === "REDO"} />
               <p className="attempt-metadata">
                 {attempt.problem.difficulty.charAt(0) +
                   attempt.problem.difficulty.slice(1).toLocaleLowerCase()}
@@ -671,6 +713,7 @@ export function Practice({
                 try {
                   const confirmed = await confirmAttempt(apiUrl, token, attempt.id, input);
                   setAttempt(null);
+                  setSelectedCatalogProblem(null);
                   setClassifying(false);
                   setSaved(confirmed);
                   setReload((value) => value + 1);
@@ -725,388 +768,362 @@ export function Practice({
           )}
         </div>
       ) : null}
-      {!loading && error === undefined && attempt === null ? (
-        <div>
-          {plan === null ? (
-            <div className="daily-plan">
-              <h3>Create today’s plan</h3>
-              <p className="settings-help">
-                Personalization uses your bounded learning context while the server keeps review
-                priorities, eligibility, and the daily target fixed. Provider failures fall back to
-                the deterministic planner.
-              </p>
-              <div className="account-actions">
-                <button
-                  type="button"
-                  disabled={busy || !keyState.hasKey}
-                  onClick={() => void generatePlan(true)}
+      {!loading ? (
+        <>
+          <div hidden={view !== "today" || (attempt !== null && showAttempt)}>
+            <Today
+              apiUrl={apiUrl}
+              token={token}
+              settings={settings}
+              plan={plan}
+              attempt={attempt}
+              busy={busy || tutorBusy}
+              generatingPlan={generatingPlan}
+              aiReady={keyState.hasKey}
+              finishedForToday={extraPracticeDismissed}
+              seconds={seconds}
+              refresh={reload + planRefresh}
+              onGenerate={(personalized) => void generatePlan(personalized)}
+              onStart={startProblem}
+              onResume={resumeAttempt}
+              onBrowse={() => onNavigate("problems")}
+              onAiSetup={() => onNavigate("settings")}
+              onExternalAi={() => setExternalPlanning((open) => !open)}
+              onExtra={() => {
+                setShowExtra(true);
+                setExtraPracticeDismissedDate(null);
+              }}
+              onStop={stopExtra}
+            >
+              {externalPlanning && (plan === null || plan.items.length === 0) ? (
+                <ExternalAiExport
+                  apiUrl={apiUrl}
+                  token={token}
+                  planningOnly
+                  onPlanSaved={(savedPlan) => {
+                    setPlan(savedPlan);
+                    setExternalPlanning(false);
+                    setPlanRefresh((value) => value + 1);
+                  }}
+                />
+              ) : null}
+              {showExtra && planComplete && !extraPracticeDismissed ? (
+                <section
+                  className="daily-plan extra-practice"
+                  aria-labelledby="extra-practice-heading"
                 >
-                  {busy ? "Creating plan…" : "Personalize with AI"}
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={busy}
-                  onClick={() => void generatePlan(false)}
-                >
-                  Generate without AI
+                  <h3 id="extra-practice-heading">
+                    {extraPracticeStarted ? "Extra practice" : "Daily plan complete"}
+                  </h3>
+                  <p>
+                    {extraPracticeStarted
+                      ? "Great work. Keep the momentum going with one more eligible problem, or stop whenever you are ready."
+                      : "Congratulations! You completed every saved plan item. Extra practice is optional and does not change your daily target or streak."}
+                  </p>
+                  {extraPracticeError === undefined ? null : (
+                    <p className="auth-message" role="alert">
+                      {extraPracticeError}
+                    </p>
+                  )}
+                  <div className="account-actions">
+                    <button
+                      type="button"
+                      disabled={busy || !keyState.hasKey}
+                      onClick={() => void startExtra(true)}
+                    >
+                      {busy
+                        ? "Choosing problem…"
+                        : extraPracticeStarted
+                          ? "Choose another with AI"
+                          : "Continue with AI"}
+                    </button>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void startExtra(false)}
+                    >
+                      {extraPracticeStarted ? "Choose another without AI" : "Continue without AI"}
+                    </button>
+                    {extraPracticeStarted ? (
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        disabled={busy}
+                        onClick={stopExtra}
+                      >
+                        Done with extra practice
+                      </button>
+                    ) : null}
+                  </div>
+                  {!keyState.hasKey ? (
+                    <p className="settings-help">
+                      Add an OpenAI API key in Practice settings to personalize the extra problem,
+                      or continue without AI.
+                    </p>
+                  ) : null}
+                </section>
+              ) : null}
+            </Today>
+          </div>
+          <div hidden={view !== "problems"}>
+            <header className="problems-heading">
+              <h2>Problems</h2>
+              <p className="settings-help">Choose a problem for your practice.</p>
+            </header>
+            {attempt !== null ? (
+              <div className="practice-resume-banner">
+                <div>
+                  <strong>Active attempt: {attempt.problem.title}</strong>
+                  <p className="settings-help">
+                    {attempt.timerPausedAt ? "Timer paused" : "Time remaining"} ·{" "}
+                    {formatRemainingSeconds(seconds)}
+                  </p>
+                </div>
+                <button type="button" disabled={busy || tutorBusy} onClick={resumeAttempt}>
+                  Resume attempt
                 </button>
               </div>
-              {!keyState.hasKey ? (
-                <p className="settings-help">
-                  Add an OpenAI API key in Practice settings, or use External AI from the navigation
-                  and return a structured recommendation.
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <div className="daily-plan">
-              <h3>Today’s plan · {plan.practiceDate}</h3>
-              <p>
-                {plan.items.filter((item) => item.status === "FINISHED").length} of{" "}
-                {plan.items.length} finished · Target {plan.target}
-              </p>
-              {plan.items.length === 0 ? (
-                <p>No eligible work is available for today’s plan.</p>
-              ) : (
-                <ul className="problem-list">
-                  {plan.items.map((item) => (
-                    <li key={item.id}>
-                      <div>
-                        <strong>
-                          {item.problem.leetcodeId}. {item.problem.title}
-                        </strong>
-                        <p className="settings-help">
-                          {item.problem.difficulty}
-                          {item.problem.availability === "PAID_ONLY"
-                            ? " · LeetCode Premium required"
-                            : ""}
-                        </p>
-                        <p className="settings-help">{item.explanation}</p>
-                      </div>
-                      {item.status === "FINISHED" ? (
-                        <span className="problem-list-status problem-list-status-finished">
-                          Finished
-                        </span>
-                      ) : item.status === "INCOMPLETE" ? (
-                        <span className="problem-list-status problem-list-status-incomplete">
-                          Incomplete
-                        </span>
-                      ) : (
+            ) : null}
+            {selectedCatalogProblem === null ? (
+              <section className="catalog-browser page-surface">
+                <div className="catalog-heading">
+                  <div>
+                    <h3>Problem catalog</h3>
+                    <p className="settings-help">
+                      Browse {catalogTotal} published {catalogTotal === 1 ? "problem" : "problems"}.
+                    </p>
+                  </div>
+                </div>
+                <div className="catalog-toolbar">
+                  <label className="catalog-search">
+                    <span className="visually-hidden">Search problems</span>
+                    <input
+                      type="search"
+                      inputMode="search"
+                      placeholder="Search number or title"
+                      value={catalogQuery}
+                      onChange={(event) => setCatalogQuery(event.target.value)}
+                    />
+                  </label>
+                  <details
+                    ref={catalogSortMenu}
+                    className="catalog-sort-menu"
+                    name="catalog-controls"
+                  >
+                    <summary>
+                      <span>Sort</span>
+                      <span className="catalog-control-value">
+                        {labelForSort(catalogSort)} {catalogSortDirection === "ASC" ? "↑" : "↓"}
+                      </span>
+                    </summary>
+                    <div className="catalog-sort-panel">
+                      <p>Sort by</p>
+                      {catalogSortOptions.map((option) => (
                         <button
                           type="button"
-                          disabled={busy || item.problem.availability === "UNAVAILABLE"}
-                          onClick={() =>
-                            void update(() => startAttempt(apiUrl, token, item.problem.id))
-                          }
+                          className="catalog-sort-option"
+                          aria-pressed={catalogSort === option.value}
+                          key={option.value}
+                          onClick={() => {
+                            if (catalogSort === option.value) {
+                              setCatalogSortDirection((direction) =>
+                                direction === "ASC" ? "DESC" : "ASC",
+                              );
+                            } else {
+                              setCatalogSort(option.value);
+                              setCatalogSortDirection("ASC");
+                            }
+                          }}
                         >
-                          {item.problem.availability === "UNAVAILABLE"
-                            ? "Unavailable"
-                            : item.status === "ACTIVE"
-                              ? "Resume"
-                              : "Start"}
+                          <span>{option.label}</span>
+                          {catalogSort === option.value ? (
+                            <span aria-hidden="true">
+                              {catalogSortDirection === "ASC" ? "↑" : "↓"}
+                            </span>
+                          ) : null}
                         </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-          {planComplete && !extraPracticeDismissed ? (
-            <section className="daily-plan extra-practice" aria-labelledby="extra-practice-heading">
-              <h3 id="extra-practice-heading">
-                {extraPracticeStarted ? "Extra practice" : "Daily plan complete"}
-              </h3>
-              <p>
-                {extraPracticeStarted
-                  ? "Great work. Keep the momentum going with one more eligible problem, or stop whenever you are ready."
-                  : "Congratulations! You completed every saved plan item. Extra practice is optional and does not change your daily target or streak."}
-              </p>
-              <p className="settings-help">
-                AI uses the same bounded learning context as plan creation.
-              </p>
-              {extraPracticeError === undefined ? null : (
-                <p className="auth-message" role="alert">
-                  {extraPracticeError}
-                </p>
-              )}
-              <div className="account-actions">
-                <button
-                  type="button"
-                  disabled={busy || !keyState.hasKey}
-                  onClick={() => void startExtra(true)}
-                >
-                  {busy
-                    ? "Choosing problem…"
-                    : extraPracticeStarted
-                      ? "Choose another with AI"
-                      : "Continue with AI"}
-                </button>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void startExtra(false)}
-                >
-                  {extraPracticeStarted ? "Choose another without AI" : "Continue without AI"}
-                </button>
-                {extraPracticeStarted ? (
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    disabled={busy}
-                    onClick={stopExtra}
+                      ))}
+                    </div>
+                  </details>
+                  <details
+                    ref={catalogFilterMenu}
+                    className="catalog-filter-menu"
+                    name="catalog-controls"
                   >
-                    Done with extra practice
-                  </button>
-                ) : null}
-              </div>
-              {!keyState.hasKey ? (
-                <p className="settings-help">
-                  Add an OpenAI API key in Practice settings to personalize the extra problem, or
-                  continue without AI.
-                </p>
-              ) : null}
-            </section>
-          ) : null}
-          {selectedCatalogProblemId === null ? (
-            <section className="catalog-browser page-surface">
-              <div className="catalog-heading">
-                <div>
-                  <h3>Problem catalog</h3>
-                  <p className="settings-help">
-                    Browse {catalogTotal} published {catalogTotal === 1 ? "problem" : "problems"}.
-                  </p>
+                    <summary>
+                      Filter
+                      {filterCount > 0 ? (
+                        <span className="catalog-filter-count">{filterCount}</span>
+                      ) : null}
+                    </summary>
+                    <div className="catalog-filter-panel">
+                      <fieldset>
+                        <legend>Difficulty</legend>
+                        {catalogDifficultyOptions.map((option) => (
+                          <label key={option.value}>
+                            <input
+                              type="checkbox"
+                              checked={catalogDifficulties.includes(option.value)}
+                              onChange={() =>
+                                setCatalogDifficulties((current) =>
+                                  toggleValue(current, option.value),
+                                )
+                              }
+                            />
+                            {option.label}
+                          </label>
+                        ))}
+                      </fieldset>
+                      <fieldset>
+                        <legend>Availability</legend>
+                        {catalogAvailabilityOptions.map((option) => (
+                          <label key={option.value}>
+                            <input
+                              type="checkbox"
+                              checked={catalogAvailabilities.includes(option.value)}
+                              onChange={() =>
+                                setCatalogAvailabilities((current) =>
+                                  toggleValue(current, option.value),
+                                )
+                              }
+                            />
+                            {option.label}
+                          </label>
+                        ))}
+                      </fieldset>
+                      <fieldset>
+                        <legend>Progress</legend>
+                        {catalogProgressOptions.map((option) => (
+                          <label key={option.value}>
+                            <input
+                              type="checkbox"
+                              checked={catalogProgress.includes(option.value)}
+                              onChange={() =>
+                                setCatalogProgress((current) => toggleValue(current, option.value))
+                              }
+                            />
+                            {option.label}
+                          </label>
+                        ))}
+                      </fieldset>
+                      {filterCount > 0 ? (
+                        <button
+                          type="button"
+                          className="catalog-clear-filters"
+                          disabled={busy}
+                          onClick={clearCatalogFilters}
+                        >
+                          Clear filters
+                        </button>
+                      ) : null}
+                    </div>
+                  </details>
                 </div>
-              </div>
-              <div className="catalog-toolbar">
-                <label className="catalog-search">
-                  <span className="visually-hidden">Search problems</span>
-                  <input
-                    type="search"
-                    inputMode="search"
-                    placeholder="Search number or title"
-                    value={catalogQuery}
-                    onChange={(event) => setCatalogQuery(event.target.value)}
-                  />
-                </label>
-                <details
-                  ref={catalogSortMenu}
-                  className="catalog-sort-menu"
-                  name="catalog-controls"
-                >
-                  <summary>
-                    <span>Sort</span>
-                    <span className="catalog-control-value">
-                      {labelForSort(catalogSort)} {catalogSortDirection === "ASC" ? "↑" : "↓"}
-                    </span>
-                  </summary>
-                  <div className="catalog-sort-panel">
-                    <p>Sort by</p>
-                    {catalogSortOptions.map((option) => (
-                      <button
-                        type="button"
-                        className="catalog-sort-option"
-                        aria-pressed={catalogSort === option.value}
-                        key={option.value}
-                        onClick={() => {
-                          if (catalogSort === option.value) {
-                            setCatalogSortDirection((direction) =>
-                              direction === "ASC" ? "DESC" : "ASC",
-                            );
-                          } else {
-                            setCatalogSort(option.value);
-                            setCatalogSortDirection("ASC");
-                          }
-                        }}
-                      >
-                        <span>{option.label}</span>
-                        {catalogSort === option.value ? (
-                          <span aria-hidden="true">
-                            {catalogSortDirection === "ASC" ? "↑" : "↓"}
-                          </span>
-                        ) : null}
-                      </button>
-                    ))}
+                {catalogLoading ? (
+                  <p className="settings-help" role="status">
+                    Loading catalog…
+                  </p>
+                ) : catalogError !== undefined ? (
+                  <div className="catalog-empty">
+                    <p className="auth-message" role="alert">
+                      {catalogError}
+                    </p>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => setReload((value) => value + 1)}
+                    >
+                      Reload catalog
+                    </button>
                   </div>
-                </details>
-                <details
-                  ref={catalogFilterMenu}
-                  className="catalog-filter-menu"
-                  name="catalog-controls"
-                >
-                  <summary>
-                    Filter
-                    {filterCount > 0 ? (
-                      <span className="catalog-filter-count">{filterCount}</span>
-                    ) : null}
-                  </summary>
-                  <div className="catalog-filter-panel">
-                    <fieldset>
-                      <legend>Difficulty</legend>
-                      {catalogDifficultyOptions.map((option) => (
-                        <label key={option.value}>
-                          <input
-                            type="checkbox"
-                            checked={catalogDifficulties.includes(option.value)}
-                            onChange={() =>
-                              setCatalogDifficulties((current) =>
-                                toggleValue(current, option.value),
-                              )
-                            }
-                          />
-                          {option.label}
-                        </label>
-                      ))}
-                    </fieldset>
-                    <fieldset>
-                      <legend>Availability</legend>
-                      {catalogAvailabilityOptions.map((option) => (
-                        <label key={option.value}>
-                          <input
-                            type="checkbox"
-                            checked={catalogAvailabilities.includes(option.value)}
-                            onChange={() =>
-                              setCatalogAvailabilities((current) =>
-                                toggleValue(current, option.value),
-                              )
-                            }
-                          />
-                          {option.label}
-                        </label>
-                      ))}
-                    </fieldset>
-                    <fieldset>
-                      <legend>Progress</legend>
-                      {catalogProgressOptions.map((option) => (
-                        <label key={option.value}>
-                          <input
-                            type="checkbox"
-                            checked={catalogProgress.includes(option.value)}
-                            onChange={() =>
-                              setCatalogProgress((current) => toggleValue(current, option.value))
-                            }
-                          />
-                          {option.label}
-                        </label>
-                      ))}
-                    </fieldset>
-                    {filterCount > 0 ? (
-                      <button
-                        type="button"
-                        className="catalog-clear-filters"
-                        disabled={busy}
-                        onClick={clearCatalogFilters}
-                      >
-                        Clear filters
-                      </button>
-                    ) : null}
+                ) : visible.length === 0 ? (
+                  <div className="catalog-empty">
+                    <p>No problems match the current search and filters.</p>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={busy}
+                      onClick={resetCatalogControls}
+                    >
+                      Reset controls
+                    </button>
                   </div>
-                </details>
-              </div>
-              {catalogLoading ? (
-                <p className="settings-help" role="status">
-                  Loading catalog…
-                </p>
-              ) : catalogError !== undefined ? (
-                <div className="catalog-empty">
-                  <p className="auth-message" role="alert">
-                    {catalogError}
-                  </p>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => setReload((value) => value + 1)}
-                  >
-                    Reload catalog
-                  </button>
-                </div>
-              ) : visible.length === 0 ? (
-                <div className="catalog-empty">
-                  <p>No problems match the current search and filters.</p>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={busy}
-                    onClick={resetCatalogControls}
-                  >
-                    Reset controls
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <p className="catalog-result-count" role="status">
-                    Showing {visible.length} of {catalogTotal}
-                  </p>
-                  <ul className="problem-list catalog-problem-list">
-                    {visible.map((problem) => (
-                      <li key={problem.id}>
-                        <div className="catalog-problem-title">
-                          {problem.solved ? (
+                ) : (
+                  <>
+                    <p className="catalog-result-count" role="status">
+                      Showing {visible.length} of {catalogTotal}
+                    </p>
+                    <ul className="problem-list catalog-problem-list">
+                      {visible.map((problem) => (
+                        <li key={problem.id}>
+                          <div className="catalog-problem-title">
                             <button
                               className="catalog-problem-link"
                               type="button"
-                              onClick={() => setSelectedCatalogProblemId(problem.id)}
+                              onClick={() => setSelectedCatalogProblem(problem)}
                             >
                               <strong>
                                 {problem.leetcodeId}. {problem.title}
                               </strong>
                             </button>
-                          ) : (
-                            <strong>
-                              {problem.leetcodeId}. {problem.title}
-                            </strong>
-                          )}
-                        </div>
-                        <div
-                          className={
-                            problem.availability !== "AVAILABLE" && problem.solved
-                              ? "catalog-problem-meta catalog-problem-meta-with-availability"
-                              : "catalog-problem-meta"
-                          }
-                        >
-                          <span
-                            className={`catalog-difficulty catalog-difficulty-${problem.difficulty.toLocaleLowerCase()}`}
+                          </div>
+                          <div
+                            className={
+                              problem.availability !== "AVAILABLE" && problem.solved
+                                ? "catalog-problem-meta catalog-problem-meta-with-availability"
+                                : "catalog-problem-meta"
+                            }
                           >
-                            {labelForValue(problem.difficulty)}
-                          </span>
-                          {problem.availability !== "AVAILABLE" ? (
-                            <span className="catalog-availability">
-                              {problem.availability === "PAID_ONLY" ? "Premium" : "Unavailable"}
+                            <span
+                              className={`catalog-difficulty catalog-difficulty-${problem.difficulty.toLocaleLowerCase()}`}
+                            >
+                              {labelForValue(problem.difficulty)}
                             </span>
-                          ) : null}
-                          {problem.solved ? <span className="catalog-solved">Solved</span> : null}
-                        </div>
-                        <button
-                          type="button"
-                          disabled={busy || problem.availability === "UNAVAILABLE"}
-                          onClick={() => void update(() => startAttempt(apiUrl, token, problem.id))}
-                        >
-                          {problem.availability === "UNAVAILABLE" ? "Unavailable" : "Start"}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-              <div ref={catalogSentinel} className="catalog-load-sentinel" aria-hidden="true" />
-              {catalogLoadingMore ? (
-                <p className="settings-help" role="status">
-                  Loading more problems…
-                </p>
-              ) : null}
-            </section>
-          ) : (
-            <CatalogProblemDetails
-              key={selectedCatalogProblemId}
-              apiUrl={apiUrl}
-              token={token}
-              problemId={selectedCatalogProblemId}
-              onBack={() => setSelectedCatalogProblemId(null)}
-            />
-          )}
-        </div>
+                            {problem.availability !== "AVAILABLE" ? (
+                              <span className="catalog-availability">
+                                {problem.availability === "PAID_ONLY" ? "Premium" : "Unavailable"}
+                              </span>
+                            ) : null}
+                            {problem.solved ? <span className="catalog-solved">Solved</span> : null}
+                          </div>
+                          <button
+                            type="button"
+                            disabled={
+                              busy ||
+                              tutorBusy ||
+                              attempt !== null ||
+                              problem.availability === "UNAVAILABLE"
+                            }
+                            onClick={() => startProblem(problem.id)}
+                          >
+                            {problem.availability === "UNAVAILABLE" ? "Unavailable" : "Start"}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                <div ref={catalogSentinel} className="catalog-load-sentinel" aria-hidden="true" />
+                {catalogLoadingMore ? (
+                  <p className="settings-help" role="status">
+                    Loading more problems…
+                  </p>
+                ) : null}
+              </section>
+            ) : (
+              <CatalogProblemDetails
+                key={selectedCatalogProblem.id}
+                apiUrl={apiUrl}
+                token={token}
+                problem={selectedCatalogProblem}
+                disabled={busy || tutorBusy || attempt !== null}
+                onStart={startProblem}
+                onBack={() => setSelectedCatalogProblem(null)}
+              />
+            )}
+          </div>
+        </>
       ) : null}
     </section>
   );

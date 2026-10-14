@@ -43,10 +43,18 @@ interface SettingsDraft {
 }
 
 type ActiveView =
-  "analytics" | "coach" | "external-ai" | "history" | "learning" | "practice" | "settings";
+  | "analytics"
+  | "coach"
+  | "external-ai"
+  | "history"
+  | "learning"
+  | "practice"
+  | "problems"
+  | "settings";
 
 const navigationItems: ReadonlyArray<{ readonly label: string; readonly view: ActiveView }> = [
   { label: "Today", view: "practice" },
+  { label: "Problems", view: "problems" },
   { label: "Coach", view: "coach" },
   { label: "Progress", view: "analytics" },
   { label: "History", view: "history" },
@@ -130,6 +138,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
   );
   const [focusMemoryInferences, setFocusMemoryInferences] = useState(false);
   const [reloadCount, setReloadCount] = useState(0);
+  const [practiceRefresh, setPracticeRefresh] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -446,7 +455,9 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
           </div>
         ) : null}
 
-        <main className="workspace-content">
+        <main
+          className={`workspace-content${activeView === "practice" || activeView === "problems" ? " practice-content" : ""}`}
+        >
           {isLoading ? <p className="settings-status">Loading practice settings…</p> : null}
 
           {!isLoading && loadFailed && error !== undefined ? (
@@ -465,7 +476,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
           ) : null}
 
           {!isLoading && !loadFailed && !isOnboarding ? (
-            <div hidden={activeView !== "practice"}>
+            <div hidden={activeView !== "practice" && activeView !== "problems"}>
               <Practice
                 key={session.user.id}
                 apiUrl={apiUrl}
@@ -473,6 +484,10 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
                 userId={session.user.id}
                 defaultModel={savedSettings?.defaultAiModel ?? "gpt-5.4-mini"}
                 defaultReasoningEffort={savedSettings?.reasoningEffort ?? null}
+                view={activeView === "problems" ? "problems" : "today"}
+                settings={savedSettings!}
+                onNavigate={navigate}
+                refresh={practiceRefresh}
               />
             </div>
           ) : null}
@@ -517,7 +532,14 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
 
           {!isLoading && !loadFailed && !isOnboarding && visitedViews.has("external-ai") ? (
             <div hidden={activeView !== "external-ai"}>
-              <ExternalAiExport apiUrl={apiUrl} token={session.access_token} />
+              <ExternalAiExport
+                apiUrl={apiUrl}
+                token={session.access_token}
+                onPlanSaved={() => {
+                  setPracticeRefresh((value) => value + 1);
+                  navigate("practice");
+                }}
+              />
             </div>
           ) : null}
 

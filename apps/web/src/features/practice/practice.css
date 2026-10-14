@@ -1,0 +1,523 @@
+.workspace-content.practice-content {
+  width: min(100%, 96rem);
+}
+
+.today-heading,
+.practice-workspace-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1.85rem;
+}
+
+.today-heading h2,
+.problems-heading h2,
+.practice-workspace-heading h2 {
+  margin: 0;
+  font-size: 2.15rem;
+  font-weight: 500;
+  letter-spacing: -0.05rem;
+}
+
+.today-heading .settings-help {
+  margin-top: 0.6rem;
+}
+
+.today-heading > p {
+  text-align: right;
+}
+
+.today-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(17rem, 24%, 21rem);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.today-main,
+.today-sidebar {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.today-layout .page-surface {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 1.6rem;
+}
+
+.today-layout h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.today-next.daily-plan {
+  margin: 0;
+  padding: 1.85rem;
+}
+
+.today-next h3 {
+  margin: 1rem 0 0.8rem;
+  font-size: 1.65rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.today-next .today-next-meta + h3 {
+  margin-top: 1rem;
+}
+
+.today-next .account-actions {
+  margin-top: 1.3rem;
+}
+
+.today-next-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.today-status,
+.today-item-status {
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.35rem;
+  color: var(--muted);
+  background: var(--subtle);
+  font-size: 0.85rem;
+}
+
+.today-status {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.practice-type {
+  margin: 0.3rem 0 0;
+}
+
+.practice-type > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 1.7rem;
+  padding: 0.15rem 0;
+  color: var(--accent);
+  font-size: 0.85rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.practice-type > summary::-webkit-details-marker {
+  display: none;
+}
+
+.practice-type > summary::before {
+  content: "+";
+}
+
+.practice-type[open] > summary::before {
+  content: "−";
+}
+
+.practice-type p.settings-help {
+  margin: 0.3rem 0 0;
+}
+
+.today-next .practice-type + .account-actions {
+  margin-top: 0.85rem;
+}
+
+.practice .text-button {
+  min-height: 2.5rem;
+  margin: 0;
+  padding: 0.4rem 0;
+  border: 0;
+  color: var(--accent);
+  background: transparent;
+  text-align: left;
+}
+
+.practice .text-button:hover:not(:disabled) {
+  color: var(--accent);
+  background: transparent;
+  text-decoration: underline;
+}
+
+.plan-creation-actions {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1.3rem;
+}
+
+.plan-creation-actions > button {
+  margin: 0;
+}
+
+.planning-methods {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--subtle);
+}
+
+.planning-methods button {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: 0.6rem;
+  border: 0;
+  border-radius: 0.4rem;
+  color: var(--muted);
+  background: transparent;
+}
+
+.planning-methods button:hover:not(:disabled),
+.planning-methods button[aria-pressed="true"] {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.plan-creation-actions .planning-method-description {
+  margin: 0;
+}
+
+.today-assignment-list {
+  list-style: none;
+  margin: 1.1rem 0 0;
+  padding: 0;
+}
+
+.today-assignment-list > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.today-assignment-list > li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.today-assignment-list > li:last-child {
+  padding-bottom: 0;
+}
+
+.today-assignment-list > li > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.today-assignment-list .settings-help {
+  margin-top: 0.3rem;
+}
+
+.plan-loading-status {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.plan-loading-spinner {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: plan-loading-spin 0.8s linear infinite;
+}
+
+@keyframes plan-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.assignment-skeleton {
+  display: inline-block;
+  height: 0.8em;
+  border-radius: 0.25rem;
+  background: var(--border);
+  vertical-align: middle;
+  animation: assignment-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+.assignment-skeleton-details {
+  flex: 1;
+}
+
+.skeleton-title {
+  width: min(85%, 22rem);
+}
+
+.skeleton-difficulty {
+  width: 4.5rem;
+}
+
+.skeleton-practice-type {
+  display: flex;
+  align-items: center;
+  min-height: 1.7rem;
+  padding: 0.15rem 0;
+  font-size: 0.85rem;
+}
+
+.skeleton-type {
+  width: 6rem;
+}
+
+.skeleton-start {
+  width: 9rem;
+  height: 3.15rem;
+  border-radius: 0.5rem;
+}
+
+.today-item-status.skeleton-action {
+  width: 6rem;
+  height: 1.5rem;
+  padding: 0;
+}
+
+@keyframes assignment-skeleton-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assignment-skeleton {
+    animation: none;
+  }
+
+  .plan-loading-spinner {
+    animation-duration: 1.6s;
+  }
+}
+
+.today-item-status {
+  flex-shrink: 0;
+  max-width: 40%;
+  text-align: center;
+}
+
+.today-progress-value {
+  margin: 0.85rem 0;
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-progress-value > span {
+  color: var(--muted);
+}
+
+.today-progress progress {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 0.4rem;
+  margin-bottom: 1.2rem;
+  border: 0;
+  border-radius: 0.2rem;
+  overflow: hidden;
+  background: var(--subtle);
+}
+
+.today-progress progress::-webkit-progress-bar {
+  background: var(--subtle);
+}
+
+.today-progress progress::-webkit-progress-value {
+  background: var(--accent);
+}
+
+.today-progress progress::-moz-progress-bar {
+  background: var(--accent);
+}
+
+.recent-practice-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.recent-practice-heading > strong {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.recent-practice-caption {
+  margin-top: 0.6rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.recent-practice-days {
+  display: grid;
+  gap: 0.7rem;
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+}
+
+.recent-practice-day {
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr) 2.8rem;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.recent-practice-day time {
+  color: var(--muted);
+}
+
+.recent-practice-track {
+  height: 0.35rem;
+  border-radius: 0.2rem;
+  overflow: hidden;
+  background: var(--subtle);
+}
+
+.recent-practice-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.day-missed .recent-practice-fill {
+  background: var(--muted);
+}
+
+.day-neutral .recent-practice-track,
+.day-untracked .recent-practice-track {
+  height: auto;
+  overflow: visible;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.8rem;
+}
+
+.recent-practice-count {
+  text-align: right;
+}
+
+.problems-heading {
+  margin-bottom: 1.85rem;
+}
+
+.problems-heading p {
+  margin-top: 0.6rem;
+}
+
+.practice-resume-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.4rem;
+  margin-bottom: 1.5rem;
+  border-radius: 0.6rem;
+  background: var(--accent-soft);
+}
+
+.practice-resume-banner button,
+.practice-workspace-heading button {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+@media (max-width: 58rem) {
+  .today-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .today-sidebar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .today-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  .today-heading > p {
+    text-align: left;
+  }
+}
+
+@media (max-width: 38rem) {
+  .practice .catalog-toolbar {
+    position: relative;
+  }
+
+  .practice .catalog-filter-menu,
+  .practice .catalog-sort-menu {
+    position: static;
+  }
+
+  .practice .catalog-filter-panel {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .practice .catalog-sort-panel {
+    width: min(14rem, 100%);
+  }
+
+  .today-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .today-layout .page-surface,
+  .today-next.daily-plan {
+    padding: 1.4rem;
+  }
+
+  .practice-resume-banner,
+  .practice-workspace-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .today-next .account-actions > button,
+  .plan-creation-actions > button,
+  .practice-resume-banner button {
+    width: 100%;
+  }
+
+  .skeleton-start {
+    width: 100%;
+  }
+
+  .planning-methods {
+    flex-direction: column;
+  }
+}
+
+@media (pointer: coarse) {
+  .practice-type > summary,
+  .skeleton-practice-type,
+  .practice .text-button {
+    min-height: 44px;
+  }
+
+  .today-next .practice-type + .account-actions {
+    margin-top: 0.3rem;
+  }
+}

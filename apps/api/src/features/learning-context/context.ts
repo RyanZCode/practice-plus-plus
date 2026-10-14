@@ -302,9 +302,10 @@ export function createPrismaContextAssembler(client: PrismaClient) {
             where: { userProfileId },
             include: { items: { orderBy: { position: "asc" } } },
           });
-          const savedPlan =
+          const currentPlan =
             saved !== null && practiceDateFor(now, saved) === date(saved.practiceDate);
-          const practiceDate = practiceDateFor(now, savedPlan ? saved! : settings);
+          const savedPlan = currentPlan && saved.items.length > 0;
+          const practiceDate = practiceDateFor(now, currentPlan ? saved! : settings);
           const active =
             request.policy.mode === "ATTEMPT_TUTOR"
               ? await tx.attempt.findFirst({
@@ -362,7 +363,7 @@ export function createPrismaContextAssembler(client: PrismaClient) {
           );
           const byId = new Map(problems.map((p) => [p.id, p]));
           const planInput = {
-            target: savedPlan ? saved!.target : settings.dailyTarget,
+            target: currentPlan ? saved!.target : settings.dailyTarget,
             practiceDate,
             allowPremiumProblems: settings.allowPremiumProblems,
             difficultyPreference: settings.difficultyPreference,
@@ -605,13 +606,15 @@ export function createPrismaContextAssembler(client: PrismaClient) {
             generatedAt: now.toISOString(),
             practiceDate,
             planningStateId: createHash("sha256")
-              .update(JSON.stringify({ userProfileId, planInput, saved: savedPlan ? saved : null }))
+              .update(
+                JSON.stringify({ userProfileId, planInput, saved: currentPlan ? saved : null }),
+              )
               .digest("hex"),
             instructions,
             transition: transition(request.policy),
             profile: {
-              timeZone: savedPlan ? saved!.timeZone : settings.timeZone,
-              resetMinutes: savedPlan ? saved!.resetMinutes : settings.resetMinutes,
+              timeZone: currentPlan ? saved!.timeZone : settings.timeZone,
+              resetMinutes: currentPlan ? saved!.resetMinutes : settings.resetMinutes,
               dailyTarget: planInput.target,
               highIntervalDays: settings.highIntervalDays,
               mediumIntervalDays: settings.mediumIntervalDays,

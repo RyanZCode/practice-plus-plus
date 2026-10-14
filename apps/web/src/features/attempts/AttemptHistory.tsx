@@ -74,7 +74,7 @@ export function AttemptHistory({ apiUrl, token }: { apiUrl: string; token: strin
           </button>
         </div>
       ) : null}
-      {page?.attempts.length === 0 ? <p>No confirmed attempts on this page.</p> : null}
+      {page?.attempts.length === 0 ? <p>No attempts yet. Start practicing!</p> : null}
       {page === undefined || page.totalPages === 0 ? null : (
         <HistoryPagination
           disabled={loading}

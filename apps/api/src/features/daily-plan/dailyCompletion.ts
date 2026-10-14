@@ -14,6 +14,7 @@ type PlanBoundary = {
 type NewPlan = PlanBoundary & {
   target: number;
   itemCount: number;
+  retryEmpty?: boolean;
 };
 
 export async function ensureDailyCompletion(
@@ -32,7 +33,26 @@ export async function ensureDailyCompletion(
     },
     select: { practiceDate: true },
   });
-  if (existing !== null) return;
+  if (existing !== null) {
+    if (plan.retryEmpty && plan.itemCount > 0) {
+      await tx.dailyCompletion.updateMany({
+        where: {
+          userProfileId,
+          practiceDate: toDate(practiceDate),
+          state: "NEUTRAL",
+          neutralReason: neutralReasons.noPracticeAvailable,
+          requiredCount: 0,
+          completedCount: 0,
+        },
+        data: {
+          requiredCount: Math.min(plan.target, plan.itemCount),
+          state: "ACTIVE",
+          neutralReason: null,
+        },
+      });
+    }
+    return;
+  }
 
   const trackingStart = await tx.dailyCompletion.findFirst({
     where: { userProfileId },

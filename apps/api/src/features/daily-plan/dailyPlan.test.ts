@@ -66,6 +66,7 @@ function database() {
     },
   };
   const client = {
+    dailyPlan: tx.dailyPlan,
     $transaction: async (fn: (value: typeof tx) => Promise<unknown>) => fn(tx),
   } as unknown as PrismaClient;
   return { tx, store: createPrismaDailyPlanStore(client) };
@@ -155,7 +156,7 @@ describe("daily plan persistence", () => {
 
     expect((await store.current(userProfileId, now)).items[0]?.status).toBe("INCOMPLETE");
   });
-  it("keeps an empty plan stable and requires settings before generation", async () => {
+  it("requires settings and retains the empty fallback while no work is eligible", async () => {
     const { tx, store } = database();
     tx.practiceSettings.findUnique.mockResolvedValueOnce(null);
     await expect(store.current(userProfileId, now)).rejects.toThrow("Save practice settings");
@@ -165,6 +166,42 @@ describe("daily plan persistence", () => {
     await store.current(userProfileId, now);
     expect(tx.dailyPlan.create).toHaveBeenCalledTimes(1);
   });
+  it.each([false, true])(
+    "retries an empty plan after catalog import, recommended: %s",
+    async (recommended) => {
+      const { tx, store } = database();
+      tx.problem.findMany.mockResolvedValueOnce([]);
+      await store.current(userProfileId, now);
+      expect((await store.saved(userProfileId, now))?.items).toEqual([]);
+      expect(tx.problem.findMany).toHaveBeenCalledTimes(1);
+      tx.practiceSettings.findUnique.mockResolvedValue({
+        timeZone: "UTC",
+        resetMinutes: 0,
+        dailyTarget: 1,
+        allowPremiumProblems: true,
+        difficultyPreference: "ANY",
+      });
+      const plan = recommended
+        ? await store.recommended(userProfileId, now, [problem.id])
+        : await store.current(userProfileId, now);
+      expect(plan.items).toHaveLength(1);
+      expect(plan.target).toBe(2);
+      expect(tx.dailyPlan.create).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            timeZone: "America/Toronto",
+            resetMinutes: 240,
+            target: 2,
+          }),
+        }),
+      );
+      expect(await store.current(userProfileId, now)).toEqual(plan);
+      await expect(store.recommended(userProfileId, now, [problem.id])).rejects.toThrow(
+        "already been saved",
+      );
+      expect(tx.dailyPlan.create).toHaveBeenCalledTimes(2);
+    },
+  );
   it("rejects fabricated recommended problems without changing plan state", async () => {
     const { tx, store } = database();
     await expect(store.recommended(userProfileId, now, [crypto.randomUUID()])).rejects.toThrow(
