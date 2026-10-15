@@ -4,6 +4,19 @@ import type {
   ReasoningEffort,
 } from "@practice-plus-plus/contracts";
 
+export const defaultOpenAiModel = "gpt-6-luna";
+
+export function availableOpenAiModel(
+  value: string,
+  models: readonly ProviderModel[],
+): string | undefined {
+  return (
+    models.find((model) => model.id === value)?.id ??
+    models.find((model) => model.id === defaultOpenAiModel)?.id ??
+    models[0]?.id
+  );
+}
+
 export function openAiSelection(
   model: string,
   models: readonly ProviderModel[],

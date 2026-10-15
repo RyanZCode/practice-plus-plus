@@ -1,10 +1,5 @@
-import {
-  practiceSettingsSchema,
-  type PracticeSettings,
-  type ProblemDifficultyPreference,
-  type ReasoningEffort,
-} from "@practice-plus-plus/contracts";
-import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import type { PracticeSettings } from "@practice-plus-plus/contracts";
+import { useEffect, useRef, useState } from "react";
 
 import { AttemptHistory } from "../features/attempts/AttemptHistory";
 import { Analytics } from "../features/analytics/Analytics";
@@ -14,31 +9,19 @@ import { ProtectedRoute } from "../features/auth/ProtectedRoute";
 import { Coach } from "../features/coach/Coach";
 import { LearningContext } from "../features/learning-context/LearningContext";
 import { Practice } from "../features/practice/Practice";
-import { BrowserKeySettings } from "../features/settings/BrowserKeySettings";
 import { ModelDiscoveryProvider } from "../features/settings/ModelDiscovery";
-import { OpenAIModelSelect } from "../features/settings/OpenAIModelSelect";
-import { ReasoningEffortSelect } from "../features/settings/ReasoningEffortSelect";
-import { loadPracticeSettings, savePracticeSettings } from "../features/settings/settingsApi";
+import {
+  PracticeSettings as PracticeSettingsPage,
+  type SettingsSection,
+} from "../features/settings/PracticeSettings";
+import { loadPracticeSettings } from "../features/settings/settingsApi";
 import { clearTutorConversationsForUser } from "../features/tutor/tutorConversationStorage";
+import { defaultOpenAiModel } from "../shared/aiSelection";
 import { loadTheme, resolveTheme, saveTheme, type ThemePreference } from "../shared/theme";
 import { NavigationIcon } from "./NavigationIcon";
 
 interface AppProps {
   readonly apiUrl: string;
-}
-
-interface SettingsDraft {
-  readonly allowPremiumProblems: boolean;
-  readonly attemptTimerMinutes: string;
-  readonly defaultAiModel: string;
-  readonly difficultyPreference: ProblemDifficultyPreference;
-  readonly reasoningEffort: ReasoningEffort | "";
-  readonly dailyTarget: string;
-  readonly highInterval: string;
-  readonly lowInterval: string;
-  readonly mediumInterval: string;
-  readonly resetTime: string;
-  readonly timeZone: string;
 }
 
 type ActiveView =
@@ -106,23 +89,21 @@ interface AccountPageProps extends AppProps {
 }
 
 function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProps) {
-  const { browserKey, signOut, state } = useAuth();
-  const keyState = useSyncExternalStore(browserKey.subscribe, browserKey.getSnapshot);
+  const { signOut, state } = useAuth();
   const userId = authenticatedUserId(state);
   const accessToken = state.status === "authenticated" ? state.session.access_token : null;
   const accessTokenRef = useRef(accessToken);
   accessTokenRef.current = accessToken;
-  const [draft, setDraft] = useState<SettingsDraft>(() => defaultDraft());
   const [savedSettings, setSavedSettings] = useState<PracticeSettings | null>(null);
   const [error, setError] = useState<string>();
   const [loadFailed, setLoadFailed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnboarding, setIsOnboarding] = useState(false);
-  const [setupStep, setSetupStep] = useState(0);
-  const setupHeadingRef = useRef<HTMLHeadingElement>(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("practice");
+  const [settingsReturn, setSettingsReturn] = useState<{ view: ActiveView; label: string } | null>(
+    null,
+  );
   const [activeView, setActiveView] = useState<ActiveView>("practice");
   const [visitedViews, setVisitedViews] = useState<ReadonlySet<ActiveView>>(
     () => new Set(["practice"]),
@@ -137,10 +118,6 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
   useEffect(() => {
     if (mobileMenuOpen) mobileMenuRef.current?.querySelector("button")?.focus();
   }, [mobileMenuOpen]);
-
-  useEffect(() => {
-    if (isOnboarding) setupHeadingRef.current?.focus();
-  }, [isOnboarding, setupStep]);
 
   useEffect(() => {
     if (window.location.pathname === "/auth/callback") {
@@ -169,7 +146,6 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
 
         setIsOnboarding(settings === null);
         setSavedSettings(settings);
-        setDraft(settings === null ? defaultDraft() : toDraft(settings));
       })
       .catch((loadError: unknown) => {
         if (active) {
@@ -194,34 +170,6 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
 
   const session = state.session;
 
-  async function handleSave(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-    setError(undefined);
-    setLoadFailed(false);
-    setSaved(false);
-
-    const result = parseSettingsDraft(draft);
-
-    if (!result.success) {
-      setError("Check the timezone, reset time, timer, target, and review interval order.");
-      return;
-    }
-
-    setIsSaving(true);
-
-    try {
-      const settings = await savePracticeSettings(apiUrl, session.access_token, result.data);
-      setDraft(toDraft(settings));
-      setSavedSettings(settings);
-      setIsOnboarding(false);
-      setSaved(true);
-    } catch (saveError) {
-      setError(errorMessage(saveError));
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
   async function handleSignOut(): Promise<void> {
     setError(undefined);
     setIsSigningOut(true);
@@ -236,6 +184,10 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
   }
 
   function navigate(view: ActiveView): void {
+    if (view === "settings") {
+      setSettingsSection("practice");
+      setSettingsReturn(null);
+    }
     setActiveView(view);
     if (mobileMenuOpen) mobileMenuButtonRef.current?.focus();
     setMobileMenuOpen(false);
@@ -245,68 +197,13 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
     });
   }
 
-  function changeSetupStep(step: number): void {
-    setError(undefined);
-    if (step > setupStep) {
-      const result = parseSettingsDraft(draft);
-      const dailyFields = ["timeZone", "resetTime", "dailyTarget"];
-      if (
-        !result.success &&
-        result.error.issues.some(
-          (issue) => step === 2 || dailyFields.includes(String(issue.path[0])),
-        )
-      ) {
-        setError(
-          step === 1
-            ? "Choose a valid timezone, reset time, and daily target from 1 to 20."
-            : "Check the timer and redo intervals. Keep high ≤ medium ≤ low.",
-        );
-        return;
-      }
-    }
-    setSetupStep(step);
+  function openAiSettings(view: ActiveView, label: string): void {
+    navigate("settings");
+    setSettingsSection("ai");
+    setSettingsReturn({ view, label });
   }
 
   const showNavigation = !isLoading && !loadFailed && !isOnboarding;
-  const modelControls = (
-    <div className="ai-control-grid">
-      <OpenAIModelSelect
-        value={draft.defaultAiModel}
-        disabled={isSaving}
-        onChange={(defaultAiModel) => setDraft({ ...draft, defaultAiModel })}
-        label={isOnboarding ? "OpenAI model" : "Default OpenAI model"}
-        help={isOnboarding ? "" : "Used when you open Coach or Attempt tutor."}
-      />
-
-      <ReasoningEffortSelect
-        model={draft.defaultAiModel}
-        value={draft.reasoningEffort === "" ? null : draft.reasoningEffort}
-        disabled={isSaving}
-        onChange={(reasoningEffort) =>
-          setDraft({ ...draft, reasoningEffort: reasoningEffort ?? "" })
-        }
-      />
-    </div>
-  );
-  const appearanceControls = (
-    <fieldset className="appearance-setting">
-      <legend>Appearance</legend>
-      <div className="appearance-options">
-        {appearanceOptions.map((option) => (
-          <label key={option.value}>
-            <input
-              type="radio"
-              name="appearance"
-              value={option.value}
-              checked={themePreference === option.value}
-              onChange={() => onThemeChange(option.value)}
-            />
-            {option.label}
-          </label>
-        ))}
-      </div>
-    </fieldset>
-  );
 
   return (
     <div className="app-shell">
@@ -449,7 +346,11 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
         <main
           className={`workspace-content${activeView === "practice" || activeView === "problems" ? " practice-content" : ""}`}
         >
-          {isLoading ? <p className="settings-status">Loading practice settings…</p> : null}
+          {isLoading ? (
+            <p className="settings-status" role="status">
+              Loading practice settings…
+            </p>
+          ) : null}
 
           {!isLoading && loadFailed && error !== undefined ? (
             <div className="settings-status">
@@ -473,11 +374,17 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
                 apiUrl={apiUrl}
                 token={session.access_token}
                 userId={session.user.id}
-                defaultModel={savedSettings?.defaultAiModel ?? "gpt-5.4-mini"}
+                defaultModel={savedSettings?.defaultAiModel ?? defaultOpenAiModel}
                 defaultReasoningEffort={savedSettings?.reasoningEffort ?? null}
                 view={activeView === "problems" ? "problems" : "today"}
                 settings={savedSettings!}
                 onNavigate={navigate}
+                onAiSetup={(workflow) =>
+                  openAiSettings(
+                    "practice",
+                    workflow === "attempt" ? "Return to attempt" : "Back to Today",
+                  )
+                }
                 refresh={practiceRefresh}
               />
             </div>
@@ -490,13 +397,13 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
               apiUrl={apiUrl}
               token={session.access_token}
               userId={session.user.id}
-              defaultModel={savedSettings?.defaultAiModel ?? "gpt-5.4-mini"}
+              defaultModel={savedSettings?.defaultAiModel ?? defaultOpenAiModel}
               defaultReasoningEffort={savedSettings?.reasoningEffort ?? null}
               onReviewMemory={() => {
                 setFocusMemoryInferences(true);
                 navigate("learning");
               }}
-              onAiSetup={() => navigate("settings")}
+              onAiSetup={() => openAiSettings("coach", "Back to Coach")}
               onPlanSaved={() => {
                 setPracticeRefresh((value) => value + 1);
                 navigate("practice");
@@ -538,283 +445,28 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
             </p>
           ) : null}
 
-          {!isLoading && !loadFailed && (isOnboarding || activeView === "settings") ? (
-            <section className={isOnboarding ? "onboarding" : "settings-page-wrapper"}>
-              {isOnboarding ? (
-                <>
-                  <header className="setup-heading">
-                    <h2 ref={setupHeadingRef} tabIndex={-1}>
-                      Set up your practice
-                    </h2>
-                  </header>
-                  <nav className="setup-steps" aria-label="Setup steps">
-                    {["Daily practice", "Preferences", "AI setup"].map((label, step) => (
-                      <Fragment key={label}>
-                        {step > 0 ? (
-                          <span className="setup-step-connector" aria-hidden="true" />
-                        ) : null}
-                        <button
-                          type="button"
-                          className="setup-step"
-                          aria-current={setupStep === step ? "step" : undefined}
-                          disabled={isSaving}
-                          onClick={() => changeSetupStep(step)}
-                        >
-                          <span aria-hidden="true">{step + 1}</span>
-                          {label}
-                        </button>
-                      </Fragment>
-                    ))}
-                  </nav>
-                </>
-              ) : null}
-              <form
-                id="practice-settings"
-                className="settings-form settings-page page-surface"
-                hidden={isOnboarding && setupStep === 2}
-                noValidate={isOnboarding}
-                onSubmit={(event) => {
-                  if (isOnboarding && setupStep < 2) {
-                    event.preventDefault();
-                    changeSetupStep(setupStep + 1);
-                  } else {
-                    void handleSave(event);
+          {!isLoading && !loadFailed ? (
+            <PracticeSettingsPage
+              key={session.user.id}
+              apiUrl={apiUrl}
+              token={session.access_token}
+              settings={savedSettings}
+              visible={isOnboarding || activeView === "settings"}
+              section={settingsSection}
+              onSectionChange={setSettingsSection}
+              themePreference={themePreference}
+              onThemeChange={onThemeChange}
+              onSaved={(settings) => {
+                setSavedSettings(settings);
+                setIsOnboarding(false);
+              }}
+              {...(settingsReturn
+                ? {
+                    onReturn: () => navigate(settingsReturn.view),
+                    returnLabel: settingsReturn.label,
                   }
-                }}
-              >
-                {!isOnboarding ? (
-                  <div>
-                    <h2>Practice settings</h2>
-                    <p className="settings-help">
-                      Today’s selections stay fixed. Settings changes apply to the next plan.
-                    </p>
-                  </div>
-                ) : null}
-
-                {!isOnboarding ? appearanceControls : null}
-
-                <div
-                  className="settings-section setup-daily-fields"
-                  hidden={isOnboarding && setupStep !== 0}
-                >
-                  {isOnboarding ? <h3>Daily practice</h3> : null}
-                  <label>
-                    Timezone
-                    <select
-                      value={draft.timeZone}
-                      onChange={(event) => setDraft({ ...draft, timeZone: event.target.value })}
-                    >
-                      {timeZoneOptions(draft.timeZone).map((timeZone) => (
-                        <option key={timeZone} value={timeZone}>
-                          {timeZone.replaceAll("_", " ")}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label>
-                    Practice day resets at
-                    <input
-                      type="time"
-                      value={draft.resetTime}
-                      onChange={(event) => setDraft({ ...draft, resetTime: event.target.value })}
-                    />
-                  </label>
-
-                  <label>
-                    Daily problem target (1-20)
-                    <input
-                      max="20"
-                      min="1"
-                      step="1"
-                      type="number"
-                      value={draft.dailyTarget}
-                      onChange={(event) => setDraft({ ...draft, dailyTarget: event.target.value })}
-                    />
-                  </label>
-                </div>
-                <div className="settings-section" hidden={isOnboarding && setupStep !== 1}>
-                  {isOnboarding ? <h3>Practice preferences</h3> : null}
-                  <label>
-                    Automatic problem difficulty
-                    <select
-                      value={draft.difficultyPreference}
-                      onChange={(event) =>
-                        setDraft({
-                          ...draft,
-                          difficultyPreference: event.target.value as ProblemDifficultyPreference,
-                        })
-                      }
-                    >
-                      <option value="ANY">Adaptive</option>
-                      <option value="EASIER">Easier</option>
-                      <option value="MEDIUM_ONLY">Medium only</option>
-                    </select>
-                    <span className="settings-help">
-                      Easier excludes Hard problems and lets AI include approachable Medium
-                      problems. Medium only restricts new selections to Medium problems.
-                    </span>
-                  </label>
-
-                  <label>
-                    Default attempt timer (minutes)
-                    <input
-                      max="180"
-                      min="1"
-                      step="1"
-                      type="number"
-                      value={draft.attemptTimerMinutes}
-                      onChange={(event) =>
-                        setDraft({ ...draft, attemptTimerMinutes: event.target.value })
-                      }
-                    />
-                  </label>
-
-                  <label className="premium-setting">
-                    <input
-                      type="checkbox"
-                      checked={draft.allowPremiumProblems}
-                      onChange={(event) =>
-                        setDraft({ ...draft, allowPremiumProblems: event.target.checked })
-                      }
-                    />
-                    <span>
-                      Allow Premium problems in automatic selections
-                      <span className="settings-help">
-                        Premium problems remain visible in the catalog, but AI and non-AI planning
-                        will not select them when this is disabled.
-                      </span>
-                    </span>
-                  </label>
-
-                  {!isOnboarding ? modelControls : null}
-
-                  <fieldset>
-                    <legend>Redo intervals (days)</legend>
-                    <div className="interval-grid">
-                      <label>
-                        High
-                        <input
-                          max="90"
-                          min="1"
-                          step="1"
-                          type="number"
-                          value={draft.highInterval}
-                          onChange={(event) =>
-                            setDraft({ ...draft, highInterval: event.target.value })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Medium
-                        <input
-                          max="90"
-                          min="1"
-                          step="1"
-                          type="number"
-                          value={draft.mediumInterval}
-                          onChange={(event) =>
-                            setDraft({ ...draft, mediumInterval: event.target.value })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Low
-                        <input
-                          max="90"
-                          min="1"
-                          step="1"
-                          type="number"
-                          value={draft.lowInterval}
-                          onChange={(event) =>
-                            setDraft({ ...draft, lowInterval: event.target.value })
-                          }
-                        />
-                      </label>
-                    </div>
-                  </fieldset>
-
-                  {isOnboarding ? appearanceControls : null}
-                </div>
-                {isOnboarding || error === undefined ? null : (
-                  <p className="auth-message" role="alert">
-                    {error}
-                  </p>
-                )}
-
-                {saved ? (
-                  <p className="save-message" role="status">
-                    Settings saved.
-                  </p>
-                ) : null}
-
-                {!isOnboarding ? (
-                  <button type="submit" disabled={isSaving}>
-                    {isSaving ? "Saving…" : "Save settings"}
-                  </button>
-                ) : null}
-              </form>
-              {isOnboarding && setupStep === 2 ? (
-                <section className="setup-ai page-surface" aria-labelledby="setup-ai-heading">
-                  <h3 id="setup-ai-heading">
-                    AI setup <span>Optional</span>
-                  </h3>
-                  <BrowserKeySettings key={session.user.id} embedded />
-                  <div className="settings-form setup-models">{modelControls}</div>
-                </section>
-              ) : null}
-              {isOnboarding && error !== undefined ? (
-                <p className="auth-message" role="alert">
-                  {error}
-                </p>
-              ) : null}
-              {isOnboarding ? (
-                <div className="setup-actions">
-                  {setupStep > 0 ? (
-                    <button
-                      type="button"
-                      className="secondary-button setup-back"
-                      disabled={isSaving}
-                      onClick={() => changeSetupStep(setupStep - 1)}
-                    >
-                      Back
-                    </button>
-                  ) : null}
-                  {setupStep === 2 && !keyState.hasKey ? (
-                    <button
-                      type="submit"
-                      form="practice-settings"
-                      className="secondary-button setup-skip"
-                      disabled={isSaving}
-                    >
-                      Continue without AI
-                    </button>
-                  ) : null}
-                  {setupStep < 2 ? (
-                    <button
-                      type="submit"
-                      form="practice-settings"
-                      className="setup-primary"
-                      disabled={isSaving}
-                    >
-                      Continue
-                    </button>
-                  ) : (
-                    <button
-                      type="submit"
-                      form="practice-settings"
-                      className="setup-primary"
-                      disabled={isSaving}
-                    >
-                      {isSaving ? "Saving…" : "Start practicing"}
-                    </button>
-                  )}
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-          {!isLoading && !loadFailed && !isOnboarding && activeView === "settings" ? (
-            <BrowserKeySettings key={session.user.id} />
+                : {})}
+            />
           ) : null}
         </main>
       </section>
@@ -828,15 +480,6 @@ interface NavigationProps {
   readonly secondary?: boolean;
   readonly mobile?: boolean;
 }
-
-const appearanceOptions: ReadonlyArray<{
-  readonly label: string;
-  readonly value: ThemePreference;
-}> = [
-  { label: "System default", value: "system" },
-  { label: "Light", value: "light" },
-  { label: "Dark", value: "dark" },
-];
 
 function Navigation({
   activeView,
@@ -865,70 +508,6 @@ function Navigation({
       ))}
     </nav>
   );
-}
-
-function parseSettingsDraft(draft: SettingsDraft) {
-  return practiceSettingsSchema.safeParse({
-    defaultAiModel: draft.defaultAiModel,
-    reasoningEffort: draft.reasoningEffort === "" ? null : draft.reasoningEffort,
-    attemptTimerMinutes: Number(draft.attemptTimerMinutes),
-    allowPremiumProblems: draft.allowPremiumProblems,
-    difficultyPreference: draft.difficultyPreference,
-    dailyTarget: Number(draft.dailyTarget),
-    redoIntervals: {
-      high: Number(draft.highInterval),
-      low: Number(draft.lowInterval),
-      medium: Number(draft.mediumInterval),
-    },
-    resetTime: draft.resetTime,
-    timeZone: draft.timeZone,
-  });
-}
-
-function defaultDraft(): SettingsDraft {
-  return {
-    allowPremiumProblems: true,
-    defaultAiModel: "gpt-5.4-mini",
-    difficultyPreference: "ANY",
-    reasoningEffort: "",
-    attemptTimerMinutes: "30",
-    dailyTarget: "2",
-    highInterval: "1",
-    lowInterval: "7",
-    mediumInterval: "3",
-    resetTime: "04:00",
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-  };
-}
-
-const supportedTimeZones = (() => {
-  try {
-    return Intl.supportedValuesOf("timeZone");
-  } catch {
-    return [];
-  }
-})();
-
-function timeZoneOptions(currentTimeZone: string): readonly string[] {
-  return Array.from(new Set(["UTC", currentTimeZone, ...supportedTimeZones])).sort((left, right) =>
-    left.localeCompare(right),
-  );
-}
-
-function toDraft(settings: PracticeSettings): SettingsDraft {
-  return {
-    allowPremiumProblems: settings.allowPremiumProblems,
-    defaultAiModel: settings.defaultAiModel,
-    difficultyPreference: settings.difficultyPreference,
-    reasoningEffort: settings.reasoningEffort ?? "",
-    attemptTimerMinutes: String(settings.attemptTimerMinutes),
-    dailyTarget: String(settings.dailyTarget),
-    highInterval: String(settings.redoIntervals.high),
-    lowInterval: String(settings.redoIntervals.low),
-    mediumInterval: String(settings.redoIntervals.medium),
-    resetTime: settings.resetTime,
-    timeZone: settings.timeZone,
-  };
 }
 
 function errorMessage(error: unknown): string {

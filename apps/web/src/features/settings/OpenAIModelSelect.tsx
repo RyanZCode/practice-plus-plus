@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 
+import { availableOpenAiModel } from "../../shared/aiSelection";
 import { useModelDiscovery } from "./ModelDiscovery";
 
 export function OpenAIModelSelect({
@@ -18,16 +19,13 @@ export function OpenAIModelSelect({
   const discovery = useModelDiscovery();
   const canSelect = discovery.status === "ready" || discovery.status === "stale";
   const selectedValue = discovery.models.some((model) => model.id === value) ? value : "";
+  const availableModel = availableOpenAiModel(value, discovery.models);
 
   useEffect(() => {
-    if (
-      canSelect &&
-      discovery.models.length > 0 &&
-      !discovery.models.some((model) => model.id === value)
-    ) {
-      onChange(discovery.models[0]!.id);
+    if (canSelect && availableModel !== undefined && availableModel !== value) {
+      onChange(availableModel);
     }
-  }, [canSelect, discovery.models, onChange, value]);
+  }, [canSelect, availableModel, onChange, value]);
 
   return (
     <div className="model-selector">
