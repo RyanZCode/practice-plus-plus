@@ -631,6 +631,22 @@
   position: relative;
 }
 
+.attempt-external > summary {
+  min-height: 3.15rem;
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 500;
+}
+.attempt-external > summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+.attempt-external[open] > summary {
+  margin-bottom: 1rem;
+}
+
 .attempt-tutor-settings > summary {
   color: var(--accent);
   padding: 0.35rem 0;

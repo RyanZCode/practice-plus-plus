@@ -12,7 +12,6 @@ import { authenticatedUserId } from "../features/auth/authState";
 import { useAuth } from "../features/auth/auth";
 import { ProtectedRoute } from "../features/auth/ProtectedRoute";
 import { Coach } from "../features/coach/Coach";
-import { ExternalAiExport } from "../features/external-ai/ExternalAiExport";
 import { LearningContext } from "../features/learning-context/LearningContext";
 import { Practice } from "../features/practice/Practice";
 import { BrowserKeySettings } from "../features/settings/BrowserKeySettings";
@@ -43,14 +42,7 @@ interface SettingsDraft {
 }
 
 type ActiveView =
-  | "analytics"
-  | "coach"
-  | "external-ai"
-  | "history"
-  | "learning"
-  | "practice"
-  | "problems"
-  | "settings";
+  "analytics" | "coach" | "history" | "learning" | "practice" | "problems" | "settings";
 
 const navigationItems: ReadonlyArray<{ readonly label: string; readonly view: ActiveView }> = [
   { label: "Today", view: "practice" },
@@ -62,7 +54,6 @@ const navigationItems: ReadonlyArray<{ readonly label: string; readonly view: Ac
 
 const secondaryNavigationItems: typeof navigationItems = [
   { label: "Learning profile", view: "learning" },
-  { label: "External AI", view: "external-ai" },
   { label: "Settings", view: "settings" },
 ];
 
@@ -494,6 +485,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
 
           <div hidden={isLoading || loadFailed || isOnboarding || activeView !== "coach"}>
             <Coach
+              isActive={activeView === "coach"}
               key={session.user.id}
               apiUrl={apiUrl}
               token={session.access_token}
@@ -503,6 +495,11 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
               onReviewMemory={() => {
                 setFocusMemoryInferences(true);
                 navigate("learning");
+              }}
+              onAiSetup={() => navigate("settings")}
+              onPlanSaved={() => {
+                setPracticeRefresh((value) => value + 1);
+                navigate("practice");
               }}
             />
           </div>
@@ -530,25 +527,11 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
             </div>
           ) : null}
 
-          {!isLoading && !loadFailed && !isOnboarding && visitedViews.has("external-ai") ? (
-            <div hidden={activeView !== "external-ai"}>
-              <ExternalAiExport
-                apiUrl={apiUrl}
-                token={session.access_token}
-                onPlanSaved={() => {
-                  setPracticeRefresh((value) => value + 1);
-                  navigate("practice");
-                }}
-              />
-            </div>
-          ) : null}
-
           {!isLoading &&
           !loadFailed &&
           !isOnboarding &&
           activeView !== "settings" &&
           activeView !== "learning" &&
-          activeView !== "external-ai" &&
           error !== undefined ? (
             <p className="auth-message" role="alert">
               {error}

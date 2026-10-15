@@ -18,6 +18,7 @@ export function AttemptWorkspace({
   onReview,
   onReturn,
   tutor,
+  externalAi,
   children,
 }: {
   attempt: Attempt;
@@ -34,6 +35,7 @@ export function AttemptWorkspace({
   onReview: () => void;
   onReturn: () => void;
   tutor: ReactNode;
+  externalAi: ReactNode;
   children: ReactNode;
 }) {
   const gaveUp = attempt.outcome === "GAVE_UP";
@@ -220,6 +222,7 @@ export function AttemptWorkspace({
           </section>
         </aside>
         <div className="attempt-main">
+          {externalAi}
           <div hidden={reporting}>{tutor}</div>
           <div hidden={!reporting}>{children}</div>
         </div>

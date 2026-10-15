@@ -5,7 +5,6 @@ const paths = {
   analytics: "M4 20V10m5 10V6m5 14v-8m5 8V3",
   history: "M3 11a9 9 0 1 1 2 7M3 4v7h7m2-4v5l3 2",
   learning: "M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2",
-  "external-ai": "M13 4h7v7m0-7L10 14M9 4H4v16h16v-5",
   settings: "M4 6h16M4 12h16M4 18h16m-9-15v6m6 0v6m-8 0v6",
   more: "M4 6h16M4 12h16M4 18h16",
 } as const;
