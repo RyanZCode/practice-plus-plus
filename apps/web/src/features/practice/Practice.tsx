@@ -61,12 +61,14 @@ export function Practice({
   view,
   settings,
   onNavigate,
+  onAiSetup,
   refresh,
 }: {
   view: "today" | "problems";
   settings: PracticeSettings;
   refresh: number;
   onNavigate: (view: "practice" | "problems" | "settings" | "learning") => void;
+  onAiSetup: (workflow: "attempt" | "today") => void;
   apiUrl: string;
   token: string;
   userId: string;
@@ -768,7 +770,7 @@ export function Practice({
                 attempt={attempt}
                 hintsAvailable={seconds === 0}
                 disabled={busy}
-                onAiSetup={() => onNavigate("settings")}
+                onAiSetup={() => onAiSetup("attempt")}
                 onBusy={setTutorBusy}
                 onRefresh={async () => {
                   try {
@@ -870,7 +872,7 @@ export function Practice({
               onStart={startProblem}
               onResume={resumeAttempt}
               onBrowse={() => onNavigate("problems")}
-              onAiSetup={() => onNavigate("settings")}
+              onAiSetup={() => onAiSetup("today")}
               onExternalAi={() => setExternalPlanning((open) => !open)}
               onExtra={() => {
                 setShowExtra(true);

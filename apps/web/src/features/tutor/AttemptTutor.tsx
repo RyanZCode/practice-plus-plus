@@ -281,6 +281,9 @@ export function AttemptTutor({
               disabled={busy || checkpointBusy || disabled}
               onChange={setReasoningEffort}
             />
+            <button type="button" className="text-button" onClick={onAiSetup}>
+              Open AI settings
+            </button>
           </div>
         </details>
       </div>
