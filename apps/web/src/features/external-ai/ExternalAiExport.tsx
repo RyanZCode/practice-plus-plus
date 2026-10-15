@@ -3,11 +3,10 @@ import {
   type Attempt,
   type DailyPlan,
   type ExternalAiExportRequest,
+  type PlanningPreview,
 } from "@practice-plus-plus/contracts";
-import { useEffect, useState, type FormEvent } from "react";
-import { loadActiveAttempt } from "../attempts/attemptsApi";
+import { useState, type FormEvent } from "react";
 import { createExternalAiExport } from "./externalAiApi";
-import type { PlanningPreview } from "@practice-plus-plus/contracts";
 import { confirmExternalPlan, validateExternalPlan } from "../planning/planningApi";
 
 type Selection =
@@ -27,54 +26,63 @@ export function ExternalAiExport({
   apiUrl,
   token,
   planningOnly = false,
+  purpose = "GENERAL",
+  attempt = null,
+  resultOnly = false,
   onPlanSaved,
 }: {
   apiUrl: string;
   token: string;
   planningOnly?: boolean;
+  purpose?: "GENERAL" | "PLANNING";
+  attempt?: Attempt | null;
+  resultOnly?: boolean;
   onPlanSaved?: (plan: DailyPlan) => void;
 }) {
-  const [attempt, setAttempt] = useState<Attempt | null>(null);
-  const [selection, setSelection] = useState<Selection>("PLANNING");
+  const [selection, setSelection] = useState<Selection>(
+    planningOnly || purpose === "PLANNING"
+      ? "PLANNING"
+      : attempt === null
+        ? "COACH"
+        : resultOnly
+          ? "RESULT"
+          : attempt.outcome === "GAVE_UP"
+            ? "SOLUTION_REVIEW"
+            : attempt.outcome === null
+              ? "INDEPENDENT"
+              : "RESULT",
+  );
   const [currentCode, setCurrentCode] = useState("");
   const [result, setResult] = useState<{ filename: string; markdown: string } | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [operation, setOperation] = useState<"context" | "validation" | "confirmation" | null>(
+    null,
+  );
+  const busy = operation !== null;
   const [error, setError] = useState<string>();
   const [status, setStatus] = useState<string>();
   const [recommendation, setRecommendation] = useState("");
   const [preview, setPreview] = useState<PlanningPreview | null>(null);
 
-  useEffect(() => {
-    if (planningOnly) return;
-    let active = true;
-    void loadActiveAttempt(apiUrl, token)
-      .then((value) => {
-        if (active) setAttempt(value);
-      })
-      .catch(() => {
-        if (active)
-          setError("Unable to check the active attempt. Coaching exports remain available.");
-      });
-    return () => {
-      active = false;
-    };
-  }, [apiUrl, token, planningOnly]);
-
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBusy(true);
+    setOperation("context");
+    setPreview(null);
     setError(undefined);
     setStatus(undefined);
     try {
       setResult(
-        await createExternalAiExport(apiUrl, token, requestFor(selection, attempt, currentCode)),
+        await createExternalAiExport(
+          apiUrl,
+          token,
+          externalAiRequest(selection, attempt, currentCode),
+        ),
       );
       setStatus("Context ready. Its contents remain hidden until you copy or download it.");
     } catch (reason) {
       setResult(null);
       setError(reason instanceof Error ? reason.message : "Unable to create the export.");
     } finally {
-      setBusy(false);
+      setOperation(null);
     }
   }
 
@@ -101,7 +109,7 @@ export function ExternalAiExport({
   }
 
   async function validateRecommendation() {
-    setBusy(true);
+    setOperation("validation");
     setError(undefined);
     try {
       const value: unknown = JSON.parse(recommendation);
@@ -109,15 +117,23 @@ export function ExternalAiExport({
       setStatus("Recommendation validated. Confirm it to save today’s plan.");
     } catch (reason) {
       setPreview(null);
-      setError(reason instanceof Error ? reason.message : "The recommendation is invalid.");
+      setError(
+        reason instanceof SyntaxError
+          ? "Paste a valid JSON recommendation from your AI chat."
+          : reason instanceof Error && reason.name === "ZodError"
+            ? "Paste the complete version 1 recommendation from your AI chat."
+            : reason instanceof Error
+              ? reason.message
+              : "The recommendation is invalid.",
+      );
     } finally {
-      setBusy(false);
+      setOperation(null);
     }
   }
 
   async function confirmRecommendation() {
     if (preview === null) return;
-    setBusy(true);
+    setOperation("confirmation");
     setError(undefined);
     try {
       const plan = await confirmExternalPlan(apiUrl, token, preview.recommendation);
@@ -129,21 +145,31 @@ export function ExternalAiExport({
       setPreview(null);
       setError(reason instanceof Error ? reason.message : "The recommendation could not be saved.");
     } finally {
-      setBusy(false);
+      setOperation(null);
     }
   }
 
-  const choices = selections(attempt);
+  const choices =
+    planningOnly || purpose === "PLANNING"
+      ? ([["PLANNING", "Practice planning"]] as [Selection, string][])
+      : resultOnly
+        ? ([["RESULT", "Record the result"]] as [Selection, string][])
+        : externalAiSelections(attempt);
   return (
-    <section className="external-ai page-surface">
-      {planningOnly ? <h3>Plan with your own AI chat</h3> : <h2>External AI context</h2>}
+    <section className="external-ai">
+      <h3>{selection === "PLANNING" ? "Plan with my AI chat" : "Use my AI chat"}</h3>
       <p className="settings-help">
-        {planningOnly
+        {selection === "PLANNING"
           ? "Copy your planning context into your AI chat, then return its plan recommendation here."
-          : "Create a Markdown package for an AI conversation outside Practice++."}
+          : "Continue your existing AI conversation, or start a new one with updated context."}
+      </p>
+      <p className="settings-help">
+        Includes relevant goals, preferences, approved memories, confirmed evidence, and current
+        workflow context. Hidden patterns may appear in a marked final section. The contents stay
+        hidden here. Your external service controls its chat retention.
       </p>
       <form className="settings-form" onSubmit={(event) => void generate(event)}>
-        <label hidden={planningOnly}>
+        <label hidden={choices.length < 2}>
           Conversation stage
           <select
             value={selection}
@@ -153,6 +179,7 @@ export function ExternalAiExport({
               setResult(null);
               setCurrentCode("");
               setStatus(undefined);
+              setError(undefined);
             }}
           >
             {choices.map(([value, label]) => (
@@ -188,8 +215,8 @@ export function ExternalAiExport({
           </p>
         ) : null}
         <div className="account-actions">
-          <button type="submit" disabled={busy}>
-            {busy ? "Creating…" : "Create context"}
+          <button type="submit" disabled={busy} className="primary-button">
+            {operation === "context" ? "Creating…" : "Create context"}
           </button>
           <button
             type="button"
@@ -197,7 +224,7 @@ export function ExternalAiExport({
             disabled={result === null || busy}
             onClick={() => void copy()}
           >
-            Copy
+            Copy context
           </button>
           <button
             type="button"
@@ -210,7 +237,7 @@ export function ExternalAiExport({
         </div>
       </form>
       {selection === "PLANNING" && result !== null ? (
-        <section aria-label="External planning recommendation">
+        <section className="external-recommendation" aria-label="External planning recommendation">
           <h3>Return a recommendation</h3>
           <p className="settings-help">
             Paste the AI’s version 1 JSON response. Validation does not change today’s plan.
@@ -232,7 +259,7 @@ export function ExternalAiExport({
             disabled={busy || recommendation.trim() === ""}
             onClick={() => void validateRecommendation()}
           >
-            Validate recommendation
+            {operation === "validation" ? "Validating…" : "Validate recommendation"}
           </button>
           {preview ? (
             <div className="daily-plan">
@@ -249,24 +276,30 @@ export function ExternalAiExport({
                 you confirm.
               </p>
               <button type="button" disabled={busy} onClick={() => void confirmRecommendation()}>
-                Confirm and save plan
+                {operation === "confirmation" ? "Saving plan…" : "Confirm and save plan"}
               </button>
             </div>
           ) : null}
         </section>
       ) : null}
+      {selection === "RESULT" ? (
+        <p className="settings-help">
+          Return to the result form to review the outcome and report actual assistance before
+          confirming. External transcripts and assessments are not imported.
+        </p>
+      ) : attempt !== null ? (
+        <p className="settings-help">
+          Copying context does not record help. Report any help you use when recording your result.
+        </p>
+      ) : null}
     </section>
   );
 }
 
-function selections(attempt: Attempt | null): [Selection, string][] {
-  const values: [Selection, string][] = [
-    ["PLANNING", "Practice planning"],
-    ["COACH", "General coaching"],
-  ];
-  if (attempt === null) return values;
+export function externalAiSelections(attempt: Attempt | null): [Selection, string][] {
+  if (attempt === null) return [["COACH", "General coaching"]];
   if (attempt.outcome === null)
-    return values.concat([
+    return [
       ["INDEPENDENT", "Independent work"],
       ["CLARIFICATION", "Clarify the problem"],
       ["HINT_1", tutorHintNames[0]],
@@ -274,13 +307,14 @@ function selections(attempt: Attempt | null): [Selection, string][] {
       ["HINT_3", tutorHintNames[2]],
       ["DEBUGGING", "Debug current code"],
       ["OPTIMIZATION", "Complexity and optimization"],
-    ]);
+    ];
+  const values: [Selection, string][] = [];
   if (attempt.outcome === "GAVE_UP") values.push(["SOLUTION_REVIEW", "Solution review"]);
   values.push(["RESULT", "Record the result"]);
   return values;
 }
 
-function requestFor(
+export function externalAiRequest(
   selection: Selection,
   attempt: Attempt | null,
   currentCode: string,

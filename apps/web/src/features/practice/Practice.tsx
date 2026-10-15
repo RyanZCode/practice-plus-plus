@@ -736,6 +736,27 @@ export function Practice({
             onGiveUp={() => setDecision("give-up")}
             onCancel={() => setDecision("cancel")}
             onReview={() => void update(() => reviewSolution(apiUrl, token, attempt.id))}
+            externalAi={
+              <details className="attempt-external page-surface">
+                <summary>Use my AI chat</summary>
+                {classifying && attempt.outcome === null ? (
+                  <p className="settings-help">
+                    Report your result before preparing result-recording context. Final confirmation
+                    remains separate.
+                  </p>
+                ) : (
+                  <ExternalAiExport
+                    key={`${attempt.id}-${attempt.outcome ?? "solving"}-${classifying}`}
+                    apiUrl={apiUrl}
+                    token={token}
+                    attempt={attempt}
+                    resultOnly={
+                      classifying || (attempt.outcome !== null && attempt.outcome !== "GAVE_UP")
+                    }
+                  />
+                )}
+              </details>
+            }
             tutor={
               <AttemptTutor
                 key={attempt.id}
