@@ -15,7 +15,10 @@ const now = new Date("2026-09-14T12:00:00Z");
 describe.skipIf(databaseUrl === undefined)("learning context screen database", () => {
   const sql = new pg.Client({ connectionString: databaseUrl, connectionTimeoutMillis: 5000 });
   const db = new PrismaClient({
-    adapter: new PrismaPg({ connectionString: databaseUrl }, { schema }),
+    adapter: new PrismaPg(
+      { connectionString: databaseUrl, options: `-c search_path=${schema}` },
+      { schema },
+    ),
   });
   const store = createPrismaLearningContextStore(db);
   let goalId: string;

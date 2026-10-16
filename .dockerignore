@@ -1,4 +1,6 @@
 .git
+docs
+AGENTS.override.md
 .pnpm-store
 node_modules
 **/node_modules

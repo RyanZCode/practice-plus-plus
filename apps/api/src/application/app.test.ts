@@ -1,10 +1,12 @@
 import { createServer, type Server } from "node:http";
+import { Writable } from "node:stream";
 
 import type { Express } from "express";
 import pino from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "./app.js";
+import { createLogger } from "../shared/logger.js";
 
 const servers: Server[] = [];
 
@@ -39,6 +41,61 @@ afterEach(async () => {
 });
 
 describe("API", () => {
+  it("limits authenticated AI routes without limiting health checks", async () => {
+    const url = await startServer(
+      createApp({
+        authentication: {
+          profileStore: { resolveByAuthSubject: vi.fn() },
+          verifier: { verify: async (subject) => ({ subject }) },
+        },
+        logger: pino({ level: "silent" }),
+      }),
+    );
+    const headers = { authorization: "Bearer user-one" };
+    for (let count = 0; count < 30; count += 1) {
+      expect((await fetch(`${url}/ai/providers`, { headers })).status).toBe(200);
+    }
+    expect((await fetch(`${url}/ai/providers`, { headers })).status).toBe(429);
+    expect(
+      (
+        await fetch(`${url}/ai/providers`, {
+          headers: { authorization: "Bearer user-two" },
+        })
+      ).status,
+    ).toBe(200);
+    expect((await fetch(`${url}/health/ready`)).status).toBe(200);
+  });
+
+  it("logs request metadata without query values, headers, or request content", async () => {
+    const output: string[] = [];
+    const url = await startServer(
+      createApp({
+        logger: createLogger(
+          new Writable({
+            write(chunk, _encoding, callback) {
+              output.push(chunk.toString());
+              callback();
+            },
+          }),
+        ),
+      }),
+    );
+    await fetch(`${url}/missing?token=private-query`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer private-auth",
+        cookie: "session=private-cookie",
+        "x-api-key": "private-key",
+      },
+      body: "private-message-and-code",
+    });
+    const logs = output.join("");
+    expect(logs).not.toContain("private-");
+    const record = JSON.parse(output[0]!);
+    expect(record.req).toEqual({ id: expect.any(Number), method: "POST", url: "/missing" });
+    expect(record.res.statusCode).toBe(404);
+  });
+
   it("lists only public provider metadata for authenticated users", async () => {
     const url = await startServer(
       createApp({

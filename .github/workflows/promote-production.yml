@@ -2,9 +2,15 @@ name: Promote production database
 
 on:
   workflow_dispatch:
+    inputs:
+      revision:
+        description: Full commit SHA that passed staging CI
+        required: true
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: production-database
@@ -13,6 +19,8 @@ concurrency:
 jobs:
   validate-main:
     runs-on: ubuntu-latest
+    outputs:
+      revision: ${{ steps.revision.outputs.sha }}
 
     steps:
       - name: Require main branch
@@ -20,6 +28,30 @@ jobs:
         run: |
           echo "Production promotion must be dispatched from main."
           exit 1
+
+      - name: Check out main history
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify staged revision
+        id: revision
+        env:
+          REVISION: ${{ inputs.revision }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ ! "$REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "A full lowercase commit SHA is required."
+            exit 1
+          fi
+          git merge-base --is-ancestor "$REVISION" origin/main
+          passed_runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$REVISION&event=push&status=success" --jq '[.workflow_runs[] | select(.head_branch == "main")] | length')
+          if [[ "$passed_runs" -eq 0 ]]; then
+            echo "This revision has no successful main CI and staging migration run."
+            exit 1
+          fi
+          echo "sha=$REVISION" >> "$GITHUB_OUTPUT"
 
   verify-staging:
     needs: validate-main
@@ -30,7 +62,7 @@ jobs:
       - name: Check out main
         uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ needs.validate-main.outputs.revision }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -49,7 +81,7 @@ jobs:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
 
   migrate-production:
-    needs: verify-staging
+    needs: [validate-main, verify-staging]
     runs-on: ubuntu-latest
     environment: production
 
@@ -57,7 +89,7 @@ jobs:
       - name: Check out main
         uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ needs.validate-main.outputs.revision }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7

@@ -18,7 +18,10 @@ const confirmedAt = new Date("2026-09-17T14:00:00Z");
 describe.skipIf(databaseUrl === undefined)("daily completion database", () => {
   const sql = new pg.Client({ connectionString: databaseUrl, connectionTimeoutMillis: 5000 });
   const db = new PrismaClient({
-    adapter: new PrismaPg({ connectionString: databaseUrl }, { schema }),
+    adapter: new PrismaPg(
+      { connectionString: databaseUrl, options: `-c search_path=${schema}` },
+      { schema },
+    ),
   });
   let checkpointAttemptId: string;
 

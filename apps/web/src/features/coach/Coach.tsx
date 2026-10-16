@@ -9,7 +9,7 @@ import {
 } from "@practice-plus-plus/contracts";
 import { useAuth } from "../auth/auth";
 import { useModelDiscovery } from "../settings/ModelDiscovery";
-import { recentCoachMessages, streamCoach } from "./coachApi";
+import { AiRateLimitError, recentCoachMessages, streamCoach } from "./coachApi";
 import { MarkdownMessage } from "../../shared/MarkdownMessage";
 import { OpenAIModelSelect } from "../settings/OpenAIModelSelect";
 import { ReasoningEffortSelect } from "../settings/ReasoningEffortSelect";
@@ -225,7 +225,13 @@ export function Coach({
             index === current.length - 1 ? { ...message, complete: true } : message,
           ),
         );
-    } catch {
+    } catch (error) {
+      if (active.current === controller && error instanceof AiRateLimitError) {
+        setMessages((current) => current.slice(0, -2));
+        setDraft(user.content);
+        setError(error.message);
+        return;
+      }
       if (active.current === controller)
         setError(
           controller.signal.aborted
