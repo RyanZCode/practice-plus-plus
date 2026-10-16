@@ -20,6 +20,7 @@ ENV NODE_ENV=production
 WORKDIR /app
 
 COPY --from=build --chown=node:node /prod/api .
+COPY certificates/supabase-root-2021.crt ./certificates/supabase-root-2021.crt
 
 USER node
 
