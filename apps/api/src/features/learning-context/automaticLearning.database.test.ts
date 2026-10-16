@@ -33,7 +33,10 @@ const output = {
 describe.skipIf(databaseUrl === undefined)("automatic learning persistence", () => {
   const sql = new pg.Client({ connectionString: databaseUrl, connectionTimeoutMillis: 5000 });
   const db = new PrismaClient({
-    adapter: new PrismaPg({ connectionString: databaseUrl }, { schema }),
+    adapter: new PrismaPg(
+      { connectionString: databaseUrl, options: `-c search_path=${schema}` },
+      { schema },
+    ),
   });
   const summaries = createPrismaSummaryStore(db);
   const profile = createPrismaLearningContextStore(db);

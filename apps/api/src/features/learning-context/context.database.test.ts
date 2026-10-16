@@ -16,7 +16,10 @@ const now = new Date("2026-09-12T12:00:00Z");
 describe.skipIf(databaseUrl === undefined)("context relational queries", () => {
   const sql = new pg.Client({ connectionString: databaseUrl, connectionTimeoutMillis: 5000 });
   const db = new PrismaClient({
-    adapter: new PrismaPg({ connectionString: databaseUrl }, { schema }),
+    adapter: new PrismaPg(
+      { connectionString: databaseUrl, options: `-c search_path=${schema}` },
+      { schema },
+    ),
   });
   const assembler = createPrismaContextAssembler(db);
   let activeId: string;
