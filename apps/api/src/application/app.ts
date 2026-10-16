@@ -50,6 +50,7 @@ import { handleError, notFound } from "../shared/errors.js";
 import { createHealthRouter, type ReadinessCheck } from "../shared/health.js";
 import { createLogger } from "../shared/logger.js";
 import { getProviders } from "../shared/providers.js";
+import { createAiRequestLimit } from "../shared/aiRequestLimit.js";
 
 interface AuthenticationOptions {
   readonly tutor?: TutorOptions;
@@ -83,7 +84,16 @@ export function createApp(options: AppOptions = {}): Express {
   const logger = options.logger ?? createLogger();
 
   app.disable("x-powered-by");
-  app.use(pinoHttp({ logger }));
+  app.use(
+    pinoHttp({
+      logger,
+      serializers: {
+        req(request) {
+          return { id: request.id, method: request.method, url: request.url?.split("?")[0] };
+        },
+      },
+    }),
+  );
   if (options.webOrigin !== undefined) {
     app.use(cors({ origin: options.webOrigin }));
   }
@@ -92,43 +102,27 @@ export function createApp(options: AppOptions = {}): Express {
   if (options.authentication !== undefined) {
     const authenticate = requireAuthentication(options.authentication.verifier);
     const resolveProfile = resolveApplicationProfile(options.authentication.profileStore);
+    app.use("/ai", authenticate, createAiRequestLimit());
 
     if (options.authentication.tutor !== undefined) {
-      app.use(
-        "/ai/tutor",
-        authenticate,
-        resolveProfile,
-        createTutorRouter(options.authentication.tutor),
-      );
+      app.use("/ai/tutor", resolveProfile, createTutorRouter(options.authentication.tutor));
     }
     if (options.authentication.coach !== undefined) {
-      app.use(
-        "/ai/coach",
-        authenticate,
-        resolveProfile,
-        createCoachRouter(options.authentication.coach),
-      );
+      app.use("/ai/coach", resolveProfile, createCoachRouter(options.authentication.coach));
     }
     if (options.authentication.assessments !== undefined) {
       app.use(
         "/ai/assessment-drafts",
-        authenticate,
         resolveProfile,
         createAssessmentRouter(options.authentication.assessments),
       );
     }
     if (options.authentication.summaries !== undefined) {
-      app.use(
-        "/ai",
-        authenticate,
-        resolveProfile,
-        createSummaryRouter(options.authentication.summaries),
-      );
+      app.use("/ai", resolveProfile, createSummaryRouter(options.authentication.summaries));
     }
     if (options.authentication.externalAiExport !== undefined) {
       app.use(
         "/ai/external-context",
-        authenticate,
         resolveProfile,
         createExternalAiExportRouter(options.authentication.externalAiExport),
       );
@@ -136,7 +130,6 @@ export function createApp(options: AppOptions = {}): Express {
     if (options.authentication.planning !== undefined) {
       app.use(
         "/ai/planning",
-        authenticate,
         resolveProfile,
         createPlanningRouter(options.authentication.planning),
       );
@@ -145,7 +138,6 @@ export function createApp(options: AppOptions = {}): Express {
     if (options.authentication.modelDiscovery !== undefined) {
       app.use(
         "/ai/models",
-        authenticate,
         resolveProfile,
         createModelDiscoveryRouter(options.authentication.modelDiscovery),
       );
@@ -166,7 +158,7 @@ export function createApp(options: AppOptions = {}): Express {
       response.json({ id: getApplicationProfile(request).id });
     });
 
-    app.get("/ai/providers", authenticate, (_request, response) => {
+    app.get("/ai/providers", (_request, response) => {
       response.json(getProviders());
     });
 

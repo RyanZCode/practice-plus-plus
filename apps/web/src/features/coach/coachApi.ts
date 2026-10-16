@@ -4,6 +4,16 @@ import {
   type TutorRequest,
 } from "@practice-plus-plus/contracts";
 
+export class AiRateLimitError extends Error {
+  constructor(retryAfter: string | null) {
+    const value = Number(retryAfter);
+    const seconds = Number.isFinite(value) && value > 0 ? Math.min(60, Math.ceil(value)) : 60;
+    super(
+      `AI request limit reached. Wait ${seconds} ${seconds === 1 ? "second" : "seconds"}, then try again.`,
+    );
+  }
+}
+
 export async function streamCoach(
   apiUrl: string,
   token: string,
@@ -42,6 +52,9 @@ async function streamChat(
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(input),
   });
+  if (response.status === 429) {
+    throw new AiRateLimitError(response.headers.get("Retry-After"));
+  }
   if (!response.ok || response.body === null) {
     throw new Error(
       response.status === 401

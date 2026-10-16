@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { type CoachRequest } from "@practice-plus-plus/contracts";
-import { recentCoachMessages, streamCoach, streamTutor } from "./coachApi";
+import { AiRateLimitError, recentCoachMessages, streamCoach, streamTutor } from "./coachApi";
 
 const input: CoachRequest = {
   selection: { providerId: "openai", model: "test-model" },
@@ -20,6 +20,32 @@ function response(text: string) {
   );
 }
 describe("coach streaming client", () => {
+  it.each([
+    ["12", "12 seconds"],
+    ["1", "1 second"],
+    [null, "60 seconds"],
+    ["invalid", "60 seconds"],
+    ["-1", "60 seconds"],
+  ])("reports a safe retry delay for HTTP 429 (%s)", async (retryAfter, delay) => {
+    const onText = vi.fn();
+    const request = streamCoach(
+      "https://api.example.com",
+      "token",
+      input,
+      new AbortController().signal,
+      onText,
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response("private upstream content", {
+          status: 429,
+          headers: retryAfter === null ? {} : { "Retry-After": retryAfter },
+        }),
+      ),
+    );
+    await expect(request).rejects.toBeInstanceOf(AiRateLimitError);
+    await expect(request).rejects.toThrow(`Wait ${delay}, then try again.`);
+    expect(onText).not.toHaveBeenCalled();
+  });
+
   it("sends tutor help and transient code to the tutor endpoint", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
