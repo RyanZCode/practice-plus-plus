@@ -132,13 +132,13 @@ export function Today({
                 <h3 id="today-next-heading">
                   {problem!.leetcodeId}. {problem!.title}
                 </h3>
-                <p className="settings-help">
-                  {attempt
-                    ? attempt.timerPausedAt
+                {attempt ? (
+                  <p className="settings-help">
+                    {attempt.timerPausedAt
                       ? `Timer paused · ${formatRemainingSeconds(seconds)} remaining`
-                      : `${formatRemainingSeconds(seconds)} remaining`
-                    : "Selected for your practice today."}
-                </p>
+                      : `${formatRemainingSeconds(seconds)} remaining`}
+                  </p>
+                ) : null}
                 <PracticeType redo={attempt ? attempt.type === "REDO" : next!.kind === "REDO"} />
                 <div className="account-actions">
                   <button
@@ -168,7 +168,7 @@ export function Today({
                       [
                         ["AI", "Practice++ AI"],
                         ["WITHOUT_AI", "Without AI"],
-                        ["EXTERNAL", "My AI chat"],
+                        ["EXTERNAL", "External AI"],
                       ] as const
                     ).map(([method, label]) => (
                       <button
@@ -228,7 +228,7 @@ export function Today({
                   </button>
                 </div>
                 <p className="settings-help">
-                  Extra practice does not change today's target or completion.
+                  Extra practice keeps today's saved plan and target unchanged.
                 </p>
               </>
             ) : (
@@ -291,7 +291,7 @@ export function Today({
                           <span className={`today-item-status status-${item.status.toLowerCase()}`}>
                             {item.status === "FINISHED" ? "Completed" : "Incomplete"}
                           </span>
-                        ) : item.status === "ACTIVE" ? (
+                        ) : item.status === "ACTIVE" || attempt?.problem.id === item.problem.id ? (
                           <button
                             type="button"
                             className="text-button"

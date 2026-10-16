@@ -5,7 +5,8 @@ const paths = {
   analytics: "M4 20V10m5 10V6m5 14v-8m5 8V3",
   history: "M3 11a9 9 0 1 1 2 7M3 4v7h7m2-4v5l3 2",
   learning: "M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2",
-  settings: "M4 6h16M4 12h16M4 18h16m-9-15v6m6 0v6m-8 0v6",
+  settings:
+    "M10 2h4l.6 2.5 2 1.2 2.5-.7 2 3.5-1.9 1.8v3.4l1.9 1.8-2 3.5-2.5-.7-2 1.2L14 22h-4l-.6-2.5-2-1.2-2.5.7-2-3.5 1.9-1.8v-3.4L2.9 8.5l2-3.5 2.5.7 2-1.2Z",
   more: "M4 6h16M4 12h16M4 18h16",
 } as const;
 
@@ -24,6 +25,7 @@ export function NavigationIcon({ name }: { readonly name: keyof typeof paths }) 
       <path d={paths[name]} />
       {name === "practice" ? <circle cx="12" cy="12" r="4" /> : null}
       {name === "learning" ? <circle cx="12" cy="6" r="3" /> : null}
+      {name === "settings" ? <circle cx="12" cy="12" r="3" /> : null}
     </svg>
   );
 }

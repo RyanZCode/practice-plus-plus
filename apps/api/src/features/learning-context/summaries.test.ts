@@ -307,7 +307,7 @@ it("persists only structured tutor output with pending, user-scoped provenance",
     ],
   };
   const tx = {
-    attempt: { findFirst: vi.fn().mockResolvedValue({ id: attemptId }) },
+    attempt: { findFirst: vi.fn().mockResolvedValue({ id: attemptId, confirmedAt: null }) },
     conversationSummary: { create: vi.fn().mockResolvedValue(conversation) },
     attemptSummary: { upsert: vi.fn().mockResolvedValue({}) },
     learnerMemory: {
@@ -364,6 +364,11 @@ it("persists only structured tutor output with pending, user-scoped provenance",
     where: { id_userProfileId: { id: memory.id, userProfileId: userId } },
     select: expect.any(Object),
   });
-  expect(tx.learnerMemory.create.mock.calls[0]?.[0].data.approvalState).toBeUndefined();
+  expect(tx.learnerMemory.create.mock.calls[0]?.[0].data).toMatchObject({
+    approvalState: "APPROVED",
+    approvalSource: "AUTOMATIC",
+    reviewedAt: now,
+    approvalReason: expect.stringContaining("Attempt tutor"),
+  });
   expect(JSON.stringify(tx.learnerMemory.create.mock.calls)).not.toContain("I keep rushing");
 });

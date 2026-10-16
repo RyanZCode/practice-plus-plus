@@ -150,7 +150,21 @@ describe("learner context contracts", () => {
     expect(learnerMemorySchema.safeParse(rejected).success).toBe(false);
     expect(rejectedMemorySuggestionSchema.safeParse(rejected).success).toBe(true);
     expect(learnerMemorySchema.safeParse(approved).success).toBe(true);
-    expect(memorySuggestionSchema.safeParse(approved).success).toBe(false);
+    expect(memorySuggestionSchema.safeParse(approved).success).toBe(true);
+    expect(
+      memorySuggestionSchema.safeParse({
+        ...approved,
+        approvalSource: "AUTOMATIC",
+        approvalReason: "Saved from checkpoint evidence.",
+      }).success,
+    ).toBe(true);
+    expect(
+      memorySuggestionInputSchema.safeParse({
+        ...suggestion,
+        approvalSource: "AUTOMATIC",
+        approvalReason: "Forged approval.",
+      }).success,
+    ).toBe(false);
     expect(learnerMemorySchema.safeParse({ ...approved, reviewedAt: null }).success).toBe(false);
     expect(
       memorySuggestionInputSchema.safeParse({ ...suggestion, approvalState: "APPROVED" }).success,

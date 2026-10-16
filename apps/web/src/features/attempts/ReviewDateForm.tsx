@@ -1,5 +1,5 @@
 import type { Attempt, ReviewObligation } from "@practice-plus-plus/contracts";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { overrideReview } from "./attemptsApi";
 
 export function ReviewDateForm({
@@ -20,6 +20,7 @@ export function ReviewDateForm({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
+  const errorId = useId();
   const savedDate = saved.manualDueDate ?? saved.generatedDueDate;
   const changed = date !== savedDate;
 
@@ -45,16 +46,18 @@ export function ReviewDateForm({
   return (
     <form
       className="review-date-form"
+      aria-busy={saving}
       onSubmit={(event) => {
         event.preventDefault();
         void save(date);
       }}
     >
-      <p>
-        Next review: {savedDate}
+      <h3>Review date</h3>
+      <p className="review-saved-date">
+        Saved date: {savedDate}
         {saved.manualDueDate !== null ? " (manual override)" : ""}
-        {" · "}Generated date: {saved.generatedDueDate}
       </p>
+      <p className="review-generated-date">Generated date: {saved.generatedDueDate}</p>
       <label>
         Next review date
         <input
@@ -62,30 +65,35 @@ export function ReviewDateForm({
           required
           value={date}
           disabled={saving}
-          onChange={(event) => setDate(event.target.value)}
+          aria-describedby={error === undefined ? undefined : errorId}
+          onChange={(event) => {
+            setDate(event.target.value);
+            setMessage(undefined);
+            setError(undefined);
+          }}
         />
       </label>
-      {changed || saved.manualDueDate !== null ? (
-        <div className="account-actions">
-          {changed ? (
-            <button type="submit" disabled={saving}>
-              Save review date
-            </button>
-          ) : null}
-          {saved.manualDueDate !== null ? (
-            <button
-              className="secondary-button"
-              type="button"
-              disabled={saving}
-              onClick={() => void save(null)}
-            >
-              Use generated date
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="account-actions">
+        <button type="submit" disabled={saving || !changed}>
+          {saving ? "Saving…" : "Save date"}
+        </button>
+        {saved.manualDueDate !== null ? (
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={saving}
+            onClick={() => void save(null)}
+          >
+            Use generated date
+          </button>
+        ) : null}
+      </div>
       {message ? <p role="status">{message}</p> : null}
-      {error ? <p role="alert">{error}</p> : null}
+      {error ? (
+        <p className="auth-message" id={errorId} role="alert">
+          {error} Your date has not been saved.
+        </p>
+      ) : null}
     </form>
   );
 }

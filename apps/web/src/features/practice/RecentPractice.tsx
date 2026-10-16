@@ -64,7 +64,9 @@ export function RecentPracticePanel({
                     ? "Not tracked"
                     : day.status === "COMPLETED"
                       ? "Completed"
-                      : "Missed";
+                      : day.status === "PARTIAL"
+                        ? "Partial"
+                        : "Missed";
               return (
                 <li
                   key={day.date}
@@ -78,7 +80,7 @@ export function RecentPracticePanel({
                       <span
                         className="recent-practice-fill"
                         style={{
-                          width: `${day.requiredCount ? (day.completedCount! / day.requiredCount) * 100 : 0}%`,
+                          width: `${day.requiredCount ? Math.min(1, day.completedCount! / day.requiredCount) * 100 : 0}%`,
                         }}
                       />
                     )}

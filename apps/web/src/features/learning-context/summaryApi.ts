@@ -54,10 +54,3 @@ export async function loadMemorySuggestions(
   if (!response.ok) throw new Error("Memory suggestions could not be loaded.");
   return memorySuggestionListResponseSchema.parse(await response.json()).memorySuggestions;
 }
-
-export function needsCheckpoint(messages: { content: string }[]): boolean {
-  return (
-    messages.length >= 10 ||
-    new TextEncoder().encode(JSON.stringify(messages)).byteLength >= 40 * 1024
-  );
-}

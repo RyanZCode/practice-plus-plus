@@ -29,6 +29,7 @@ export function ExternalAiExport({
   purpose = "GENERAL",
   attempt = null,
   resultOnly = false,
+  heading,
   onPlanSaved,
 }: {
   apiUrl: string;
@@ -37,6 +38,7 @@ export function ExternalAiExport({
   purpose?: "GENERAL" | "PLANNING";
   attempt?: Attempt | null;
   resultOnly?: boolean;
+  heading?: string | null;
   onPlanSaved?: (plan: DailyPlan) => void;
 }) {
   const [selection, setSelection] = useState<Selection>(
@@ -157,7 +159,9 @@ export function ExternalAiExport({
         : externalAiSelections(attempt);
   return (
     <section className="external-ai">
-      <h3>{selection === "PLANNING" ? "Plan with my AI chat" : "Use my AI chat"}</h3>
+      {heading !== null ? (
+        <h3>{heading ?? (selection === "PLANNING" ? "Plan with external AI" : "External AI")}</h3>
+      ) : null}
       <p className="settings-help">
         {selection === "PLANNING"
           ? "Copy your planning context into your AI chat, then return its plan recommendation here."

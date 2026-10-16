@@ -413,13 +413,21 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
 
           {!isLoading && !loadFailed && !isOnboarding && visitedViews.has("history") ? (
             <div hidden={activeView !== "history"}>
-              <AttemptHistory apiUrl={apiUrl} token={session.access_token} />
+              <AttemptHistory
+                apiUrl={apiUrl}
+                token={session.access_token}
+                isActive={activeView === "history"}
+              />
             </div>
           ) : null}
 
           {!isLoading && !loadFailed && !isOnboarding && visitedViews.has("analytics") ? (
             <div hidden={activeView !== "analytics"}>
-              <Analytics apiUrl={apiUrl} token={session.access_token} />
+              <Analytics
+                apiUrl={apiUrl}
+                token={session.access_token}
+                isActive={activeView === "analytics"}
+              />
             </div>
           ) : null}
 
@@ -429,6 +437,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
                 apiUrl={apiUrl}
                 token={session.access_token}
                 focusInferences={focusMemoryInferences}
+                isActive={activeView === "learning"}
                 onFocusHandled={() => setFocusMemoryInferences(false)}
               />
             </div>

@@ -471,6 +471,8 @@ model LearnerMemory {
   lifecycleState MemoryLifecycleState    @default(ACTIVE) @map("lifecycle_state")
   approvalState  MemoryApprovalState     @default(PENDING) @map("approval_state")
   reviewedAt     DateTime?               @map("reviewed_at") @db.Timestamptz(3)
+  approvalSource String?                 @map("approval_source") @db.VarChar(20)
+  approvalReason String?                 @map("approval_reason") @db.VarChar(1000)
   createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
   userProfile    UserProfile             @relation(fields: [userProfileId], references: [id], onDelete: Cascade)

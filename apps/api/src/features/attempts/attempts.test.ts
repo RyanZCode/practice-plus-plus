@@ -398,7 +398,12 @@ function database() {
       findFirst: vi.fn().mockResolvedValue({ id: problemId }),
       findMany: vi.fn().mockResolvedValue([{ id: problemId }]),
     },
+    dailyCompletion: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      upsert: vi.fn().mockResolvedValue({}),
+    },
     practiceSettings: {
+      findUniqueOrThrow: vi.fn().mockResolvedValue({ dailyTarget: 2 }),
       findUnique: vi.fn().mockResolvedValue({
         timeZone: "America/Toronto",
         resetMinutes: 240,
@@ -845,6 +850,45 @@ describe("attempt persistence", () => {
         }),
       }),
     );
+    expect(tx.problemPattern.findMany).not.toHaveBeenCalled();
+  });
+
+  it("includes permitted patterns and the complete learning checkpoint in confirmed history", async () => {
+    const { tx, store } = database();
+    const summary = {
+      approach: "Tracked the previous two totals.",
+      stuckPoint: "Chose an overlapping house.",
+      misconception: "Included adjacent houses.",
+      assistance: "A conceptual hint.",
+      progressTrigger: "Separated the two states.",
+      finalUnderstanding: "Each choice depends on the previous two totals.",
+      nextTeachingAction: "Try a fresh transfer.",
+      reviewedAt: new Date("2026-09-10T12:00:00Z"),
+    };
+    tx.attempt.count.mockResolvedValue(1);
+    tx.attempt.findMany.mockResolvedValue([
+      { ...record, confirmedAt: summary.reviewedAt, outcome: "INDEPENDENT", summary },
+    ]);
+    tx.problemPattern.findMany.mockResolvedValue([{ pattern: { name: "Dynamic Programming" } }]);
+    const history = await store.history(userId, { page: 1 });
+    expect(history.attempts[0]).toMatchObject({
+      patterns: ["Dynamic Programming"],
+      summary: { ...summary, reviewedAt: summary.reviewedAt.toISOString() },
+    });
+    expect(tx.problemPattern.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          problem: {
+            attempts: { some: expect.objectContaining({ userProfileId: userId, id: record.id }) },
+          },
+        }),
+      }),
+    );
+    tx.problemPattern.findMany.mockClear();
+    tx.attempt.findMany.mockResolvedValue([
+      { ...record, confirmedAt: summary.reviewedAt, outcome: "INCOMPLETE", summary },
+    ]);
+    expect((await store.history(userId, { page: 1 })).attempts[0]?.patterns).toBeUndefined();
     expect(tx.problemPattern.findMany).not.toHaveBeenCalled();
   });
 

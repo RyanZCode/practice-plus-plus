@@ -2,6 +2,7 @@ import {
   checkpointRequestSchema,
   checkpointResponseSchema,
   memorySuggestionListResponseSchema,
+  memorySuggestionSchema,
   rollingSummaryOutputSchema,
   type CheckpointRequest,
   type CheckpointResponse,
@@ -40,6 +41,8 @@ const memorySelect = {
   lifecycleState: true,
   approvalState: true,
   reviewedAt: true,
+  approvalSource: true,
+  approvalReason: true,
   evidence: { select: evidenceSelect },
 } as const;
 
@@ -123,21 +126,24 @@ function evidenceReference(evidence: MemoryRecord["evidence"][number]): MemoryEv
 }
 
 function presentMemory(record: MemoryRecord): MemorySuggestion {
-  return {
+  return memorySuggestionSchema.parse({
     id: record.id,
     category: record.category,
     content: record.content,
     confidence: record.confidence,
     lastObservedAt: record.lastObservedAt.toISOString(),
     lifecycleState: record.lifecycleState,
-    approvalState: "PENDING",
-    reviewedAt: null,
+    approvalState: record.approvalState === "APPROVED" ? "APPROVED" : "PENDING",
+    reviewedAt: record.reviewedAt?.toISOString() ?? null,
+    approvalSource: record.approvalSource,
+    approvalReason: record.approvalReason,
     evidence: record.evidence.map(evidenceReference),
-  };
+  });
 }
 
-type CheckpointReference =
-  { mode: "COACH"; attemptId: null } | { mode: "ATTEMPT_TUTOR"; attemptId: string };
+type CheckpointReference = (
+  { mode: "COACH"; attemptId: null } | { mode: "ATTEMPT_TUTOR"; attemptId: string }
+) & { checkpointId?: string };
 
 export interface SummaryStore {
   save(
@@ -155,24 +161,62 @@ export function createPrismaSummaryStore(client: PrismaClient): SummaryStore {
       let stage = "transaction";
       try {
         return await client.$transaction(async (tx) => {
+          if (checkpoint.checkpointId) {
+            const existing = await tx.conversationSummary.findFirst({
+              where: { id: checkpoint.checkpointId, userProfileId: userId },
+              select: {
+                id: true,
+                mode: true,
+                attemptId: true,
+                topics: true,
+                learningProgress: true,
+                nextSteps: true,
+                updatedAt: true,
+              },
+            });
+            if (existing) {
+              return checkpointResponseSchema.parse({
+                summary: { ...existing, updatedAt: existing.updatedAt.toISOString() },
+                attemptSummary: null,
+                memorySuggestions: (
+                  await tx.learnerMemory.findMany({
+                    where: {
+                      userProfileId: userId,
+                      approvalState: "APPROVED",
+                      evidence: { some: { conversationSummaryId: existing.id } },
+                    },
+                    select: memorySelect,
+                    take: 5,
+                  })
+                ).map(presentMemory),
+              });
+            }
+          }
+          let unconfirmedAttempt = false;
           if (checkpoint.mode === "ATTEMPT_TUTOR") {
             stage = "attempt_authorization";
             const attempt = await tx.attempt.findFirst({
-              where: { id: checkpoint.attemptId, userProfileId: userId, confirmedAt: null },
-              select: { id: true },
+              where: { id: checkpoint.attemptId, userProfileId: userId },
+              select: { id: true, confirmedAt: true },
             });
-            if (attempt === null) throw new HttpError(404, "Active attempt not found.");
+            if (attempt === null) throw new HttpError(404, "Attempt not found.");
+            unconfirmedAttempt = attempt.confirmedAt === null;
           }
           stage = "conversation_summary";
           const summary = await tx.conversationSummary.create({
             data: {
+              ...(checkpoint.checkpointId ? { id: checkpoint.checkpointId } : {}),
               userProfileId: userId,
               mode: checkpoint.mode,
               attemptId: checkpoint.attemptId,
               ...output.summary,
             },
           });
-          if (checkpoint.mode === "ATTEMPT_TUTOR" && output.attemptSummary !== null) {
+          if (
+            checkpoint.mode === "ATTEMPT_TUTOR" &&
+            unconfirmedAttempt &&
+            output.attemptSummary !== null
+          ) {
             stage = "attempt_summary";
             await tx.attemptSummary.upsert({
               where: { attemptId: checkpoint.attemptId },
@@ -190,25 +234,41 @@ export function createPrismaSummaryStore(client: PrismaClient): SummaryStore {
             const duplicate = await tx.learnerMemory.findFirst({
               where: {
                 userProfileId: userId,
-                approvalState: "PENDING",
                 category: suggestion.category,
                 content: suggestion.content,
               },
               select: memorySelect,
             });
             if (duplicate !== null) {
-              memories.push(duplicate);
-              continue;
+              if (duplicate.approvalState === "REJECTED") continue;
+              if (duplicate.approvalState === "APPROVED") {
+                memories.push(duplicate);
+                continue;
+              }
             }
             stage = "memory_suggestion";
-            const memory = await tx.learnerMemory.create({
-              data: {
-                userProfileId: userId,
-                ...suggestion,
-                lastObservedAt: now,
-              },
-              select: { id: true },
-            });
+            const approval = {
+              approvalState: "APPROVED" as const,
+              reviewedAt: now,
+              approvalSource: "AUTOMATIC",
+              approvalReason: `Automatically approved from a saved ${checkpoint.mode === "COACH" ? "Coach" : "Attempt tutor"} checkpoint with linked conversation evidence.`,
+            };
+            const memory =
+              duplicate === null
+                ? await tx.learnerMemory.create({
+                    data: {
+                      userProfileId: userId,
+                      ...suggestion,
+                      lastObservedAt: now,
+                      ...approval,
+                    },
+                    select: { id: true },
+                  })
+                : await tx.learnerMemory.update({
+                    where: { id_userProfileId: { id: duplicate.id, userProfileId: userId } },
+                    data: { ...approval, lastObservedAt: now },
+                    select: { id: true },
+                  });
             stage = "memory_evidence";
             await tx.learnerMemoryEvidence.createMany({
               data: [
@@ -246,7 +306,10 @@ export function createPrismaSummaryStore(client: PrismaClient): SummaryStore {
               nextSteps: summary.nextSteps,
               updatedAt: summary.updatedAt.toISOString(),
             },
-            attemptSummary: checkpoint.mode === "ATTEMPT_TUTOR" ? output.attemptSummary : null,
+            attemptSummary:
+              checkpoint.mode === "ATTEMPT_TUTOR" && unconfirmedAttempt
+                ? output.attemptSummary
+                : null,
             memorySuggestions: memories.map(presentMemory),
           });
         });
@@ -370,7 +433,11 @@ export function createSummaryRouter({
     const policy: ContextRequest["policy"] =
       input.mode === "COACH"
         ? { mode: "COACH", purpose: "GENERAL" }
-        : { mode: "ATTEMPT_TUTOR", attemptId: input.attemptId, phase: "INDEPENDENT" };
+        : {
+            mode: "ATTEMPT_TUTOR",
+            attemptId: input.attemptId,
+            phase: input.phase ?? "INDEPENDENT",
+          };
     try {
       const packet = await assembler.assemble(
         getApplicationProfile(request).id,
@@ -420,7 +487,15 @@ export function createSummaryRouter({
           ? { mode: input.mode, attemptId: input.attemptId }
           : { mode: input.mode, attemptId: input.attemptId };
       response.json(
-        await store.save(getApplicationProfile(request).id, checkpoint, output.data, now),
+        await store.save(
+          getApplicationProfile(request).id,
+          {
+            ...checkpoint,
+            ...(input.checkpointId ? { checkpointId: input.checkpointId } : {}),
+          },
+          output.data,
+          now,
+        ),
       );
     } catch (error) {
       if (controller.signal.aborted) return;

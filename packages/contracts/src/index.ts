@@ -113,13 +113,19 @@ export const coachEventSchema = z.discriminatedUnion("type", [
 export type CoachEvent = z.infer<typeof coachEventSchema>;
 
 const checkpointFields = {
+  checkpointId: z.uuid().optional(),
   selection: providerSelectionSchema,
   apiKey: z.string().regex(/^[\x21-\x7e]{1,4096}$/),
   messages: contextRequestSchema.shape.messages.unwrap().min(2).max(12),
 };
 export const checkpointRequestSchema = z.discriminatedUnion("mode", [
   z.strictObject({ ...checkpointFields, mode: z.literal("COACH"), attemptId: z.null() }),
-  z.strictObject({ ...checkpointFields, mode: z.literal("ATTEMPT_TUTOR"), attemptId: z.uuid() }),
+  z.strictObject({
+    ...checkpointFields,
+    mode: z.literal("ATTEMPT_TUTOR"),
+    attemptId: z.uuid(),
+    phase: z.enum(["INDEPENDENT", "SOLUTION_REVIEW", "RESULT"]).optional(),
+  }),
 ]);
 export type CheckpointRequest = z.infer<typeof checkpointRequestSchema>;
 
@@ -723,10 +729,18 @@ export const streakCalendarResponseSchema = z.strictObject({
   days: z.array(
     z.strictObject({
       date: z.iso.date(),
-      status: z.enum(["COMPLETED", "MISSED", "CURRENT", "FUTURE", "NEUTRAL", "UNTRACKED"]),
+      status: z.enum([
+        "COMPLETED",
+        "MISSED",
+        "PARTIAL",
+        "CURRENT",
+        "FUTURE",
+        "NEUTRAL",
+        "UNTRACKED",
+      ]),
       isCurrent: z.boolean(),
       requiredCount: z.number().int().min(0).max(20).nullable(),
-      completedCount: z.number().int().min(0).max(20).nullable(),
+      completedCount: z.number().int().nonnegative().nullable(),
       neutralReason: dailyCompletionNeutralReasonSchema.nullable(),
     }),
   ),

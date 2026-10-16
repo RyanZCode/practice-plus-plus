@@ -1,10 +1,8 @@
 import {
   streakCalendarResponseSchema,
-  type DailyCompletionNeutralReason,
-  type DailyCompletionState,
   type StreakCalendarResponse,
 } from "@practice-plus-plus/contracts";
-import type { PrismaClient, Prisma } from "../../shared/generated/prisma/client.js";
+import type { PrismaClient } from "../../shared/generated/prisma/client.js";
 import { HttpError } from "../../shared/errors.js";
 import { practiceDateFor } from "../daily-plan/dailyPlan.js";
 
@@ -12,8 +10,6 @@ export type DailyCompletionRecord = {
   practiceDate: string;
   requiredCount: number;
   completedCount: number;
-  state: DailyCompletionState;
-  neutralReason: DailyCompletionNeutralReason | null;
 };
 
 export interface StreakStore {
@@ -29,8 +25,19 @@ export function buildStreakCalendar(
   const asOfDay = calendarDay(asOfPracticeDate);
   const selectedMonth = month ?? asOfPracticeDate.slice(0, 7);
   const { year, monthNumber, daysInMonth } = parseMonth(selectedMonth);
+  function quotaFor(date: string) {
+    const known = findRequiredCount(records, date);
+    return date === asOfPracticeDate
+      ? (fallbackRequiredCount ?? known)
+      : (known ?? fallbackRequiredCount);
+  }
   const observed = records
     .filter((record) => calendarDay(record.practiceDate) <= asOfDay)
+    .map((record) => ({
+      ...record,
+      requiredCount:
+        record.requiredCount > 0 ? record.requiredCount : (quotaFor(record.practiceDate) ?? 0),
+    }))
     .toSorted((left, right) => left.practiceDate.localeCompare(right.practiceDate));
   const trackingStartDate = observed[0]?.practiceDate ?? null;
   const recordByDate = new Map(observed.map((record) => [record.practiceDate, record]));
@@ -49,8 +56,8 @@ export function buildStreakCalendar(
       const day = calendarDay(date);
       const dayStatus = status(day, asOfDay, trackingStartDay, record);
       const inferredRequiredCount =
-        dayStatus === "MISSED" && record === undefined
-          ? (findRequiredCount(records, date) ?? fallbackRequiredCount ?? null)
+        (dayStatus === "MISSED" || dayStatus === "CURRENT") && record === undefined
+          ? (quotaFor(date) ?? null)
           : null;
       return {
         date,
@@ -58,7 +65,7 @@ export function buildStreakCalendar(
         isCurrent: date === asOfPracticeDate,
         requiredCount: record?.requiredCount ?? inferredRequiredCount,
         completedCount: record?.completedCount ?? (inferredRequiredCount === null ? null : 0),
-        neutralReason: record?.neutralReason ?? null,
+        neutralReason: null,
       };
     }),
   });
@@ -68,11 +75,7 @@ export function createPrismaStreakStore(client: PrismaClient): StreakStore {
   const select = {
     practiceDate: true,
     requiredCount: true,
-    completedCount: true,
-    state: true,
-    neutralReason: true,
   } as const;
-  type Record = Prisma.DailyCompletionGetPayload<{ select: typeof select }>;
 
   return {
     async calendar(userProfileId, now, month) {
@@ -83,7 +86,7 @@ export function createPrismaStreakStore(client: PrismaClient): StreakStore {
         }),
         client.dailyPlan.findUnique({
           where: { userProfileId },
-          select: { practiceDate: true, timeZone: true, resetMinutes: true },
+          select: { practiceDate: true, timeZone: true, resetMinutes: true, target: true },
         }),
       ]);
       if (settings === null)
@@ -92,32 +95,58 @@ export function createPrismaStreakStore(client: PrismaClient): StreakStore {
         savedPlan !== null && practiceDateFor(now, savedPlan) === date(savedPlan.practiceDate)
           ? date(savedPlan.practiceDate)
           : practiceDateFor(now, settings);
-      const records = await client.dailyCompletion.findMany({
-        where: {
-          userProfileId,
-          practiceDate: { lte: toDate(asOfPracticeDate) },
-        },
-        orderBy: { practiceDate: "asc" },
-        select,
-      });
-      return buildStreakCalendar(
-        records.map(toRecord),
-        asOfPracticeDate,
-        month,
-        settings.dailyTarget,
-      );
+      const [records, attempts] = await Promise.all([
+        client.dailyCompletion.findMany({
+          where: { userProfileId, practiceDate: { lte: toDate(asOfPracticeDate) } },
+          orderBy: { practiceDate: "asc" },
+          select,
+        }),
+        client.attempt.groupBy({
+          by: ["practiceDate", "outcome"],
+          where: {
+            userProfileId,
+            practiceDate: { lte: toDate(asOfPracticeDate) },
+            confirmedAt: { not: null },
+            outcome: { in: ["INDEPENDENT", "ASSISTED", "GAVE_UP", "INCOMPLETE"] },
+          },
+          _count: { _all: true },
+        }),
+      ]);
+      const counts = new Map<string, number>();
+      for (const attempt of attempts) {
+        const practiceDate = date(attempt.practiceDate);
+        counts.set(
+          practiceDate,
+          (counts.get(practiceDate) ?? 0) +
+            (attempt.outcome === "INCOMPLETE" ? 0 : attempt._count._all),
+        );
+      }
+      const history = records.map((record) => ({
+        practiceDate: date(record.practiceDate),
+        requiredCount: record.requiredCount,
+        completedCount: counts.get(date(record.practiceDate)) ?? 0,
+      }));
+      const recordedDates = new Set(history.map((record) => record.practiceDate));
+      for (const [practiceDate, completedCount] of counts) {
+        if (!recordedDates.has(practiceDate))
+          history.push({
+            practiceDate,
+            completedCount,
+            requiredCount:
+              practiceDate === asOfPracticeDate &&
+              savedPlan !== null &&
+              date(savedPlan.practiceDate) === asOfPracticeDate
+                ? savedPlan.target
+                : (findRequiredCount(history, practiceDate) ?? settings.dailyTarget),
+          });
+      }
+      const target =
+        savedPlan !== null && date(savedPlan.practiceDate) === asOfPracticeDate
+          ? savedPlan.target
+          : settings.dailyTarget;
+      return buildStreakCalendar(history, asOfPracticeDate, month, target);
     },
   };
-
-  function toRecord(record: Record): DailyCompletionRecord {
-    return {
-      practiceDate: date(record.practiceDate),
-      requiredCount: record.requiredCount,
-      completedCount: record.completedCount,
-      state: record.state,
-      neutralReason: isNeutralReason(record.neutralReason) ? record.neutralReason : null,
-    };
-  }
 }
 
 function currentStreak(
@@ -131,15 +160,15 @@ function currentStreak(
   let day = asOfDay;
   while (day >= trackingStartDay) {
     const record = records.get(dateFromDay(day));
-    if (day === asOfDay && (record === undefined || record.state === "ACTIVE")) {
+    if (day === asOfDay && (record === undefined || record.completedCount < record.requiredCount)) {
       day -= 1;
       continue;
     }
-    if (record?.state === "NEUTRAL") {
-      day -= 1;
-      continue;
-    }
-    if (record?.state === "FULFILLED") {
+    if (
+      record !== undefined &&
+      record.requiredCount > 0 &&
+      record.completedCount >= record.requiredCount
+    ) {
       streak += 1;
       day -= 1;
       continue;
@@ -156,22 +185,27 @@ function status(
   record: DailyCompletionRecord | undefined,
 ) {
   if (day > asOfDay) return "FUTURE" as const;
-  if (record?.state === "NEUTRAL") return "NEUTRAL" as const;
-  if (record?.state === "FULFILLED") return "COMPLETED" as const;
+  if (
+    record !== undefined &&
+    record.requiredCount > 0 &&
+    record.completedCount >= record.requiredCount
+  )
+    return "COMPLETED" as const;
+  if (record !== undefined && record.completedCount > 0) return "PARTIAL" as const;
   if (day === asOfDay) return "CURRENT" as const;
   if (trackingStartDay === null || day < trackingStartDay) return "UNTRACKED" as const;
   return "MISSED" as const;
 }
 
 function findRequiredCount(records: readonly DailyCompletionRecord[], date: string): number | null {
-  const knownCounts = records
+  const known = records
     .filter((record) => record.requiredCount > 0)
-    .toSorted(
-      (left, right) =>
-        Math.abs(calendarDay(left.practiceDate) - calendarDay(date)) -
-        Math.abs(calendarDay(right.practiceDate) - calendarDay(date)),
-    );
-  return knownCounts[0]?.requiredCount ?? null;
+    .toSorted((left, right) => left.practiceDate.localeCompare(right.practiceDate));
+  return (
+    known.filter((record) => record.practiceDate <= date).at(-1)?.requiredCount ??
+    known[0]?.requiredCount ??
+    null
+  );
 }
 
 function parseMonth(value: string) {
@@ -203,8 +237,4 @@ function date(value: Date): string {
 
 function dateFromDay(value: number): string {
   return new Date(value * 86_400_000).toISOString().slice(0, 10);
-}
-
-function isNeutralReason(value: string | null): value is DailyCompletionNeutralReason {
-  return value === "NO_PRACTICE_AVAILABLE" || value === "BOUNDARY_CHANGE";
 }

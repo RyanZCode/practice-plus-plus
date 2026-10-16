@@ -16,7 +16,6 @@ import { ReasoningEffortSelect } from "../settings/ReasoningEffortSelect";
 import {
   checkpointMessages,
   loadMemorySuggestions,
-  needsCheckpoint,
   saveCheckpoint,
 } from "../learning-context/summaryApi";
 import { openAiSelection } from "../../shared/aiSelection";
@@ -75,8 +74,8 @@ export function Coach({
   const clearDialog = useRef<HTMLDialogElement>(null);
   const messageInput = useRef<HTMLTextAreaElement>(null);
   const canUseAi = keyState.hasKey && models.some((entry) => entry.id === model);
-  const checkpointReady =
-    messages.slice(checkpointIndex).filter((message) => message.complete).length >= 2;
+  const automaticCheckpointEnd = useRef(0);
+  const checkpointIds = useRef(new Map<number, string>());
   const active = useRef<AbortController | null>(null);
   const messagesRef = useRef<HTMLOListElement>(null);
   useEffect(
@@ -127,8 +126,11 @@ export function Coach({
     if (complete.length < 2 || checkpointBusy) return false;
     setCheckpointBusy(true);
     setCheckpointError(undefined);
+    const checkpointId = checkpointIds.current.get(endIndex) ?? crypto.randomUUID();
+    checkpointIds.current.set(endIndex, checkpointId);
     try {
       const result = await saveCheckpoint(apiUrl, token, {
+        checkpointId,
         selection: openAiSelection(model, models, reasoningEffort),
         apiKey: browserKey.getKey(userId) ?? "",
         mode: "COACH",
@@ -154,15 +156,31 @@ export function Coach({
     }
   }
 
+  useEffect(() => {
+    if (messages.length === 0) {
+      automaticCheckpointEnd.current = 0;
+      checkpointIds.current.clear();
+    }
+    const latest = messages.at(-1);
+    if (
+      busy ||
+      checkpointBusy ||
+      !canUseAi ||
+      !latest?.complete ||
+      latest.role !== "assistant" ||
+      messages.length <= checkpointIndex ||
+      automaticCheckpointEnd.current >= messages.length
+    )
+      return;
+    automaticCheckpointEnd.current = messages.length;
+    void checkpoint(messages.slice(checkpointIndex), messages.length);
+  }, [messages, checkpointIndex, checkpointBusy, busy, canUseAi]);
+
   async function send(event: FormEvent) {
     event.preventDefault();
-    if (active.current || checkpointBusy || !canUseAi) return;
+    if (active.current || !canUseAi) return;
     const user: Message = { role: "user", content: draft.trim(), complete: true };
-    let contextMessages = messages.slice(checkpointIndex).filter((message) => message.complete);
-    if (needsCheckpoint([...contextMessages, user])) {
-      const saved = await checkpoint(contextMessages, messages.length);
-      if (saved) contextMessages = [];
-    }
+    const contextMessages = messages.slice(checkpointIndex).filter((message) => message.complete);
     const input = coachRequestSchema.safeParse({
       selection: openAiSelection(model, models, reasoningEffort),
       apiKey: browserKey.getKey(userId),
@@ -249,7 +267,7 @@ export function Coach({
             aria-controls="coach-external"
             onClick={() => setExternalOpen((open) => !open)}
           >
-            My AI chat
+            External AI
           </button>
           <details
             className="coach-menu"
@@ -266,22 +284,18 @@ export function Coach({
                 Conversation focus
                 <select
                   value={purpose}
-                  disabled={busy || checkpointBusy}
+                  disabled={busy}
                   onChange={(event) => setPurpose(event.target.value as CoachRequest["purpose"])}
                 >
                   <option value="GENERAL">General coaching</option>
                   <option value="PLANNING">Practice planning</option>
                 </select>
               </label>
-              <OpenAIModelSelect
-                value={model}
-                disabled={busy || checkpointBusy}
-                onChange={setModel}
-              />
+              <OpenAIModelSelect value={model} disabled={busy} onChange={setModel} />
               <ReasoningEffortSelect
                 model={model}
                 value={reasoningEffort}
-                disabled={busy || checkpointBusy}
+                disabled={busy}
                 onChange={setReasoningEffort}
               />
               <button type="button" className="text-button" onClick={onAiSetup}>
@@ -300,16 +314,8 @@ export function Coach({
           >
             <summary>Conversation</summary>
             <div className="coach-menu-panel">
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={busy || checkpointBusy || !canUseAi || !checkpointReady}
-                onClick={() => void checkpoint(messages.slice(checkpointIndex), messages.length)}
-              >
-                {checkpointBusy ? "Saving checkpoint…" : "Save learning checkpoint"}
-              </button>
               <p className="settings-help">
-                Saves a compact summary. Memory suggestions still need your approval.
+                Learning checkpoints and evidence-backed memories save automatically after replies.
               </p>
               <button
                 type="button"
@@ -333,7 +339,8 @@ export function Coach({
           memories remain.
         </p>
         <p className="settings-help">
-          Save a learning checkpoint first if you want to retain the useful gist.
+          Completed replies are summarized automatically. Learning profile lets you inspect or
+          remove saved learning.
         </p>
         <div className="account-actions">
           <button
@@ -364,6 +371,7 @@ export function Coach({
         <div id="coach-external" className="page-surface">
           <ExternalAiExport
             key={purpose}
+            heading="External AI"
             apiUrl={apiUrl}
             token={token}
             purpose={purpose}
@@ -445,7 +453,7 @@ export function Coach({
                 type="submit"
                 title="Send (Ctrl+Enter)"
                 aria-keyshortcuts="Control+Enter"
-                disabled={busy || checkpointBusy || !canUseAi || draft.trim().length === 0}
+                disabled={busy || !canUseAi || draft.trim().length === 0}
               >
                 {busy ? "Responding…" : "Send"}
               </button>
@@ -466,15 +474,24 @@ export function Coach({
             </p>
           ) : null}
           {checkpointError ? (
-            <p className="auth-message" role="alert">
+            <div className="auth-message" role="alert">
               {checkpointError}
-            </p>
+              <button
+                className="text-button"
+                type="button"
+                disabled={checkpointBusy}
+                onClick={() => void checkpoint(messages.slice(checkpointIndex), messages.length)}
+              >
+                Retry automatic save
+              </button>
+            </div>
           ) : null}
+          {checkpointBusy ? <p role="status">Saving learning automatically…</p> : null}
         </div>
       </form>
-      {summary ? (
+      {summary && !checkpointError && !checkpointBusy ? (
         <div className="coach-checkpoint page-surface" role="status">
-          <strong>Latest learning checkpoint</strong>
+          <strong>Learning checkpoint saved automatically</strong>
           <p>{summary.topics}</p>
         </div>
       ) : null}
@@ -485,12 +502,11 @@ export function Coach({
         >
           <div>
             <h3>
-              {suggestions.length} {suggestions.length === 1 ? "suggestion" : "suggestions"} to
-              review
+              {suggestions.length} learning {suggestions.length === 1 ? "memory" : "memories"}
             </h3>
             <p className="settings-help">
-              These inferences are pending and are not used in future coaching until you approve
-              them.
+              Evidence-backed memories are approved automatically. You can inspect, correct, or
+              delete them in Learning profile.
             </p>
           </div>
           <button
@@ -498,7 +514,7 @@ export function Coach({
             type="button"
             onClick={onReviewMemory}
           >
-            Review in Learning profile
+            Manage in Learning profile
           </button>
         </section>
       ) : null}

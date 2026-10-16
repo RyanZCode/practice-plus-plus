@@ -740,7 +740,20 @@ export function Practice({
             onReview={() => void update(() => reviewSolution(apiUrl, token, attempt.id))}
             externalAi={
               <details className="attempt-external page-surface">
-                <summary>Use my AI chat</summary>
+                <summary>
+                  External AI
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                </summary>
                 {classifying && attempt.outcome === null ? (
                   <p className="settings-help">
                     Report your result before preparing result-recording context. Final confirmation
@@ -749,6 +762,7 @@ export function Practice({
                 ) : (
                   <ExternalAiExport
                     key={`${attempt.id}-${attempt.outcome ?? "solving"}-${classifying}`}
+                    heading={null}
                     apiUrl={apiUrl}
                     token={token}
                     attempt={attempt}
@@ -903,7 +917,7 @@ export function Practice({
                   <p>
                     {extraPracticeStarted
                       ? "Choose one more eligible problem, or finish for today."
-                      : "Extra practice is optional and stays outside today’s plan, target, and streak."}
+                      : "Extra practice is optional. It counts in your calendar without changing today's saved plan or target."}
                   </p>
                   {extraPracticeError === undefined ? null : (
                     <p className="auth-message" role="alert">

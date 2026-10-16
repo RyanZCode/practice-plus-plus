@@ -12,6 +12,7 @@ import {
   loadLearningContext,
   removeGoal,
   removeInference,
+  removeCheckpoint,
   removeTeachingPreference,
   reviewInference,
   updateGoal,
@@ -23,6 +24,7 @@ interface LearningContextProps {
   readonly focusInferences: boolean;
   readonly onFocusHandled: () => void;
   readonly token: string;
+  readonly isActive?: boolean;
 }
 
 export function LearningContext({
@@ -30,9 +32,12 @@ export function LearningContext({
   focusInferences,
   onFocusHandled,
   token,
+  isActive = true,
 }: LearningContextProps) {
   const [context, setContext] = useState<LearningContextResponse>();
   const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
   const [section, setSection] = useState("goals");
@@ -40,19 +45,28 @@ export function LearningContext({
   const tabs = useRef<HTMLElement>(null);
 
   useEffect(() => {
+    if (!isActive) return;
     let active = true;
     setError(undefined);
+    setLoading(true);
+    setLoadFailed(false);
     void loadLearningContext(apiUrl, token)
       .then((loaded) => {
         if (active) setContext(loaded);
       })
       .catch((loadError: unknown) => {
-        if (active) setError(message(loadError));
+        if (active) {
+          setError(message(loadError));
+          setLoadFailed(true);
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
     return () => {
       active = false;
     };
-  }, [apiUrl, reload, token]);
+  }, [apiUrl, reload, token, isActive]);
 
   useEffect(() => {
     if (!focusInferences || context === undefined) return;
@@ -119,12 +133,13 @@ export function LearningContext({
           {error}
         </p>
       )}
-      {busy || saved ? (
+      {busy || (saved && !error) ? (
         <p className="learning-save-status" role="status">
           {busy ? "Saving changes…" : "Changes saved."}
         </p>
       ) : null}
-      {context === undefined ? (
+      {loading ? <p role="status">Loading learning profile…</p> : null}
+      {loadFailed ? (
         <button
           className="secondary-button"
           type="button"
@@ -132,7 +147,8 @@ export function LearningContext({
         >
           Try again
         </button>
-      ) : (
+      ) : null}
+      {context !== undefined && (
         <>
           <nav
             ref={tabs}
@@ -161,7 +177,7 @@ export function LearningContext({
             {[
               ["goals", "Goals & preferences", "memory-supplied"],
               ["evidence", "Observed evidence", "memory-evidence"],
-              ["suggestions", "Suggestions", "memory-inferences"],
+              ["suggestions", "Memories", "memory-inferences"],
             ].map(([key, title, panel]) => (
               <button
                 key={key}
@@ -281,6 +297,22 @@ export function LearningContext({
                     Source: compact {label(summary.mode).toLowerCase()} summary, without transcripts
                     or code
                   </small>
+                  <button
+                    type="button"
+                    className="text-button danger-button"
+                    disabled={busy}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Delete this learning checkpoint? Memories without remaining supporting evidence will also be removed.",
+                        )
+                      ) {
+                        void change(() => removeCheckpoint(apiUrl, token, summary.id));
+                      }
+                    }}
+                  >
+                    Delete checkpoint
+                  </button>
                 </li>
               ))}
             </ul>
@@ -294,41 +326,49 @@ export function LearningContext({
             aria-labelledby="learning-tab-suggestions"
             hidden={section !== "suggestions"}
           >
-            <h3>Suggestions to review</h3>
+            <h3>Learning memories</h3>
             <p className="settings-help">
-              Only approved inferences can be used in later AI context. Pending and rejected items
-              stay excluded.
+              Evidence-backed checkpoint memories are approved automatically. Inspect their sources,
+              correct them, or delete them whenever needed. Items missing evidence stay excluded.
             </p>
             {context.inferred.length === 0 ? <p>No inferences yet.</p> : null}
-            {(["PENDING", "REVIEWED"] as const).map((group) => (
-              <div key={group} className="inference-group">
-                <h4>{group === "PENDING" ? "To review" : "Reviewed memories"}</h4>
-                <ul className="context-list inference-list">
-                  {context.inferred
-                    .filter((inference) =>
-                      group === "PENDING"
-                        ? inference.approvalState === "PENDING"
-                        : inference.approvalState !== "PENDING",
-                    )
-                    .map((inference) => (
-                      <li key={inference.id}>
-                        <InferenceForm
-                          inference={inference}
-                          busy={busy}
-                          onReview={(review) =>
-                            change(() => reviewInference(apiUrl, token, inference.id, review))
-                          }
-                          onRemove={() =>
-                            window.confirm("Permanently remove this inference?")
-                              ? change(() => removeInference(apiUrl, token, inference.id))
-                              : Promise.resolve(false)
-                          }
-                        />
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            ))}
+            {(["PENDING", "REVIEWED"] as const)
+              .filter((group) =>
+                context.inferred.some((inference) =>
+                  group === "PENDING"
+                    ? inference.approvalState === "PENDING"
+                    : inference.approvalState !== "PENDING",
+                ),
+              )
+              .map((group) => (
+                <div key={group} className="inference-group">
+                  <h4>{group === "PENDING" ? "Needs attention" : "Saved memories"}</h4>
+                  <ul className="context-list inference-list">
+                    {context.inferred
+                      .filter((inference) =>
+                        group === "PENDING"
+                          ? inference.approvalState === "PENDING"
+                          : inference.approvalState !== "PENDING",
+                      )
+                      .map((inference) => (
+                        <li key={inference.id}>
+                          <InferenceForm
+                            inference={inference}
+                            busy={busy}
+                            onReview={(review) =>
+                              change(() => reviewInference(apiUrl, token, inference.id, review))
+                            }
+                            onRemove={() =>
+                              window.confirm("Permanently remove this inference?")
+                                ? change(() => removeInference(apiUrl, token, inference.id))
+                                : Promise.resolve(false)
+                            }
+                          />
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ))}
           </section>
         </>
       )}
@@ -513,7 +553,11 @@ function InferenceForm({
               : "Excluded from future context"}
           </small>
         </span>
-        <span className="context-state">{label(inference.approvalState)}</span>
+        <span className="context-state">
+          {inference.approvalState === "APPROVED" && inference.approvalSource === "AUTOMATIC"
+            ? "Auto-approved"
+            : label(inference.approvalState)}
+        </span>
       </summary>
       <div className="inference-review">
         <div className="inference-meta">
@@ -522,6 +566,12 @@ function InferenceForm({
           <span>{Math.round(inference.confidence * 100)}% confidence</span>
           <span>Last observed {date(inference.lastObservedAt)}</span>
         </div>
+        {inference.approvalSource === "AUTOMATIC" && inference.reviewedAt ? (
+          <p className="settings-help">
+            Auto-approved {new Date(inference.reviewedAt).toLocaleString()}.{" "}
+            {inference.approvalReason}
+          </p>
+        ) : null}
         <details className="inference-evidence">
           <summary>Supporting evidence ({inference.evidence.length})</summary>
           {inference.evidence.length === 0 ? (
@@ -602,8 +652,8 @@ function InferenceForm({
               </button>
             </div>
             <p className="settings-help">
-              Saving a correction keeps this memory's {label(inference.approvalState).toLowerCase()}{" "}
-              approval status. Historical attempts are unchanged.
+              Saving a correction preserves this memory's approval status. Historical attempts are
+              unchanged.
             </p>
           </form>
         </details>

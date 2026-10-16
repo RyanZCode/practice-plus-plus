@@ -86,8 +86,11 @@ it("renders decision-oriented analytics with definitions and no skill-score clai
   );
 
   expect(html).toContain("Progress");
-  expect(html).toContain("3</strong> overdue review items");
-  expect(html).toContain("75%");
+  expect(html).toContain("3 overdue</strong>");
+  expect(html).toContain("75% · 3 / 4 solved");
+  expect(html).toContain("5 / 10 fresh samples");
+  expect(html).toContain("5.0 total · 3.0 needs practice");
+  expect(html).toContain("Samples and weights");
   expect(html).toContain("Graphs");
   expect(html).toContain("Needs practice");
   expect(html).toContain("Metric definitions");
@@ -136,7 +139,7 @@ describe("analytics empty states", () => {
   });
 });
 
-it("renders the daily-target calendar with status labels and neutral guidance", () => {
+it("renders partial and missed counts without neutral or future legend entries", () => {
   const html = renderToStaticMarkup(
     createElement(StreakCalendarView, {
       calendar: {
@@ -170,12 +173,12 @@ it("renders the daily-target calendar with status labels and neutral guidance", 
             neutralReason: null,
           },
           {
-            date: "2026-09-18",
-            status: "NEUTRAL",
+            date: "2026-09-14",
+            status: "PARTIAL",
             isCurrent: false,
-            requiredCount: 0,
-            completedCount: 0,
-            neutralReason: "NO_PRACTICE_AVAILABLE",
+            requiredCount: 3,
+            completedCount: 1,
+            neutralReason: null,
           },
         ],
       },
@@ -184,12 +187,15 @@ it("renders the daily-target calendar with status labels and neutral guidance", 
     }),
   );
 
-  expect(html).toContain("Daily target streak");
-  expect(html).toContain("2</strong>");
+  expect(html).toContain("Consistency");
+  expect(html).toContain("2 days</strong>");
   expect(html).toContain("Completed");
-  expect(html).toContain("No practice available");
+  expect(html).toContain("Partial");
+  expect(html).toContain("1/3");
+  expect(html).not.toContain("Neutral");
+  expect(html).not.toContain("Future</li>");
   expect(html).toContain('data-status="CURRENT"');
-  expect(html).toContain("0 / 2");
-  expect(html).toContain("Neutral days do not extend or break the streak.");
+  expect(html).toContain("0/2");
+  expect(html).toContain("Counts can exceed the target");
   expect(html).not.toContain("motivational context");
 });

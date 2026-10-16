@@ -66,12 +66,9 @@ export function createPrismaDailyPlanStore(client: PrismaClient): DailyPlanStore
       if (current && saved.items.length > 0) {
         if (freshProblemIds !== undefined)
           throw new HttpError(409, "Today's plan has already been saved.");
-        await ensureDailyCompletion(tx, userProfileId, saved, {
+        await ensureDailyCompletion(tx, userProfileId, {
           practiceDate: saved.practiceDate,
           target: saved.target,
-          timeZone: saved.timeZone,
-          resetMinutes: saved.resetMinutes,
-          itemCount: saved.items.length,
         });
         return present(saved);
       }
@@ -162,13 +159,9 @@ export function createPrismaDailyPlanStore(client: PrismaClient): DailyPlanStore
       }
       const selections = buildDailyPlan(planInput);
       if (current && selections.length === 0) return present(saved);
-      await ensureDailyCompletion(tx, userProfileId, saved, {
+      await ensureDailyCompletion(tx, userProfileId, {
         practiceDate: new Date(`${practiceDate}T00:00:00.000Z`),
         target,
-        timeZone: boundary.timeZone,
-        resetMinutes: boundary.resetMinutes,
-        itemCount: selections.length,
-        retryEmpty: current,
       });
       await tx.dailyPlan.deleteMany({ where: { userProfileId } });
       return present(
