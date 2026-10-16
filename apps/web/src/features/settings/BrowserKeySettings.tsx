@@ -84,7 +84,7 @@ export function BrowserKeySettings({
       {embedded ? null : <h2>OpenAI API key</h2>}
       {embedded && section !== "storage" ? keyField : null}
       {embedded && section !== "storage" ? keyActions : null}
-      {section === "key" ? (
+      {section !== "storage" ? (
         <p className="settings-help">
           Your key is sent only for provider requests and is never saved on the server.
         </p>

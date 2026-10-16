@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { checkpointMessages, needsCheckpoint, saveCheckpoint } from "./summaryApi";
+import { checkpointMessages, saveCheckpoint } from "./summaryApi";
 
 const input = {
+  checkpointId: "25d64b95-b7cc-4fe5-91ac-ae296dc66383",
   selection: { providerId: "openai" as const, model: "test-model" },
   apiKey: "private-key",
   mode: "COACH" as const,
@@ -46,11 +47,5 @@ describe("learning checkpoint client", () => {
         { role: "assistant", content: "Slow down", label: "Coach" },
       ]),
     ).toEqual(input.messages);
-  });
-
-  it("checkpoints before the active context reaches its request cap", () => {
-    expect(needsCheckpoint(Array.from({ length: 9 }, () => ({ content: "short" })))).toBe(false);
-    expect(needsCheckpoint(Array.from({ length: 10 }, () => ({ content: "short" })))).toBe(true);
-    expect(needsCheckpoint([{ content: "界".repeat(14000) }])).toBe(true);
   });
 });

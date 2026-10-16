@@ -1,7 +1,8 @@
-import type {
-  PatternEvidence,
-  PatternEvidenceResponse,
-  StreakCalendarResponse,
+import {
+  tutorHintNames,
+  type PatternEvidence,
+  type PatternEvidenceResponse,
+  type StreakCalendarResponse,
 } from "@practice-plus-plus/contracts";
 import { useEffect, useState } from "react";
 import { loadAnalytics, loadStreakCalendar } from "./analyticsApi";
@@ -20,13 +21,22 @@ const classificationOrder = {
   NO_CURRENT_WEAKNESS_SIGNAL: 3,
 } as const;
 
-export function Analytics({ apiUrl, token }: { apiUrl: string; token: string }) {
+export function Analytics({
+  apiUrl,
+  token,
+  isActive = true,
+}: {
+  apiUrl: string;
+  token: string;
+  isActive?: boolean;
+}) {
   const [analytics, setAnalytics] = useState<PatternEvidenceResponse>();
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
+    if (!isActive) return;
     let active = true;
     setLoading(true);
     setError(undefined);
@@ -43,22 +53,35 @@ export function Analytics({ apiUrl, token }: { apiUrl: string; token: string }) 
     return () => {
       active = false;
     };
-  }, [apiUrl, token, reload]);
+  }, [apiUrl, token, reload, isActive]);
 
-  if (loading) return <p role="status">Loading progress…</p>;
-  if (error !== undefined)
+  if (loading || error !== undefined)
     return (
-      <div className="page-surface">
-        <p className="auth-message" role="alert">
-          {error}
-        </p>
-        <button type="button" onClick={() => setReload((value) => value + 1)}>
-          Try again
-        </button>
-      </div>
+      <section className="analytics-page" aria-labelledby="analytics-heading">
+        <header className="analytics-heading">
+          <h2 id="analytics-heading">Progress</h2>
+        </header>
+        <div className="page-surface">
+          {loading ? (
+            <p role="status">Loading progress…</p>
+          ) : (
+            <>
+              <p className="auth-message" role="alert">
+                {error}
+              </p>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setReload((value) => value + 1)}
+              >
+                Try again
+              </button>
+            </>
+          )}
+        </div>
+      </section>
     );
   if (analytics === undefined) return null;
-
   return <AnalyticsView analytics={analytics} apiUrl={apiUrl} token={token} />;
 }
 
@@ -71,7 +94,10 @@ export function AnalyticsView({
   apiUrl?: string;
   token?: string;
 }) {
+  const [showUntested, setShowUntested] = useState(false);
   const patterns = [...analytics.patterns].sort(comparePatterns);
+  const tested = patterns.filter((pattern) => pattern.classification !== "UNTESTED");
+  const untested = patterns.filter((pattern) => pattern.classification === "UNTESTED");
   const { summary } = analytics;
   const overdue = summary.reviewWork.overdueExactRedos + summary.reviewWork.overdueTransfers;
   const dueToday = summary.reviewWork.dueTodayExactRedos + summary.reviewWork.dueTodayTransfers;
@@ -79,237 +105,264 @@ export function AnalyticsView({
     summary.redo.outcomes.independent +
     summary.redo.outcomes.assisted +
     summary.redo.outcomes.gaveUp;
+  const redoSolved = summary.redo.outcomes.independent + summary.redo.outcomes.assisted;
+  const freshAttempts =
+    summary.freshOutcomes.independent +
+    summary.freshOutcomes.assisted +
+    summary.freshOutcomes.gaveUp;
   const knownOptimality = summary.optimality.optimal + summary.optimality.suboptimal;
   const concentrated = patterns.filter((pattern) => pattern.overconcentrated);
 
   return (
     <section className="analytics-page" aria-labelledby="analytics-heading">
       <header className="analytics-heading">
-        <div>
-          <h2 id="analytics-heading">Progress</h2>
-        </div>
-        <p className={`review-work-summary${overdue > 0 ? " review-work-overdue" : ""}`}>
-          <strong>{overdue}</strong> overdue review {overdue === 1 ? "item" : "items"}
-          <span>{dueToday} due today</span>
-        </p>
+        <h2 id="analytics-heading">Progress</h2>
+        <p>As of practice date {formatDate(analytics.asOfPracticeDate)}</p>
       </header>
-
-      <div className="analytics-summary-grid">
-        <MetricCard
-          title="Fresh outcomes"
-          value={`${summary.freshOutcomes.independent} independent`}
-          detail={`${summary.freshOutcomes.assisted} assisted, ${summary.freshOutcomes.gaveUp} gave up`}
-        />
-        <MetricCard
-          title="Exact redo retention"
-          value={formatPercent(summary.redo.successRate)}
-          detail={`${redoAttempts} completed redos, ${summary.redo.outcomes.incomplete} incomplete`}
-        />
-        <MetricCard
-          title="Known solution quality"
-          value={
-            knownOptimality === 0
-              ? "No known ratings"
-              : `${formatPercent(summary.optimality.optimal / knownOptimality)} optimal`
-          }
-          detail={`${summary.optimality.suboptimal} suboptimal, ${summary.optimality.unknownOrOmitted} unknown or omitted`}
-        />
-        <MetricCard
-          title="Recent concentration"
-          value={`${concentrated.length} ${concentrated.length === 1 ? "pattern" : "patterns"}`}
-          detail={
-            concentrated.length === 0
-              ? "No concentration signal"
-              : concentrated.map((pattern) => pattern.patternName).join(", ")
-          }
-        />
-      </div>
-
       {apiUrl === undefined || token === undefined ? null : (
         <StreakCalendar apiUrl={apiUrl} token={token} />
       )}
+
+      <section className="analytics-section page-surface" aria-labelledby="review-heading">
+        <h3 id="review-heading">Review workload</h3>
+        <div className="review-work-counts">
+          <div>
+            <strong className={overdue > 0 ? "review-overdue-count" : undefined}>
+              {overdue} overdue
+            </strong>
+            <p>
+              {summary.reviewWork.overdueExactRedos} exact{" "}
+              {summary.reviewWork.overdueExactRedos === 1 ? "redo" : "redos"} ·{" "}
+              {summary.reviewWork.overdueTransfers}{" "}
+              {summary.reviewWork.overdueTransfers === 1 ? "transfer" : "transfers"}
+            </p>
+          </div>
+          <div>
+            <strong>{dueToday} due today</strong>
+            <p>
+              {summary.reviewWork.dueTodayExactRedos} exact{" "}
+              {summary.reviewWork.dueTodayExactRedos === 1 ? "redo" : "redos"} ·{" "}
+              {summary.reviewWork.dueTodayTransfers}{" "}
+              {summary.reviewWork.dueTodayTransfers === 1 ? "transfer" : "transfers"}
+            </p>
+          </div>
+        </div>
+        {summary.reviewWork.overdueItems.length > 0 ? (
+          <details className="overdue-review-details">
+            <summary>Overdue items</summary>
+            <ol className="overdue-review-list">
+              {summary.reviewWork.overdueItems.map((item) => (
+                <li
+                  key={
+                    item.type === "EXACT_REDO"
+                      ? `redo-${item.sourceAttemptId}`
+                      : `transfer-${item.transferId}`
+                  }
+                >
+                  {item.type === "EXACT_REDO" ? (
+                    <>
+                      <a href={item.problem.url} target="_blank" rel="noreferrer">
+                        {item.problem.leetcodeId}. {item.problem.title}
+                      </a>
+                      <small>
+                        Exact redo · Due {formatDate(item.dueDate)} ·{" "}
+                        {formatDaysOverdue(item.daysOverdue)}
+                      </small>
+                    </>
+                  ) : (
+                    <>
+                      <strong>{item.patternName} transfer</strong>
+                      <small>
+                        From {item.sourceProblemTitle} · Eligible {formatDate(item.dueDate)} ·{" "}
+                        {formatDaysOverdue(item.daysOverdue)}
+                      </small>
+                      <small>No destination is selected until this transfer is scheduled.</small>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </details>
+        ) : null}
+      </section>
 
       <section
         className="analytics-section page-surface"
         aria-labelledby="pattern-evidence-heading"
       >
         <div className="analytics-section-heading">
-          <div>
-            <h3 id="pattern-evidence-heading">Pattern priorities</h3>
-            <p>Use these signals to decide where fresh practice will be most useful.</p>
-          </div>
-          <span>{patterns.length} patterns</span>
+          <h3 id="pattern-evidence-heading">Pattern evidence</h3>
+          <span>Fresh attempts · Latest 10 per pattern</span>
         </div>
-        <div className="analytics-table-scroll">
-          <table className="analytics-table">
-            <thead>
-              <tr>
-                <th scope="col">Pattern</th>
-                <th scope="col">Evidence</th>
-                <th scope="col">Fresh outcomes</th>
-                <th scope="col">Last practiced</th>
-                <th scope="col">Recent exposure</th>
-              </tr>
-            </thead>
-            <tbody>
-              {patterns.map((pattern) => (
-                <tr key={pattern.patternId}>
-                  <th scope="row">{pattern.patternName}</th>
-                  <td>
-                    <span
-                      className={`evidence-label evidence-${pattern.classification.toLowerCase()}`}
-                    >
-                      {classificationLabels[pattern.classification]}
-                    </span>
-                    {pattern.stale ? (
-                      <span className="evidence-label evidence-stale">Stale</span>
-                    ) : null}
-                    <small>{pattern.fresh.sampleCount} of 10 current samples</small>
-                  </td>
-                  <td>
-                    {pattern.fresh.outcomes.independent} independent,{" "}
-                    {pattern.fresh.outcomes.assisted} assisted, {pattern.fresh.outcomes.gaveUp} gave
-                    up
-                  </td>
-                  <td>
-                    {pattern.lastPracticed === null ? "Never" : formatDate(pattern.lastPracticed)}
-                  </td>
-                  <td>
-                    {pattern.recentExposureShare === null
-                      ? "No recent practice"
-                      : `${formatPercent(pattern.recentExposureShare)}${pattern.overconcentrated ? ", concentrated" : ""}`}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {freshAttempts === 0 ? (
+          <p className="progress-empty">No confirmed fresh attempts yet.</p>
+        ) : null}
+        <div className="pattern-row-heading" aria-hidden="true">
+          <span>Pattern</span>
+          <span>Evidence</span>
+          <span>Fresh outcomes</span>
         </div>
+        {tested.map((pattern) => (
+          <PatternRow key={pattern.patternId} pattern={pattern} />
+        ))}
+        <div id="untested-patterns" hidden={!showUntested && tested.length > 0}>
+          {untested.map((pattern) => (
+            <PatternRow key={pattern.patternId} pattern={pattern} />
+          ))}
+        </div>
+        {untested.length > 0 && tested.length > 0 ? (
+          <button
+            className="pattern-toggle"
+            type="button"
+            aria-expanded={showUntested}
+            aria-controls="untested-patterns"
+            onClick={() => setShowUntested(!showUntested)}
+          >
+            {showUntested ? "Hide" : "Show"} {untested.length} untested{" "}
+            {untested.length === 1 ? "pattern" : "patterns"}
+          </button>
+        ) : null}
+        <MetricDefinitions />
       </section>
 
-      <div className="analytics-detail-grid">
-        <section className="analytics-section page-surface" aria-labelledby="assistance-heading">
-          <h3 id="assistance-heading">Help used</h3>
-          <p>Distinct confirmed attempts can appear in more than one category.</p>
-          <dl className="metric-list">
-            <MetricRow label="Clarification" value={summary.assistance.clarification} />
-            <MetricRow label="Conceptual hint" value={summary.assistance.conceptualHint} />
-            <MetricRow label="Debugging" value={summary.assistance.debugging} />
-            <MetricRow label="Optimization" value={summary.assistance.optimization} />
-            <MetricRow label="Solution review" value={summary.assistance.solutionReview} />
-          </dl>
-        </section>
-
-        <section className="analytics-section page-surface" aria-labelledby="review-heading">
-          <h3 id="review-heading">Review workload</h3>
-          <p>Open follow-up work relative to your current practice date.</p>
-          <dl className="metric-list">
-            <MetricRow label="Overdue exact redos" value={summary.reviewWork.overdueExactRedos} />
-            <MetricRow label="Overdue transfers" value={summary.reviewWork.overdueTransfers} />
-            <MetricRow
-              label="Exact redos due today"
-              value={summary.reviewWork.dueTodayExactRedos}
-            />
-            <MetricRow label="Transfers due today" value={summary.reviewWork.dueTodayTransfers} />
-          </dl>
-          {summary.reviewWork.overdueItems.length > 0 ? (
-            <details className="overdue-review-details">
-              <summary>
-                Show overdue {summary.reviewWork.overdueItems.length === 1 ? "item" : "items"}
-              </summary>
-              <ol className="overdue-review-list">
-                {summary.reviewWork.overdueItems.map((item) => (
-                  <li
-                    key={
-                      item.type === "EXACT_REDO"
-                        ? `redo-${item.sourceAttemptId}`
-                        : `transfer-${item.transferId}`
-                    }
-                  >
-                    {item.type === "EXACT_REDO" ? (
-                      <>
-                        <span className="review-kind">Exact redo</span>
-                        <a href={item.problem.url} target="_blank" rel="noreferrer">
-                          {item.problem.leetcodeId}. {item.problem.title}
-                        </a>
-                        <small>
-                          Due {formatDate(item.dueDate)}, {formatDaysOverdue(item.daysOverdue)}
-                        </small>
-                      </>
-                    ) : (
-                      <>
-                        <span className="review-kind">Fresh pattern transfer</span>
-                        <strong>{item.patternName} transfer</strong>
-                        <small>
-                          From {item.sourceProblemTitle}. Eligible {formatDate(item.dueDate)},{" "}
-                          {formatDaysOverdue(item.daysOverdue)}.
-                        </small>
-                        <small>No destination is selected until this transfer is scheduled.</small>
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ol>
-            </details>
-          ) : null}
-        </section>
+      <div className="analytics-summary-grid">
+        <article className="analytics-card">
+          <h3>Fresh outcomes</h3>
+          <strong>{summary.freshOutcomes.independent} independent</strong>
+          <p>
+            {summary.freshOutcomes.assisted} assisted · {summary.freshOutcomes.gaveUp} gave up
+          </p>
+          <p>{freshAttempts} confirmed, non-incomplete fresh attempts</p>
+        </article>
+        <article className="analytics-card">
+          <h3>Exact redo retention</h3>
+          <strong>
+            {redoAttempts === 0
+              ? "Not enough data"
+              : `${formatPercent(summary.redo.successRate)} · ${redoSolved} / ${redoAttempts} solved`}
+          </strong>
+          <p>
+            {summary.redo.outcomes.independent} independent · {summary.redo.outcomes.assisted}{" "}
+            assisted · {summary.redo.outcomes.gaveUp} gave up
+          </p>
+          <p>{summary.redo.outcomes.incomplete} incomplete, excluded from rate</p>
+        </article>
       </div>
 
-      <details className="analytics-definitions page-surface">
-        <summary>Metric definitions</summary>
-        <dl>
-          <dt>Pattern evidence</dt>
-          <dd>
-            Uses the latest 10 confirmed, non-incomplete fresh attempts per pattern. Zero samples is
-            untested, one to four is building evidence, and five or more permits a directional
-            signal. It is not a mastery score.
-          </dd>
-          <dt>Needs practice</dt>
-          <dd>
-            More than half of weighted current evidence is assisted, gave up, shaky, or suboptimal.
-            Multi-pattern attempts split numerical weight equally across their patterns.
-          </dd>
-          <dt>Stale</dt>
-          <dd>No confirmed, non-incomplete fresh or redo attempt for 30 practice-calendar days.</dd>
-          <dt>Recent concentration</dt>
-          <dd>
-            After at least four qualifying attempts in the last seven practice dates, more than half
-            of weighted exposure belongs to one pattern.
-          </dd>
-          <dt>Fresh outcomes</dt>
-          <dd>All confirmed, non-incomplete fresh attempts through the current practice date.</dd>
-          <dt>Exact redo retention</dt>
-          <dd>
-            Independent and assisted redo outcomes divided by all non-incomplete redo outcomes.
-            Incomplete redos are shown separately.
-          </dd>
-          <dt>Help used</dt>
-          <dd>
-            Distinct confirmed, non-incomplete attempts using each category. One attempt may use
-            multiple categories.
-          </dd>
-          <dt>Solution quality</dt>
-          <dd>
-            Optimal versus suboptimal among attempts with a known rating. Unknown and omitted
-            ratings remain visible and are excluded from the percentage.
-          </dd>
-          <dt>Overdue review work</dt>
-          <dd>
-            Unresolved exact redos or pattern transfers with an effective due or eligibility date
-            before the current practice date. Items due on the current date are separate.
-          </dd>
-        </dl>
+      <details className="analytics-extra page-surface">
+        <summary>Help, solution quality and concentration</summary>
+        <div className="analytics-detail-grid">
+          <section aria-labelledby="assistance-heading">
+            <h3 id="assistance-heading">Help used</h3>
+            <p>Distinct attempts per category. Categories may overlap.</p>
+            <dl className="metric-list">
+              <MetricRow label="Clarification" value={summary.assistance.clarification} />
+              <MetricRow label="Conceptual hint" value={summary.assistance.conceptualHint} />
+              <MetricRow label="Debugging" value={summary.assistance.debugging} />
+              <MetricRow label="Optimization" value={summary.assistance.optimization} />
+              <MetricRow label="Solution review" value={summary.assistance.solutionReview} />
+            </dl>
+          </section>
+          <section aria-labelledby="quality-heading">
+            <h3 id="quality-heading">Known solution quality</h3>
+            <p>
+              {knownOptimality === 0
+                ? "No known ratings"
+                : `${formatPercent(summary.optimality.optimal / knownOptimality)} optimal · ${summary.optimality.optimal} / ${knownOptimality} known ratings`}
+            </p>
+            <p>
+              {summary.optimality.suboptimal} suboptimal · {summary.optimality.unknownOrOmitted}{" "}
+              unknown or omitted
+            </p>
+          </section>
+          <section aria-labelledby="concentration-heading">
+            <h3 id="concentration-heading">Recent concentration</h3>
+            <p>
+              {concentrated.length === 0
+                ? "No concentration signal"
+                : concentrated.map((pattern) => pattern.patternName).join(", ")}
+            </p>
+          </section>
+        </div>
       </details>
     </section>
   );
 }
 
-function MetricCard({ title, value, detail }: { title: string; value: string; detail: string }) {
+function PatternRow({ pattern }: { pattern: PatternEvidence }) {
+  const { fresh, redo } = pattern;
+  const redoSamples = redo.outcomes.independent + redo.outcomes.assisted + redo.outcomes.gaveUp;
   return (
-    <article className="analytics-card">
-      <h3>{title}</h3>
-      <strong>{value}</strong>
-      <p>{detail}</p>
-    </article>
+    <details className="pattern-row">
+      <summary>
+        <strong>{pattern.patternName}</strong>
+        <span className="pattern-classification">
+          <span
+            className={
+              pattern.classification === "NEEDS_PRACTICE" ? "review-overdue-count" : undefined
+            }
+          >
+            {classificationLabels[pattern.classification]}
+          </span>
+          {pattern.stale ? <span className="review-overdue-count"> · Stale</span> : null}
+          <small>{fresh.sampleCount} / 10 fresh samples</small>
+        </span>
+        <span className="pattern-outcomes">
+          {fresh.sampleCount === 0
+            ? "No fresh attempts"
+            : `${fresh.outcomes.independent} independent · ${fresh.outcomes.assisted} assisted · ${fresh.outcomes.gaveUp} gave up`}
+        </span>
+        <span className="row-chevron" aria-hidden="true">
+          ›
+        </span>
+      </summary>
+      <div className="pattern-details">
+        <dl className="progress-facts">
+          <div>
+            <dt>Fresh evidence weight</dt>
+            <dd>
+              {fresh.weightedTotal.toFixed(1)} total · {fresh.weightedWeakSignals.toFixed(1)} needs
+              practice
+            </dd>
+          </div>
+          <div>
+            <dt>Exact redos, separate from fresh</dt>
+            <dd>
+              {redoSamples === 0
+                ? "No completed redos"
+                : `${redo.outcomes.independent + redo.outcomes.assisted} / ${redoSamples} solved (${formatPercent(redo.successRate)})`}
+            </dd>
+            <dd className="detail-caption">
+              {redo.outcomes.independent} independent · {redo.outcomes.assisted} assisted ·{" "}
+              {redo.outcomes.gaveUp} gave up · {redo.outcomes.incomplete} incomplete
+            </dd>
+          </div>
+          <div>
+            <dt>Last practiced, fresh or redo</dt>
+            <dd>{pattern.lastPracticed === null ? "Never" : formatDate(pattern.lastPracticed)}</dd>
+          </div>
+          <div>
+            <dt>Exposure, last 7 practice dates</dt>
+            <dd>
+              {pattern.recentExposureShare === null
+                ? "No recent practice"
+                : `${formatPercent(pattern.recentExposureShare)} of weighted exposure${pattern.overconcentrated ? ", concentrated" : ""}`}
+            </dd>
+          </div>
+          {pattern.highestConceptualHintLevel === null ? null : (
+            <div>
+              <dt>Highest conceptual hint</dt>
+              <dd>{tutorHintNames[pattern.highestConceptualHintLevel - 1] ?? "Guidance step"}</dd>
+            </div>
+          )}
+        </dl>
+        {fresh.sampleCount < 5 ? (
+          <p className="detail-caption">
+            At least 5 fresh samples are needed for a directional signal.
+          </p>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
@@ -319,6 +372,62 @@ function MetricRow({ label, value }: { label: string; value: number }) {
       <dt>{label}</dt>
       <dd>{value}</dd>
     </div>
+  );
+}
+
+function MetricDefinitions() {
+  return (
+    <details className="analytics-definitions">
+      <summary>Metric definitions</summary>
+      <dl>
+        <dt>Pattern evidence</dt>
+        <dd>
+          Uses the latest 10 confirmed, non-incomplete fresh attempts per pattern. Zero samples is
+          untested, one to four is building evidence, and five or more permits a directional signal.
+          It is not a mastery score.
+        </dd>
+        <dt>Needs practice</dt>
+        <dd>
+          More than half of weighted current evidence is assisted, gave up, shaky, or suboptimal.
+          Multi-pattern attempts split numerical weight equally across their patterns.
+        </dd>
+        <dt>Samples and weights</dt>
+        <dd>
+          Each tagged attempt counts as one sample per pattern. Numerical contributions split
+          equally across tags. Do not add pattern samples to get an attempt total. Missing optional
+          details add no penalty.
+        </dd>
+        <dt>Stale</dt>
+        <dd>No confirmed, non-incomplete fresh or redo attempt for 30 practice-calendar days.</dd>
+        <dt>Recent concentration</dt>
+        <dd>
+          After at least four qualifying attempts in the last seven practice dates, more than half
+          of weighted exposure belongs to one pattern.
+        </dd>
+        <dt>Fresh outcomes</dt>
+        <dd>All confirmed, non-incomplete fresh attempts through the current practice date.</dd>
+        <dt>Exact redo retention</dt>
+        <dd>
+          Independent and assisted redo outcomes divided by all non-incomplete redo outcomes.
+          Incomplete redos are shown separately.
+        </dd>
+        <dt>Help used</dt>
+        <dd>
+          Distinct confirmed, non-incomplete attempts using each category. One attempt may use
+          multiple categories.
+        </dd>
+        <dt>Solution quality</dt>
+        <dd>
+          Optimal versus suboptimal among attempts with a known rating. Unknown and omitted ratings
+          remain visible and are excluded from the percentage.
+        </dd>
+        <dt>Overdue review work</dt>
+        <dd>
+          Unresolved exact redos or pattern transfers with an effective due or eligibility date
+          before the current practice date. Items due on the current date are separate.
+        </dd>
+      </dl>
+    </details>
   );
 }
 
@@ -375,14 +484,14 @@ function StreakCalendar({ apiUrl, token }: { apiUrl: string; token: string }) {
   if (loading && calendar === undefined)
     return (
       <section className="streak-section page-surface" aria-labelledby="streak-heading">
-        <h2 id="streak-heading">Daily target streak</h2>
-        <p role="status">Loading streak calendar…</p>
+        <h2 id="streak-heading">Consistency</h2>
+        <p role="status">Loading calendar…</p>
       </section>
     );
   if (error !== undefined && calendar === undefined)
     return (
       <section className="streak-section page-surface" aria-labelledby="streak-heading">
-        <h2 id="streak-heading">Daily target streak</h2>
+        <h2 id="streak-heading">Consistency</h2>
         <p className="auth-message" role="alert">
           {error}
         </p>
@@ -400,6 +509,7 @@ function StreakCalendar({ apiUrl, token }: { apiUrl: string; token: string }) {
       {...(error === undefined ? {} : { error })}
       loading={loading}
       nextDisabled={calendar.month >= currentMonth}
+      onRetry={() => setReload((value) => value + 1)}
       onPreviousMonth={() => setMonth(shiftMonth(calendar.month, -1))}
       onNextMonth={() => setMonth(shiftMonth(calendar.month, 1))}
     />
@@ -413,6 +523,7 @@ export function StreakCalendarView({
   nextDisabled = false,
   onPreviousMonth,
   onNextMonth,
+  onRetry,
 }: {
   calendar: StreakCalendarResponse;
   error?: string;
@@ -420,6 +531,7 @@ export function StreakCalendarView({
   nextDisabled?: boolean;
   onPreviousMonth: () => void;
   onNextMonth: () => void;
+  onRetry?: () => void;
 }) {
   const firstWeekday = new Date(`${calendar.month}-01T00:00:00.000Z`).getUTCDay();
   const monthLabel = formatMonth(calendar.month);
@@ -427,113 +539,154 @@ export function StreakCalendarView({
 
   return (
     <section className="streak-section page-surface" aria-labelledby="streak-heading">
-      <div className="streak-heading">
+      <div className="analytics-section-heading">
+        <h3 id="streak-heading">Consistency</h3>
+        <span>Daily plan completion</span>
+      </div>
+      <div className="streak-layout">
         <div>
-          <h2 id="streak-heading">Daily target streak</h2>
-          <p>Complete every plan item to complete a practice day.</p>
-        </div>
-        <div className="streak-stat" aria-label={`Current streak: ${streakLabel}`}>
-          <strong>{calendar.currentStreak}</strong>
-          <span>current streak</span>
-        </div>
-      </div>
-
-      <div className="streak-calendar-toolbar">
-        <button className="secondary-button" type="button" onClick={onPreviousMonth}>
-          Previous month
-        </button>
-        <h3 aria-live="polite">{monthLabel}</h3>
-        <button
-          className="secondary-button"
-          type="button"
-          disabled={nextDisabled}
-          onClick={onNextMonth}
-        >
-          Next month
-        </button>
-      </div>
-
-      {loading ? <p role="status">Loading month…</p> : null}
-      {error === undefined ? null : (
-        <p className="auth-message" role="alert">
-          {error}
-        </p>
-      )}
-
-      <div
-        className="streak-calendar-grid"
-        role="grid"
-        aria-label={`${monthLabel} daily target calendar`}
-      >
-        {weekdayLabels.map((label) => (
-          <span className="streak-weekday" role="columnheader" key={label}>
-            {label}
-          </span>
-        ))}
-        {Array.from({ length: firstWeekday }, (_, index) => (
-          <span
-            className="streak-day streak-day-empty"
-            role="gridcell"
-            aria-hidden="true"
-            key={`empty-${index}`}
-          />
-        ))}
-        {calendar.days.map((day) => {
-          const label = streakDayLabel(day);
-          return (
-            <span
-              aria-current={day.isCurrent ? "date" : undefined}
-              aria-label={label}
-              className={`streak-day streak-day-${day.status.toLowerCase()}${
-                day.isCurrent ? " streak-day-today" : ""
-              }`}
-              data-status={day.status}
-              role="gridcell"
-              title={label}
-              key={day.date}
+          <div className="streak-calendar-toolbar">
+            <button
+              className="secondary-button"
+              type="button"
+              aria-label="Previous month"
+              disabled={loading}
+              onClick={onPreviousMonth}
             >
-              <strong>{Number(day.date.slice(-2))}</strong>
-              {day.requiredCount === null ? null : (
-                <small>
-                  {day.completedCount} / {day.requiredCount}
-                </small>
-              )}
-            </span>
-          );
-        })}
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m15 6-6 6 6 6" />
+              </svg>
+            </button>
+            <h4 aria-live="polite">{monthLabel}</h4>
+            <button
+              className="secondary-button"
+              type="button"
+              aria-label="Next month"
+              disabled={loading || nextDisabled}
+              onClick={onNextMonth}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m9 6 6 6-6 6" />
+              </svg>
+            </button>
+          </div>
+          {loading ? <p role="status">Loading month…</p> : null}
+          {error === undefined ? null : (
+            <div className="calendar-error">
+              <p className="auth-message" role="alert">
+                {error}
+              </p>
+              {onRetry ? (
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={loading}
+                  onClick={onRetry}
+                >
+                  Try again
+                </button>
+              ) : null}
+            </div>
+          )}
+          <div
+            className="streak-calendar-grid"
+            role="group"
+            aria-label={`${monthLabel} daily completion`}
+            aria-busy={loading}
+          >
+            {weekdayLabels.map((label) => (
+              <span className="streak-weekday" aria-hidden="true" key={label}>
+                {label}
+              </span>
+            ))}
+            {Array.from({ length: firstWeekday }, (_, index) => (
+              <span className="streak-day-empty" aria-hidden="true" key={`empty-${index}`} />
+            ))}
+            {calendar.days.map((day) => {
+              const label = streakDayLabel(day);
+              return (
+                <span
+                  aria-current={day.isCurrent ? "date" : undefined}
+                  aria-label={label}
+                  className={`streak-day streak-day-${day.status.toLowerCase()}${day.isCurrent ? " streak-day-today" : ""}`}
+                  data-status={day.status}
+                  role="img"
+                  title={label}
+                  key={day.date}
+                >
+                  <strong>
+                    {Number(day.date.slice(-2))}
+                    {day.status === "COMPLETED" ? " ✓" : day.status === "NEUTRAL" ? " −" : ""}
+                  </strong>
+                  {day.requiredCount === null || day.status === "NEUTRAL" ? null : (
+                    <small>
+                      {day.completedCount}/{day.requiredCount}
+                    </small>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+          <ul className="streak-legend" aria-label="Calendar legend">
+            <li>
+              <span className="streak-legend-swatch streak-swatch-completed" aria-hidden="true" />✓
+              Completed
+            </li>
+            <li>
+              <span className="streak-legend-swatch streak-swatch-partial" aria-hidden="true" />
+              Partial
+            </li>
+            <li>
+              <span className="streak-legend-swatch streak-swatch-missed" aria-hidden="true" />
+              Missed
+            </li>
+            <li>
+              <span className="streak-legend-swatch streak-swatch-current" aria-hidden="true" />
+              Current
+            </li>
+          </ul>
+        </div>
+        <div className="streak-context">
+          <div className="streak-stat" aria-label={`Current streak: ${streakLabel}`}>
+            <strong>{streakLabel}</strong>
+            <span>Current streak</span>
+          </div>
+          <p className="streak-note">
+            {calendar.trackingStartDate === null
+              ? "Tracking begins after your first practice plan is generated."
+              : `Tracking since ${formatDate(calendar.trackingStartDate)}.`}
+          </p>
+          <details className="completion-rules">
+            <summary>Completion rules</summary>
+            <p>
+              Confirmed independent, assisted, and gave-up attempts count toward the day's target,
+              including manual and extra practice. Incomplete attempts do not count. Counts can
+              exceed the target.
+            </p>
+            <p>
+              Completed days meet or exceed the target. Partial days fall below it. Tracked days
+              with no attempts show 0/target, even if no plan was generated. Partial and missed days
+              break the streak after the day ends.
+            </p>
+          </details>
+        </div>
       </div>
-
-      <ul className="streak-legend" aria-label="Calendar legend">
-        <li>
-          <span className="streak-legend-swatch streak-swatch-completed" aria-hidden="true" />
-          Completed
-        </li>
-        <li>
-          <span className="streak-legend-swatch streak-swatch-missed" aria-hidden="true" />
-          Missed
-        </li>
-        <li>
-          <span className="streak-legend-swatch streak-swatch-current" aria-hidden="true" />
-          Current
-        </li>
-        <li>
-          <span className="streak-legend-swatch streak-swatch-neutral" aria-hidden="true" />
-          No practice available
-        </li>
-        <li>
-          <span className="streak-legend-swatch streak-swatch-future" aria-hidden="true" />
-          Future
-        </li>
-      </ul>
-
-      {calendar.trackingStartDate === null ? (
-        <p className="streak-note">Tracking begins after your first practice plan is generated.</p>
-      ) : (
-        <p className="streak-note">
-          Tracking started {formatDate(calendar.trackingStartDate)}. Neutral days do not extend or
-          break the streak.
-        </p>
-      )}
     </section>
   );
 }
@@ -563,6 +716,8 @@ function streakDayLabel(day: StreakCalendarResponse["days"][number]) {
   switch (day.status) {
     case "COMPLETED":
       return `${formatDate(day.date)}. Completed.${counts}${current}`;
+    case "PARTIAL":
+      return `${formatDate(day.date)}. Partial.${counts}${current}`;
     case "MISSED":
       return `${formatDate(day.date)}. Missed.${counts}`;
     case "CURRENT":

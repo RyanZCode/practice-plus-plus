@@ -39,6 +39,7 @@ function store(): LearningContextStore {
     }),
     updateGoal: vi.fn(),
     deleteGoal: vi.fn(),
+    deleteSummary: vi.fn(),
     createTeachingPreference: vi.fn(),
     updateTeachingPreference: vi.fn(),
     deleteTeachingPreference: vi.fn(),
@@ -165,5 +166,22 @@ describe("learning context", () => {
     });
     expect(response.status).toBe(400);
     expect(learningContextStore.reviewMemory).not.toHaveBeenCalled();
+  });
+
+  it("deletes checkpoints with authenticated ownership and rejects malformed identifiers", async () => {
+    const learningContextStore = store();
+    const url = await setup(learningContextStore);
+    const response = await fetch(`${url}/summaries/${memoryId}`, {
+      method: "DELETE",
+      headers: { authorization: "Bearer token" },
+    });
+    expect(response.status).toBe(204);
+    expect(learningContextStore.deleteSummary).toHaveBeenCalledWith(userId, memoryId);
+    const invalid = await fetch(`${url}/summaries/invalid`, {
+      method: "DELETE",
+      headers: { authorization: "Bearer token" },
+    });
+    expect(invalid.status).toBe(400);
+    expect(learningContextStore.deleteSummary).toHaveBeenCalledTimes(1);
   });
 });

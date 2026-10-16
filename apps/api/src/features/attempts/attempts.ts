@@ -170,7 +170,9 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
         }),
       ]);
       return attemptHistoryResponseSchema.parse({
-        attempts: records.map(toAttempt),
+        attempts: await Promise.all(
+          records.map((record) => present(client, userProfileId, record)),
+        ),
         page: query.page,
         totalPages: Math.ceil(total / attemptHistoryPageSize),
       });
@@ -395,7 +397,7 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
           },
           select,
         });
-        await updateDailyCompletionForAttempt(tx, userProfileId, attemptId, input.outcome, now);
+        await updateDailyCompletionForAttempt(tx, userProfileId, record.practiceDate, now);
         return updated;
       });
     },

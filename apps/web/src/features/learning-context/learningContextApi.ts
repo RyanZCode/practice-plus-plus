@@ -181,6 +181,21 @@ export async function removeInference(
   );
 }
 
+export async function removeCheckpoint(
+  apiUrl: string,
+  token: string,
+  id: string,
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  await request(
+    apiUrl,
+    token,
+    `/summaries/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+    fetcher,
+  );
+}
+
 export function learningContextExport(context: LearningContextResponse): string {
   return `${JSON.stringify(learningContextResponseSchema.parse(context), null, 2)}\n`;
 }

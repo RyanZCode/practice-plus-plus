@@ -98,6 +98,11 @@
   background: var(--accent-soft);
 }
 
+.today-item-status.status-finished {
+  color: light-dark(#047857, #86efac);
+  background: light-dark(#ecfdf5, #123c2b);
+}
+
 .practice-type {
   margin: 0.3rem 0 0;
 }
@@ -399,8 +404,8 @@
   background: var(--accent);
 }
 
-.day-missed .recent-practice-fill {
-  background: var(--muted);
+.day-partial .recent-practice-fill {
+  background: light-dark(#84510b, #efc481);
 }
 
 .day-neutral .recent-practice-track,
@@ -498,6 +503,12 @@
   top: 1.5rem;
 }
 
+.attempt-main {
+  display: grid;
+  align-content: start;
+  gap: 1.2rem;
+}
+
 .attempt-sidebar .page-surface,
 .attempt-workspace .attempt-tutor,
 .attempt-workspace .outcome-form {
@@ -576,9 +587,12 @@
 }
 
 .attempt-workspace .catalog-pattern-list li {
-  padding: 0;
-  font-size: 1.25rem;
-  background: transparent;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  background: var(--surface);
   color: var(--accent);
 }
 
@@ -635,9 +649,23 @@
   min-height: 3.15rem;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   color: var(--accent);
   cursor: pointer;
   font-weight: 500;
+  list-style: none;
+}
+.attempt-external > summary::-webkit-details-marker {
+  display: none;
+}
+.attempt-external > summary svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+.attempt-external[open] > summary svg {
+  transform: rotate(90deg);
 }
 .attempt-external > summary:focus-visible {
   outline: 3px solid var(--focus);
@@ -677,22 +705,19 @@
   border-color: var(--border);
 }
 
+.tutor-hint-panel p + button {
+  margin-top: 0.75rem;
+}
+
 .tutor-help-actions button[aria-pressed="true"] {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-soft);
 }
 
-.attempt-workspace .tutor-workspace > .settings-form {
+.attempt-workspace .tutor-workspace {
   display: grid;
-}
-
-.attempt-workspace .coach-messages {
-  margin: 0;
-}
-
-.attempt-workspace .coach-messages:empty {
-  display: none;
+  gap: 1rem;
 }
 
 .attempt-outcomes {
@@ -884,4 +909,8 @@
   .today-next .practice-type + .account-actions {
     margin-top: 0.3rem;
   }
+}
+
+.day-missed .recent-practice-track {
+  background: light-dark(#fff1f2, #4a1c29);
 }

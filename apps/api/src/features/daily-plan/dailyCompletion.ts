@@ -1,159 +1,71 @@
 import type { Prisma } from "../../shared/generated/prisma/client.js";
 
-const neutralReasons = {
-  boundaryChange: "BOUNDARY_CHANGE",
-  noPracticeAvailable: "NO_PRACTICE_AVAILABLE",
-} as const;
-
-type PlanBoundary = {
-  practiceDate: Date;
-  timeZone: string;
-  resetMinutes: number;
-};
-
-type NewPlan = PlanBoundary & {
-  target: number;
-  itemCount: number;
-  retryEmpty?: boolean;
-};
-
 export async function ensureDailyCompletion(
   tx: Prisma.TransactionClient,
   userProfileId: string,
-  previousPlan: PlanBoundary | null,
-  plan: NewPlan,
+  plan: { practiceDate: Date; target: number },
 ): Promise<void> {
-  const practiceDate = date(plan.practiceDate);
-  const existing = await tx.dailyCompletion.findUnique({
-    where: {
-      userProfileId_practiceDate: {
-        userProfileId,
-        practiceDate: toDate(practiceDate),
-      },
-    },
-    select: { practiceDate: true },
-  });
-  if (existing !== null) {
-    if (plan.retryEmpty && plan.itemCount > 0) {
-      await tx.dailyCompletion.updateMany({
-        where: {
-          userProfileId,
-          practiceDate: toDate(practiceDate),
-          state: "NEUTRAL",
-          neutralReason: neutralReasons.noPracticeAvailable,
-          requiredCount: 0,
-          completedCount: 0,
-        },
-        data: {
-          requiredCount: Math.min(plan.target, plan.itemCount),
-          state: "ACTIVE",
-          neutralReason: null,
-        },
-      });
-    }
-    return;
-  }
-
-  const trackingStart = await tx.dailyCompletion.findFirst({
-    where: { userProfileId },
-    orderBy: { practiceDate: "asc" },
-    select: { practiceDate: true },
-  });
-  if (
-    trackingStart !== null &&
-    previousPlan !== null &&
-    (previousPlan.timeZone !== plan.timeZone || previousPlan.resetMinutes !== plan.resetMinutes)
-  ) {
-    const previousDate = date(previousPlan.practiceDate);
-    const transitionDates = datesBetween(previousDate, practiceDate);
-    if (transitionDates.length > 0) {
-      await tx.dailyCompletion.createMany({
-        data: transitionDates.map((transitionDate) => ({
-          userProfileId,
-          practiceDate: toDate(transitionDate),
-          requiredCount: 0,
-          completedCount: 0,
-          state: "NEUTRAL" as const,
-          neutralReason: neutralReasons.boundaryChange,
-        })),
-        skipDuplicates: true,
-      });
-    }
-  }
-
-  const requiredCount = Math.min(plan.target, plan.itemCount);
-  await tx.dailyCompletion.create({
-    data: {
+  const where = { userProfileId_practiceDate: { userProfileId, practiceDate: plan.practiceDate } };
+  const existing = await tx.dailyCompletion.findUnique({ where, select: { requiredCount: true } });
+  if (existing !== null && existing.requiredCount > 0) return;
+  await tx.dailyCompletion.upsert({
+    where,
+    create: {
       userProfileId,
-      practiceDate: toDate(practiceDate),
-      requiredCount,
+      practiceDate: plan.practiceDate,
+      requiredCount: plan.target,
       completedCount: 0,
-      state: requiredCount === 0 ? "NEUTRAL" : "ACTIVE",
-      neutralReason: requiredCount === 0 ? neutralReasons.noPracticeAvailable : null,
+      state: "ACTIVE",
     },
+    update: { requiredCount: plan.target, state: "ACTIVE", neutralReason: null },
   });
 }
 
 export async function updateDailyCompletionForAttempt(
   tx: Prisma.TransactionClient,
   userProfileId: string,
-  attemptId: string,
-  outcome: string,
+  practiceDate: Date,
   confirmedAt: Date,
 ): Promise<void> {
-  if (outcome !== "INDEPENDENT" && outcome !== "ASSISTED" && outcome !== "GAVE_UP") return;
-
-  const item = await tx.dailyPlanItem.findFirst({
-    where: { userProfileId, attemptId },
-    select: { plan: { select: { practiceDate: true } } },
-  });
-  if (item === null) return;
-
-  const practiceDate = date(item.plan.practiceDate);
-  const where = {
-    userProfileId_practiceDate: {
-      userProfileId,
-      practiceDate: toDate(practiceDate),
-    },
-  } as const;
+  const where = { userProfileId_practiceDate: { userProfileId, practiceDate } };
   const completion = await tx.dailyCompletion.findUnique({
     where,
-    select: { state: true, requiredCount: true, completedCount: true },
+    select: { requiredCount: true, fulfilledAt: true },
   });
-  if (completion === null || completion.state !== "ACTIVE") return;
-
-  const completedCount = Math.min(completion.requiredCount, completion.completedCount + 1);
-  await tx.dailyCompletion.update({
-    where,
-    data: {
-      completedCount,
-      ...(completedCount === completion.requiredCount
-        ? { state: "FULFILLED" as const, fulfilledAt: confirmedAt }
-        : {}),
+  let requiredCount = completion?.requiredCount ?? 0;
+  if (requiredCount === 0) {
+    const plan = await tx.dailyPlan.findUnique({
+      where: { userProfileId },
+      select: { practiceDate: true, target: true },
+    });
+    if (plan !== null && plan.practiceDate.getTime() === practiceDate.getTime()) {
+      requiredCount = plan.target;
+    } else {
+      const settings = await tx.practiceSettings.findUniqueOrThrow({
+        where: { userProfileId },
+        select: { dailyTarget: true },
+      });
+      requiredCount = settings.dailyTarget;
+    }
+  }
+  const completedCount = await tx.attempt.count({
+    where: {
+      userProfileId,
+      practiceDate,
+      confirmedAt: { not: null },
+      outcome: { in: ["INDEPENDENT", "ASSISTED", "GAVE_UP"] },
     },
   });
-}
-
-function datesBetween(start: string, end: string): string[] {
-  const dates: string[] = [];
-  let current = addDays(start, 1);
-  while (current < end) {
-    dates.push(current);
-    current = addDays(current, 1);
-  }
-  return dates;
-}
-
-function addDays(value: string, amount: number): string {
-  const parsed = toDate(value);
-  parsed.setUTCDate(parsed.getUTCDate() + amount);
-  return date(parsed);
-}
-
-function toDate(value: string): Date {
-  return new Date(`${value}T00:00:00.000Z`);
-}
-
-function date(value: Date): string {
-  return value.toISOString().slice(0, 10);
+  const data = {
+    requiredCount,
+    completedCount,
+    state: completedCount >= requiredCount ? ("FULFILLED" as const) : ("ACTIVE" as const),
+    fulfilledAt: completedCount >= requiredCount ? (completion?.fulfilledAt ?? confirmedAt) : null,
+    neutralReason: null,
+  };
+  await tx.dailyCompletion.upsert({
+    where,
+    create: { userProfileId, practiceDate, ...data },
+    update: data,
+  });
 }

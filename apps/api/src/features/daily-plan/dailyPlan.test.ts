@@ -59,6 +59,7 @@ function database() {
     reviewObligation: { findMany: vi.fn().mockResolvedValue([]) },
     transferObligation: { findMany: vi.fn().mockResolvedValue([]) },
     dailyCompletion: {
+      upsert: vi.fn().mockResolvedValue({}),
       findUnique: vi.fn().mockResolvedValue(null),
       findFirst: vi.fn().mockResolvedValue(null),
       createMany: vi.fn().mockResolvedValue({ count: 0 }),

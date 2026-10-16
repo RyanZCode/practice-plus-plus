@@ -177,14 +177,6 @@ export function AttemptWorkspace({
                 <button type="button" className="text-button" disabled={busy} onClick={onGiveUp}>
                   Give up and review
                 </button>
-                <button
-                  type="button"
-                  className="text-button"
-                  disabled={busy}
-                  onClick={() => onReport(true)}
-                >
-                  Save as incomplete
-                </button>
               </div>
             ) : null}
             <div className="attempt-discard-action">
@@ -222,9 +214,9 @@ export function AttemptWorkspace({
           </section>
         </aside>
         <div className="attempt-main">
-          {externalAi}
           <div hidden={reporting}>{tutor}</div>
           <div hidden={!reporting}>{children}</div>
+          {externalAi}
         </div>
       </div>
     </div>

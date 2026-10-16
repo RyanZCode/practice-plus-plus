@@ -1,198 +1,129 @@
 import { describe, expect, it, vi } from "vitest";
-
 import type { Prisma } from "../../shared/generated/prisma/client.js";
 import { ensureDailyCompletion, updateDailyCompletionForAttempt } from "./dailyCompletion.js";
 
 const userProfileId = "25d64b95-b7cc-4fe5-91ac-ae296dc66383";
-
+const practiceDate = new Date("2026-09-17T00:00:00Z");
+const confirmedAt = new Date("2026-09-17T13:00:00Z");
 function database() {
-  const tx = {
+  const mock = {
     dailyCompletion: {
       findUnique: vi.fn().mockResolvedValue(null),
-      findFirst: vi.fn().mockResolvedValue(null),
-      createMany: vi.fn().mockResolvedValue({ count: 0 }),
-      create: vi.fn().mockResolvedValue({}),
-      update: vi.fn().mockResolvedValue({}),
-      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      upsert: vi.fn().mockResolvedValue({}),
     },
-    dailyPlanItem: { findFirst: vi.fn().mockResolvedValue(null) },
+    dailyPlan: { findUnique: vi.fn().mockResolvedValue(null) },
+    practiceSettings: { findUniqueOrThrow: vi.fn().mockResolvedValue({ dailyTarget: 3 }) },
+    attempt: { count: vi.fn().mockResolvedValue(1) },
   };
-  return { tx: tx as unknown as Prisma.TransactionClient };
+  return { mock, tx: mock as unknown as Prisma.TransactionClient };
 }
 
 describe("daily completion lifecycle", () => {
-  it("captures the achievable item count and neutralizes an empty plan", async () => {
-    const { tx } = database();
-
-    await ensureDailyCompletion(tx, userProfileId, null, {
-      practiceDate: new Date("2026-09-17T00:00:00.000Z"),
-      target: 5,
-      timeZone: "UTC",
-      resetMinutes: 0,
-      itemCount: 0,
-    });
-
-    expect(tx.dailyCompletion.create).toHaveBeenCalledWith({
-      data: {
-        userProfileId,
-        practiceDate: new Date("2026-09-17T00:00:00.000Z"),
-        requiredCount: 0,
-        completedCount: 0,
-        state: "NEUTRAL",
-        neutralReason: "NO_PRACTICE_AVAILABLE",
-      },
-    });
-  });
-
-  it("records only boundary-skipped dates after tracking has started", async () => {
-    const { tx } = database();
-    vi.mocked(tx.dailyCompletion.findFirst).mockResolvedValue({
-      practiceDate: new Date("2026-09-10T00:00:00.000Z"),
-    } as never);
-
-    await ensureDailyCompletion(
-      tx,
-      userProfileId,
-      {
-        practiceDate: new Date("2026-09-10T00:00:00.000Z"),
-        timeZone: "UTC",
-        resetMinutes: 0,
-      },
-      {
-        practiceDate: new Date("2026-09-13T00:00:00.000Z"),
-        target: 2,
-        timeZone: "America/Toronto",
-        resetMinutes: 240,
-        itemCount: 1,
-      },
-    );
-
-    expect(tx.dailyCompletion.createMany).toHaveBeenCalledWith({
-      data: [
-        {
-          userProfileId,
-          practiceDate: new Date("2026-09-11T00:00:00.000Z"),
-          requiredCount: 0,
-          completedCount: 0,
-          state: "NEUTRAL",
-          neutralReason: "BOUNDARY_CHANGE",
-        },
-        {
-          userProfileId,
-          practiceDate: new Date("2026-09-12T00:00:00.000Z"),
-          requiredCount: 0,
-          completedCount: 0,
-          state: "NEUTRAL",
-          neutralReason: "BOUNDARY_CHANGE",
-        },
-      ],
-      skipDuplicates: true,
-    });
-    expect(tx.dailyCompletion.create).toHaveBeenCalledWith(
+  it("captures the configured target even when a plan has no eligible work", async () => {
+    const { tx, mock } = database();
+    await ensureDailyCompletion(tx, userProfileId, { practiceDate, target: 3 });
+    expect(mock.dailyCompletion.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ requiredCount: 1, state: "ACTIVE" }),
+        create: {
+          userProfileId,
+          practiceDate,
+          requiredCount: 3,
+          completedCount: 0,
+          state: "ACTIVE",
+        },
       }),
     );
   });
-
-  it("does not recreate a completion record for an already recorded date", async () => {
-    const { tx } = database();
-    vi.mocked(tx.dailyCompletion.findUnique).mockResolvedValue({
-      practiceDate: new Date(),
-    } as never);
-
-    await ensureDailyCompletion(tx, userProfileId, null, {
-      practiceDate: new Date("2026-09-17T00:00:00.000Z"),
-      target: 2,
-      timeZone: "UTC",
-      resetMinutes: 0,
-      itemCount: 2,
-    });
-
-    expect(tx.dailyCompletion.findFirst).not.toHaveBeenCalled();
-    expect(tx.dailyCompletion.create).not.toHaveBeenCalled();
+  it("preserves an existing day's captured target", async () => {
+    const { tx, mock } = database();
+    mock.dailyCompletion.findUnique.mockResolvedValue({ requiredCount: 3 });
+    await ensureDailyCompletion(tx, userProfileId, { practiceDate, target: 5 });
+    expect(mock.dailyCompletion.upsert).not.toHaveBeenCalled();
   });
-
-  it("activates only the empty-plan neutral quota when an explicit retry finds work", async () => {
-    const { tx } = database();
-    const practiceDate = new Date("2026-09-17T00:00:00.000Z");
-    vi.mocked(tx.dailyCompletion.findUnique).mockResolvedValue({ practiceDate } as never);
-    const plan = { practiceDate, target: 2, timeZone: "UTC", resetMinutes: 0, itemCount: 1 };
-    await ensureDailyCompletion(tx, userProfileId, null, plan);
-    await ensureDailyCompletion(tx, userProfileId, null, {
-      ...plan,
-      retryEmpty: true,
-      itemCount: 0,
-    });
-    expect(tx.dailyCompletion.updateMany).not.toHaveBeenCalled();
-    await ensureDailyCompletion(tx, userProfileId, plan, { ...plan, retryEmpty: true });
-    expect(tx.dailyCompletion.updateMany).toHaveBeenCalledExactlyOnceWith({
+  it("replaces a legacy zero quota when that day's plan is generated", async () => {
+    const { tx, mock } = database();
+    mock.dailyCompletion.findUnique.mockResolvedValue({ requiredCount: 0 });
+    await ensureDailyCompletion(tx, userProfileId, { practiceDate, target: 3 });
+    expect(mock.dailyCompletion.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: { requiredCount: 3, state: "ACTIVE", neutralReason: null },
+      }),
+    );
+  });
+  it("counts qualifying confirmed work without requiring a plan link", async () => {
+    const { tx, mock } = database();
+    await updateDailyCompletionForAttempt(tx, userProfileId, practiceDate, confirmedAt);
+    expect(mock.attempt.count).toHaveBeenCalledWith({
       where: {
         userProfileId,
         practiceDate,
-        state: "NEUTRAL",
-        neutralReason: "NO_PRACTICE_AVAILABLE",
-        requiredCount: 0,
-        completedCount: 0,
+        confirmedAt: { not: null },
+        outcome: { in: ["INDEPENDENT", "ASSISTED", "GAVE_UP"] },
       },
-      data: { requiredCount: 1, state: "ACTIVE", neutralReason: null },
     });
-    expect(tx.dailyCompletion.create).not.toHaveBeenCalled();
-  });
-
-  it("fulfills the day only for a confirmed plan-linked qualifying outcome", async () => {
-    const { tx } = database();
-    vi.mocked(tx.dailyPlanItem.findFirst).mockResolvedValue({
-      plan: { practiceDate: new Date("2026-09-17T00:00:00.000Z") },
-    } as never);
-    vi.mocked(tx.dailyCompletion.findUnique).mockResolvedValue({
-      state: "ACTIVE",
-      requiredCount: 1,
-      completedCount: 0,
-    } as never);
-    const confirmedAt = new Date("2026-09-17T13:00:00.000Z");
-
-    await updateDailyCompletionForAttempt(
-      tx,
-      userProfileId,
-      "d3b65a55-1a50-43e1-82e0-e23a263925a5",
-      "ASSISTED",
-      confirmedAt,
-    );
-
-    expect(tx.dailyCompletion.update).toHaveBeenCalledWith({
-      where: {
-        userProfileId_practiceDate: {
+    expect(mock.dailyCompletion.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: {
           userProfileId,
-          practiceDate: new Date("2026-09-17T00:00:00.000Z"),
+          practiceDate,
+          requiredCount: 3,
+          completedCount: 1,
+          state: "ACTIVE",
+          fulfilledAt: null,
+          neutralReason: null,
         },
-      },
-      data: { completedCount: 1, state: "FULFILLED", fulfilledAt: confirmedAt },
-    });
+      }),
+    );
   });
-
-  it.each(["INCOMPLETE", "INDEPENDENT"])(
-    "does not count an unlinked or non-qualifying outcome: %s",
-    async (outcome) => {
-      const { tx } = database();
-      if (outcome === "INDEPENDENT")
-        vi.mocked(tx.dailyPlanItem.findFirst).mockResolvedValue({
-          plan: { practiceDate: new Date("2026-09-17T00:00:00.000Z") },
-        } as never);
-
-      await updateDailyCompletionForAttempt(
-        tx,
-        userProfileId,
-        "d3b65a55-1a50-43e1-82e0-e23a263925a5",
-        outcome,
-        new Date(),
-      );
-
-      if (outcome === "INCOMPLETE") {
-        expect(tx.dailyPlanItem.findFirst).not.toHaveBeenCalled();
-      } else {
-        expect(tx.dailyCompletion.update).not.toHaveBeenCalled();
-      }
-    },
-  );
+  it("keeps counts above the target and the original fulfillment time", async () => {
+    const { tx, mock } = database();
+    const fulfilledAt = new Date("2026-09-17T12:00:00Z");
+    mock.dailyCompletion.findUnique.mockResolvedValue({ requiredCount: 3, fulfilledAt });
+    mock.attempt.count.mockResolvedValue(4);
+    await updateDailyCompletionForAttempt(tx, userProfileId, practiceDate, confirmedAt);
+    expect(mock.dailyCompletion.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: {
+          requiredCount: 3,
+          completedCount: 4,
+          state: "FULFILLED",
+          fulfilledAt,
+          neutralReason: null,
+        },
+      }),
+    );
+    expect(mock.practiceSettings.findUniqueOrThrow).not.toHaveBeenCalled();
+  });
+  it("uses the active plan's captured target instead of changed settings", async () => {
+    const { tx, mock } = database();
+    mock.dailyPlan.findUnique.mockResolvedValue({ practiceDate, target: 2 });
+    mock.attempt.count.mockResolvedValue(2);
+    await updateDailyCompletionForAttempt(tx, userProfileId, practiceDate, confirmedAt);
+    expect(mock.dailyCompletion.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          requiredCount: 2,
+          completedCount: 2,
+          state: "FULFILLED",
+          fulfilledAt: confirmedAt,
+        }),
+      }),
+    );
+    expect(mock.practiceSettings.findUniqueOrThrow).not.toHaveBeenCalled();
+  });
+  it("tracks a day with only incomplete attempts without counting them", async () => {
+    const { tx, mock } = database();
+    mock.attempt.count.mockResolvedValue(0);
+    await updateDailyCompletionForAttempt(tx, userProfileId, practiceDate, confirmedAt);
+    expect(mock.attempt.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ outcome: { in: ["INDEPENDENT", "ASSISTED", "GAVE_UP"] } }),
+      }),
+    );
+    expect(mock.dailyCompletion.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ completedCount: 0, state: "ACTIVE" }),
+      }),
+    );
+  });
 });

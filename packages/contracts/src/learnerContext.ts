@@ -108,6 +108,11 @@ const memoryFields = {
   lifecycleState: z.enum(["ACTIVE", "IMPROVING", "RESOLVED"]),
 };
 
+const memoryApprovalFields = {
+  approvalSource: z.enum(["AUTOMATIC", "MANUAL"]).nullable().optional(),
+  approvalReason: learningTextSchema.nullable().optional(),
+};
+
 export const memorySuggestionInputSchema = z.strictObject({
   ...memoryFields,
   evidence: z.array(memoryEvidenceSchema).min(1),
@@ -116,15 +121,17 @@ export type MemorySuggestionInput = z.infer<typeof memorySuggestionInputSchema>;
 
 export const memorySuggestionSchema = z.strictObject({
   ...memoryFields,
+  ...memoryApprovalFields,
   id: z.uuid(),
-  approvalState: z.literal("PENDING"),
-  reviewedAt: z.null(),
+  approvalState: z.enum(["PENDING", "APPROVED"]),
+  reviewedAt: z.iso.datetime().nullable(),
   evidence: z.array(memoryEvidenceSchema),
 });
 export type MemorySuggestion = z.infer<typeof memorySuggestionSchema>;
 
 export const learnerMemorySchema = z.strictObject({
   ...memoryFields,
+  ...memoryApprovalFields,
   id: z.uuid(),
   approvalState: z.literal("APPROVED"),
   reviewedAt: z.iso.datetime(),
@@ -179,6 +186,7 @@ export type LearningContextEvidence = z.infer<typeof learningContextEvidenceSche
 
 export const learningContextInferenceSchema = z.strictObject({
   ...memoryFields,
+  ...memoryApprovalFields,
   id: z.uuid(),
   approvalState: z.enum(["PENDING", "APPROVED", "REJECTED"]),
   reviewedAt: z.iso.datetime().nullable(),

@@ -29,6 +29,8 @@ const memorySelect = {
   lifecycleState: true,
   approvalState: true,
   reviewedAt: true,
+  approvalSource: true,
+  approvalReason: true,
   evidence: {
     orderBy: { createdAt: "asc" as const },
     select: {
@@ -139,6 +141,8 @@ function presentMemory(record: MemoryRecord): LearningContextInference {
     lifecycleState: record.lifecycleState,
     approvalState: record.approvalState,
     reviewedAt: record.reviewedAt?.toISOString() ?? null,
+    approvalSource: record.approvalSource,
+    approvalReason: record.approvalReason,
     evidence,
   });
 }
@@ -165,6 +169,7 @@ export interface LearningContextStore {
     now: Date,
   ): Promise<LearningContextInference>;
   deleteMemory(userId: string, id: string): Promise<void>;
+  deleteSummary(userId: string, id: string): Promise<void>;
 }
 
 export function createPrismaLearningContextStore(client: PrismaClient): LearningContextStore {
@@ -267,7 +272,12 @@ export function createPrismaLearningContextStore(client: PrismaClient): Learning
             approvalState: "APPROVED",
             evidence: { some: { learnerGoalId: id } },
           },
-          data: { approvalState: "PENDING", reviewedAt: null },
+          data: {
+            approvalState: "PENDING",
+            reviewedAt: null,
+            approvalSource: null,
+            approvalReason: null,
+          },
         });
         return learnerGoalSchema.parse(updated);
       });
@@ -289,7 +299,12 @@ export function createPrismaLearningContextStore(client: PrismaClient): Learning
             id: { in: affected.map((item) => item.memoryId) },
             approvalState: "APPROVED",
           },
-          data: { approvalState: "PENDING", reviewedAt: null },
+          data: {
+            approvalState: "PENDING",
+            reviewedAt: null,
+            approvalSource: null,
+            approvalReason: null,
+          },
         });
       });
     },
@@ -318,7 +333,12 @@ export function createPrismaLearningContextStore(client: PrismaClient): Learning
             approvalState: "APPROVED",
             evidence: { some: { teachingPreferenceId: id } },
           },
-          data: { approvalState: "PENDING", reviewedAt: null },
+          data: {
+            approvalState: "PENDING",
+            reviewedAt: null,
+            approvalSource: null,
+            approvalReason: null,
+          },
         });
         return teachingPreferenceSchema.parse(updated);
       });
@@ -342,7 +362,12 @@ export function createPrismaLearningContextStore(client: PrismaClient): Learning
             id: { in: affected.map((item) => item.memoryId) },
             approvalState: "APPROVED",
           },
-          data: { approvalState: "PENDING", reviewedAt: null },
+          data: {
+            approvalState: "PENDING",
+            reviewedAt: null,
+            approvalSource: null,
+            approvalReason: null,
+          },
         });
       });
     },
@@ -357,6 +382,11 @@ export function createPrismaLearningContextStore(client: PrismaClient): Learning
               approvalState:
                 review.action === "APPROVE" ? ("APPROVED" as const) : ("REJECTED" as const),
               reviewedAt: now,
+              approvalSource: "MANUAL",
+              approvalReason:
+                review.action === "APPROVE"
+                  ? "Approved in Learning profile."
+                  : "Rejected in Learning profile.",
             };
       return presentMemory(
         await client.learnerMemory.update({
@@ -370,6 +400,42 @@ export function createPrismaLearningContextStore(client: PrismaClient): Learning
       await ownedMemory(userId, id);
       await client.learnerMemory.delete({
         where: { id_userProfileId: { id, userProfileId: userId } },
+      });
+    },
+    async deleteSummary(userId, id) {
+      await client.$transaction(async (tx) => {
+        const summary = await tx.conversationSummary.findFirst({
+          where: { id, userProfileId: userId },
+          select: { id: true },
+        });
+        if (!summary) throw new HttpError(404, "Learning checkpoint not found.");
+        const affected = await tx.learnerMemory.findMany({
+          where: { userProfileId: userId, evidence: { some: { conversationSummaryId: id } } },
+          select: { id: true },
+        });
+        await tx.learnerMemory.updateMany({
+          where: {
+            userProfileId: userId,
+            approvalState: "APPROVED",
+            evidence: { some: { conversationSummaryId: id } },
+          },
+          data: {
+            approvalState: "PENDING",
+            reviewedAt: null,
+            approvalSource: null,
+            approvalReason: null,
+          },
+        });
+        await tx.conversationSummary.delete({
+          where: { id_userProfileId: { id, userProfileId: userId } },
+        });
+        await tx.learnerMemory.deleteMany({
+          where: {
+            userProfileId: userId,
+            id: { in: affected.map((memory) => memory.id) },
+            evidence: { none: {} },
+          },
+        });
       });
     },
   };
@@ -437,6 +503,12 @@ export function createLearningContextRouter(
     const id = idSchema.safeParse(request.params.id);
     if (!id.success) throw new HttpError(400, "Invalid inference identifier.");
     await store.deleteMemory(getApplicationProfile(request).id, id.data);
+    response.status(204).end();
+  });
+  router.delete("/summaries/:id", async (request, response) => {
+    const id = idSchema.safeParse(request.params.id);
+    if (!id.success) throw new HttpError(400, "Invalid checkpoint identifier.");
+    await store.deleteSummary(getApplicationProfile(request).id, id.data);
     response.status(204).end();
   });
   return router;

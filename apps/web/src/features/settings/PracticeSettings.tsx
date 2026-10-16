@@ -13,13 +13,12 @@ import { OpenAIModelSelect } from "./OpenAIModelSelect";
 import { ReasoningEffortSelect } from "./ReasoningEffortSelect";
 import { savePracticeSettings } from "./settingsApi";
 
-export type SettingsSection = "practice" | "reviews" | "ai" | "credentials" | "appearance";
+export type SettingsSection = "practice" | "reviews" | "ai" | "appearance";
 
 const sections: ReadonlyArray<{ value: SettingsSection; label: string }> = [
   { value: "practice", label: "Practice preferences" },
   { value: "reviews", label: "Review intervals" },
   { value: "ai", label: "AI configuration" },
-  { value: "credentials", label: "Credential storage" },
   { value: "appearance", label: "Appearance" },
 ];
 
@@ -553,7 +552,8 @@ export function PracticeSettings({
             {section === "ai" ? (
               <>
                 <p className="settings-help">Use your OpenAI account for in-app AI features.</p>
-                <BrowserKeySettings embedded section="key" disabled={saving} />
+                <BrowserKeySettings embedded disabled={saving} />
+                <p className="settings-help">Key and storage changes take effect immediately.</p>
               </>
             ) : null}
             {["practice", "reviews", "ai"].includes(section) ? (
@@ -587,13 +587,6 @@ export function PracticeSettings({
                     <p className="settings-notice">
                       Planning, practice, and result recording remain available without AI.
                     </p>
-                    <button
-                      type="button"
-                      className="settings-return"
-                      onClick={() => selectSection("credentials")}
-                    >
-                      Manage credential storage
-                    </button>
                   </>
                 )}
                 {feedback}
@@ -603,13 +596,6 @@ export function PracticeSettings({
                   </button>
                 </div>
               </form>
-            ) : null}
-            {section === "credentials" ? (
-              <>
-                <p className="settings-help">Choose where this browser keeps your API key.</p>
-                <BrowserKeySettings embedded section="storage" disabled={saving} />
-                <p className="settings-help">Storage changes take effect immediately.</p>
-              </>
             ) : null}
             {section === "appearance" ? (
               <>

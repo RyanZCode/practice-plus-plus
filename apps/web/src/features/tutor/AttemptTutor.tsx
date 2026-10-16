@@ -16,7 +16,6 @@ import { ReasoningEffortSelect } from "../settings/ReasoningEffortSelect";
 import {
   checkpointMessages,
   loadMemorySuggestions,
-  needsCheckpoint,
   saveCheckpoint,
 } from "../learning-context/summaryApi";
 import {
@@ -126,21 +125,29 @@ export function AttemptTutor({
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, []);
-  const checkpointReady =
-    messages.slice(checkpointIndex).filter((message) => message.complete).length >= 2;
+  const automaticCheckpointEnd = useRef(checkpointIndex);
+  const checkpointIds = useRef(new Map<number, string>());
 
   async function checkpoint(source: Message[], endIndex: number): Promise<boolean> {
     const complete = source.filter((message) => message.complete);
     if (complete.length < 2 || checkpointBusy) return false;
     setCheckpointBusy(true);
-    onBusy(true);
     setCheckpointError(undefined);
+    const checkpointId = checkpointIds.current.get(endIndex) ?? crypto.randomUUID();
+    checkpointIds.current.set(endIndex, checkpointId);
     try {
       const result = await saveCheckpoint(apiUrl, token, {
+        checkpointId,
         selection: openAiSelection(model, models, reasoningEffort),
         apiKey: browserKey.getKey(userId) ?? "",
         mode: "ATTEMPT_TUTOR",
         attemptId: attempt.id,
+        phase:
+          attempt.outcome === null
+            ? "INDEPENDENT"
+            : attempt.outcome === "GAVE_UP"
+              ? "SOLUTION_REVIEW"
+              : "RESULT",
         messages: recentCoachMessages(checkpointMessages(complete)),
       });
       setSuggestions((current) => [
@@ -160,12 +167,31 @@ export function AttemptTutor({
       return false;
     } finally {
       setCheckpointBusy(false);
-      onBusy(false);
     }
   }
 
+  useEffect(() => {
+    if (messages.length === 0) {
+      automaticCheckpointEnd.current = 0;
+      checkpointIds.current.clear();
+    }
+    const latest = messages.at(-1);
+    if (
+      busy ||
+      checkpointBusy ||
+      !canUseAi ||
+      !latest?.complete ||
+      latest.role !== "assistant" ||
+      messages.length <= checkpointIndex ||
+      automaticCheckpointEnd.current >= messages.length
+    )
+      return;
+    automaticCheckpointEnd.current = messages.length;
+    void checkpoint(messages.slice(checkpointIndex), messages.length);
+  }, [messages, checkpointIndex, checkpointBusy, busy, canUseAi]);
+
   async function send(requested: TutorHelp, defaultMessage?: string) {
-    if (active.current || disabled || checkpointBusy || !canUseAi) return;
+    if (active.current || disabled || !canUseAi) return;
     const label =
       requested.type === "CONCEPTUAL_HINT"
         ? tutorHintNames[requested.hintLevel - 1]!
@@ -182,11 +208,7 @@ export function AttemptTutor({
       complete: true,
       label,
     };
-    let contextMessages = messages.slice(checkpointIndex).filter((message) => message.complete);
-    if (needsCheckpoint([...contextMessages, user])) {
-      const saved = await checkpoint(contextMessages, messages.length);
-      if (saved) contextMessages = [];
-    }
+    const contextMessages = messages.slice(checkpointIndex).filter((message) => message.complete);
     const input = tutorRequestSchema.safeParse({
       selection: openAiSelection(model, models, reasoningEffort),
       apiKey: browserKey.getKey(userId),
@@ -270,15 +292,11 @@ export function AttemptTutor({
         >
           <summary>Tutor settings</summary>
           <div className="attempt-tutor-settings-panel">
-            <OpenAIModelSelect
-              value={model}
-              disabled={busy || checkpointBusy || disabled}
-              onChange={setModel}
-            />
+            <OpenAIModelSelect value={model} disabled={busy || disabled} onChange={setModel} />
             <ReasoningEffortSelect
               model={model}
               value={reasoningEffort}
-              disabled={busy || checkpointBusy || disabled}
+              disabled={busy || disabled}
               onChange={setReasoningEffort}
             />
             <button type="button" className="text-button" onClick={onAiSetup}>
@@ -318,7 +336,7 @@ export function AttemptTutor({
                   type="button"
                   className="secondary-button"
                   aria-pressed={help.type === type}
-                  disabled={busy || checkpointBusy || disabled || !canUseAi}
+                  disabled={busy || disabled || !canUseAi}
                   onClick={() => {
                     setHelp({ type });
                     messageInput.current?.focus();
@@ -332,7 +350,7 @@ export function AttemptTutor({
                   type="button"
                   className="secondary-button"
                   aria-pressed={help.type === "CONCEPTUAL_HINT"}
-                  disabled={busy || checkpointBusy || disabled || !canUseAi}
+                  disabled={busy || disabled || !canUseAi}
                   onClick={() => {
                     setHelp({ type: "CONCEPTUAL_HINT", hintLevel: highest });
                     messageInput.current?.focus();
@@ -359,7 +377,7 @@ export function AttemptTutor({
                     onClick={() =>
                       void send(
                         { type: "CONCEPTUAL_HINT", hintLevel: highest + 1 },
-                        actions[highest],
+                        highest === 0 ? "Give me a small nudge" : actions[highest],
                       )
                     }
                   >
@@ -403,6 +421,36 @@ export function AttemptTutor({
               )}
             </div>
           ) : null}
+        </div>
+        <div className="coach-conversation page-surface">
+          <div className="coach-conversation-heading">
+            <span>
+              {gaveUp
+                ? "Solution review"
+                : help.type === "DEBUGGING"
+                  ? "Debugging"
+                  : help.type === "OPTIMIZATION"
+                    ? "Complexity and optimization"
+                    : help.type === "CONCEPTUAL_HINT"
+                      ? tutorHintNames[help.hintLevel - 1]
+                      : "Clarification"}
+            </span>
+            <span className="settings-help">Conversation stays in this tab</span>
+          </div>
+          {messages.length === 0 ? (
+            <div className="coach-empty">
+              <h3>What would you like help with?</h3>
+              <p className="settings-help">
+                {gaveUp
+                  ? "Request a solution, then close the reference and try it from memory."
+                  : help.type === "DEBUGGING"
+                    ? "Paste your code and describe what you expected to happen."
+                    : help.type === "OPTIMIZATION"
+                      ? "Describe your approach and the complexity you want to check."
+                      : "Ask about the statement or a constraint without requesting a solution."}
+              </p>
+            </div>
+          ) : null}
           <ol
             ref={messagesRef}
             className="coach-messages"
@@ -411,7 +459,7 @@ export function AttemptTutor({
             aria-busy={busy}
           >
             {messages.map((message, index) => (
-              <li key={index}>
+              <li key={index} data-role={message.role}>
                 <strong>{message.role === "user" ? "You" : `Tutor: ${message.label}`}</strong>
                 {message.role === "assistant" ? (
                   <MarkdownMessage>
@@ -426,126 +474,122 @@ export function AttemptTutor({
               </li>
             ))}
           </ol>
-          {messages.length === 0 ? (
-            <p className="settings-help">
-              {gaveUp
-                ? "Request a solution, then close the reference and try it from memory."
-                : help.type === "DEBUGGING"
-                  ? "Paste your code and describe what you expected to happen."
-                  : help.type === "OPTIMIZATION"
-                    ? "Describe your approach and the complexity you want to check."
-                    : "Ask about the statement or a constraint without requesting a solution."}
-            </p>
-          ) : null}
-          <label>
-            {help.type === "DEBUGGING" ? "Code and question" : "Your question"}
-            <textarea
-              ref={messageInput}
-              rows={3}
-              maxLength={16000}
-              value={draft}
-              disabled={busy || disabled}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.ctrlKey && event.key === "Enter" && draft.trim().length > 0) {
-                  event.preventDefault();
-                  void send(gaveUp ? { type: "SOLUTION_REVIEW" } : help);
-                }
-              }}
-            />
-          </label>
-          {error ? (
-            <p className="auth-message" role="alert">
-              {error}
-            </p>
-          ) : null}
-          {checkpointError ? (
-            <p className="auth-message" role="alert">
-              {checkpointError}
-            </p>
-          ) : null}
-          {checkpointSaved ? <p role="status">Learning checkpoint saved.</p> : null}
-          {suggestions.length > 0 ? (
-            <div>
-              <strong>Pending memory suggestions</strong>
-              <p className="settings-help">
-                Review these during confirmation. They are not used as learner memory until
-                approved.
-              </p>
-              <ul className="memory-suggestion-list">
-                {suggestions.map((suggestion) => (
-                  <li key={suggestion.id}>{suggestion.content}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          <div className="account-actions">
-            <button
-              className="primary-button"
-              type="button"
-              title="Send message (Ctrl+Enter)"
-              aria-keyshortcuts="Control+Enter"
-              disabled={
-                busy || checkpointBusy || disabled || !canUseAi || draft.trim().length === 0
-              }
-              onClick={() => void send(gaveUp ? { type: "SOLUTION_REVIEW" } : help)}
-            >
-              Send message
-            </button>
-            {gaveUp ? (
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={
-                  busy || checkpointBusy || disabled || !canUseAi || draft.trim().length > 0
-                }
-                onClick={() =>
-                  void send(
-                    { type: "SOLUTION_REVIEW" },
-                    "Explain the solution, then help me try coding from memory.",
-                  )
-                }
-              >
-                Ask AI for the solution
-              </button>
-            ) : null}
-            {checkpointReady ? (
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={busy || checkpointBusy || disabled || !canUseAi}
-                onClick={() => void checkpoint(messages.slice(checkpointIndex), messages.length)}
-              >
-                {checkpointBusy ? "Saving checkpoint…" : "Save learning checkpoint"}
-              </button>
-            ) : null}
-            {busy ? (
-              <button type="button" onClick={() => active.current?.abort()}>
-                Stop
-              </button>
-            ) : null}
-            {messages.length > 0 ? (
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={busy || checkpointBusy}
-                onClick={() => {
-                  setMessages([]);
-                  setCheckpointIndex(0);
-                  setDraft("");
-                  setError(undefined);
+          <div className="coach-composer">
+            <label>
+              {!gaveUp && help.type === "DEBUGGING" ? "Code and question" : "Message"}
+              <textarea
+                ref={messageInput}
+                rows={3}
+                maxLength={16000}
+                value={draft}
+                disabled={busy || disabled}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.ctrlKey && event.key === "Enter" && draft.trim().length > 0) {
+                    event.preventDefault();
+                    void send(gaveUp ? { type: "SOLUTION_REVIEW" } : help);
+                  }
                 }}
-              >
-                Clear conversation
-              </button>
+              />
+            </label>
+            {error ? (
+              <p className="auth-message" role="alert">
+                {error}
+              </p>
+            ) : null}
+            {checkpointError ? (
+              <div className="auth-message" role="alert">
+                {checkpointError}
+                <button
+                  className="text-button"
+                  type="button"
+                  disabled={checkpointBusy}
+                  onClick={() => void checkpoint(messages.slice(checkpointIndex), messages.length)}
+                >
+                  Retry automatic save
+                </button>
+              </div>
+            ) : null}
+            {checkpointBusy ? (
+              <p role="status">Saving learning automatically…</p>
+            ) : checkpointSaved && !checkpointError ? (
+              <p role="status">Learning saved automatically.</p>
+            ) : null}
+            {suggestions.length > 0 ? (
+              <div>
+                <strong>Learning memories</strong>
+                <p className="settings-help">
+                  Evidence-backed memories are approved automatically. You can correct or delete
+                  them in Learning profile.
+                </p>
+                <ul className="memory-suggestion-list">
+                  {suggestions.map((suggestion) => (
+                    <li key={suggestion.id}>{suggestion.content}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <div className="coach-send-actions">
+              <span className="settings-help">Ctrl+Enter to send</span>
+              <div className="account-actions">
+                <button
+                  className="primary-button"
+                  type="button"
+                  title="Send (Ctrl+Enter)"
+                  aria-keyshortcuts="Control+Enter"
+                  disabled={busy || disabled || !canUseAi || draft.trim().length === 0}
+                  onClick={() => void send(gaveUp ? { type: "SOLUTION_REVIEW" } : help)}
+                >
+                  {busy ? "Responding…" : "Send"}
+                </button>
+                {gaveUp ? (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={busy || disabled || !canUseAi || draft.trim().length > 0}
+                    onClick={() =>
+                      void send(
+                        { type: "SOLUTION_REVIEW" },
+                        "Explain the solution, then help me try coding from memory.",
+                      )
+                    }
+                  >
+                    Ask AI for the solution
+                  </button>
+                ) : null}
+                {busy ? (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => active.current?.abort()}
+                  >
+                    Stop
+                  </button>
+                ) : null}
+                {messages.length > 0 ? (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={busy || checkpointBusy}
+                    onClick={() => {
+                      setMessages([]);
+                      setCheckpointIndex(0);
+                      setDraft("");
+                      setError(undefined);
+                    }}
+                  >
+                    Clear conversation
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {gaveUp ? (
+              <p>
+                After reviewing, clear the conversation and close the reference. Try coding from
+                memory, then optionally record whether you could reproduce it below.
+              </p>
             ) : null}
           </div>
-          {gaveUp ? (
-            <p>
-              After reviewing, clear the conversation and close the reference. Try coding from
-              memory, then optionally record whether you could reproduce it below.
-            </p>
-          ) : null}
         </div>
       </div>
     </section>
