@@ -11,6 +11,7 @@ import {
 import type { CoachOptions } from "../coach/coach.js";
 import type { PrismaClient } from "../../shared/generated/prisma/client.js";
 import { HttpError } from "../../shared/errors.js";
+import { reportError } from "../../shared/errorMonitoring.js";
 import { getApplicationProfile } from "../account/profile.js";
 import { ProviderError, type ProviderMessage } from "../../shared/providers.js";
 
@@ -207,6 +208,9 @@ export function createTutorRouter({ assembler, provider, store }: TutorOptions):
       response.end();
     } catch (error) {
       if (controller.signal.aborted) return;
+      if (response.headersSent && (!(error instanceof HttpError) || error.statusCode >= 500)) {
+        reportError("stream", error instanceof HttpError ? error.statusCode : 500);
+      }
       const message =
         error instanceof ProviderError || error instanceof HttpError
           ? error.message

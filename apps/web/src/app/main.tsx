@@ -7,8 +7,14 @@ import { readConfig } from "../shared/config";
 import { ErrorBoundary } from "../shared/ErrorBoundary";
 import { getSupabaseClient } from "../shared/supabase";
 import { loadTheme, resolveTheme } from "../shared/theme";
+import { initializeErrorMonitoring } from "../shared/errorMonitoring";
 import "./styles.css";
 
+initializeErrorMonitoring(
+  import.meta.env.VITE_ERROR_MONITORING_DSN,
+  import.meta.env.VITE_APP_ENV,
+  import.meta.env.VITE_APP_VERSION,
+);
 const colorSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
 document.documentElement.dataset.theme = resolveTheme(
   loadTheme(window.localStorage),

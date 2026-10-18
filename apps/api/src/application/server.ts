@@ -17,7 +17,13 @@ import { createPrismaSummaryStore } from "../features/learning-context/summaries
 import { createPrismaLearningContextStore } from "../features/learning-context/learningContext.js";
 import { createPrismaAssessmentStore } from "../features/assessments/assessments.js";
 import { createPrismaAnalyticsStore } from "../features/analytics/analytics.js";
+import { initializeErrorMonitoring } from "../shared/errorMonitoring.js";
 
+initializeErrorMonitoring(
+  process.env.ERROR_MONITORING_DSN,
+  process.env.APP_ENV,
+  process.env.APP_VERSION,
+);
 const config = readConfig();
 const logger = createLogger();
 const database = createDatabase(config.databaseUrl);

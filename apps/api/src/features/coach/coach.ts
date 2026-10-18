@@ -7,6 +7,7 @@ import {
 } from "@practice-plus-plus/contracts";
 import express, { type ErrorRequestHandler } from "express";
 import { HttpError } from "../../shared/errors.js";
+import { reportError } from "../../shared/errorMonitoring.js";
 import { getApplicationProfile } from "../account/profile.js";
 import {
   ProviderError,
@@ -81,6 +82,9 @@ export function createCoachRouter({ assembler, provider }: CoachOptions): expres
       response.end();
     } catch (error) {
       if (controller.signal.aborted) return;
+      if (response.headersSent && (!(error instanceof HttpError) || error.statusCode >= 500)) {
+        reportError("stream", error instanceof HttpError ? error.statusCode : 500);
+      }
       const message =
         error instanceof ProviderError
           ? error.message

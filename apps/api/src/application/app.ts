@@ -51,6 +51,7 @@ import { createHealthRouter, type ReadinessCheck } from "../shared/health.js";
 import { createLogger } from "../shared/logger.js";
 import { getProviders } from "../shared/providers.js";
 import { createAiRequestLimit } from "../shared/aiRequestLimit.js";
+import { reportFailedRequests } from "../shared/errorMonitoring.js";
 
 interface AuthenticationOptions {
   readonly tutor?: TutorOptions;
@@ -84,6 +85,7 @@ export function createApp(options: AppOptions = {}): Express {
   const logger = options.logger ?? createLogger();
 
   app.disable("x-powered-by");
+  app.use(reportFailedRequests);
   app.use(
     pinoHttp({
       logger,
