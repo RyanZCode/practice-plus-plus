@@ -1,4 +1,5 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, type ReactNode } from "react";
+import { reportError } from "./errorMonitoring";
 
 interface Props {
   children: ReactNode;
@@ -15,8 +16,8 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true };
   }
 
-  public override componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error(error, info);
+  public override componentDidCatch(): void {
+    reportError("component");
   }
 
   public override render(): ReactNode {
