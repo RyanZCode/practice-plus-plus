@@ -58,6 +58,9 @@ jobs:
         env:
           LEARNER_CONTEXT_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
 
+      - name: Test backup safeguards
+        run: node --test scripts/backup-database.test.mjs
+
       - name: Build workspaces
         run: pnpm build
 
