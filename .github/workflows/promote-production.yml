@@ -80,8 +80,13 @@ jobs:
         env:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
 
-  migrate-production:
+  backup-production:
     needs: [validate-main, verify-staging]
+    uses: ./.github/workflows/backup-production.yml
+    secrets: inherit
+
+  migrate-production:
+    needs: [validate-main, verify-staging, backup-production]
     runs-on: ubuntu-latest
     environment: production
 

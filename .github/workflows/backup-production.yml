@@ -1,0 +1,86 @@
+name: Back up production database
+
+on:
+  schedule:
+    - cron: "17 8 * * *"
+  workflow_dispatch:
+    inputs:
+      purpose:
+        description: Backup purpose
+        type: choice
+        options: [daily, pre-migration]
+        default: daily
+  workflow_call:
+    inputs:
+      purpose:
+        type: string
+        default: pre-migration
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.event_name != 'schedule' || vars.PRODUCTION_BACKUPS_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 20
+
+    steps:
+      - name: Require backup activation
+        env:
+          ENABLED: ${{ vars.PRODUCTION_BACKUPS_ENABLED }}
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Production backups must run from main."
+            exit 1
+          fi
+          if [[ "$ENABLED" != "true" ]]; then
+            echo "Production backups require configured storage, key custody, and a verified retained restore."
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.19.0
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install backup tools
+        run: |
+          docker pull postgres:17-alpine
+          curl --fail --silent --show-error --location \
+            https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz \
+            --output "$RUNNER_TEMP/age.tar.gz"
+          echo "cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10  $RUNNER_TEMP/age.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/age.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/age" >> "$GITHUB_PATH"
+
+      - name: Test backup safeguards
+        run: node --test scripts/backup-database.test.mjs
+
+      - name: Export and retain encrypted backup
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.DIRECT_URL }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          BACKUP_PURPOSE: ${{ inputs.purpose || 'daily' }}
+          B2_APPLICATION_KEY_ID: ${{ secrets.B2_APPLICATION_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          BACKUP_PG_DUMP_IMAGE: postgres:17-alpine
+          BACKUP_RETENTION_ENABLED: ${{ vars.BACKUP_RETENTION_ENABLED }}
+          BACKUP_VERIFIED_FILE_ID: ${{ vars.BACKUP_VERIFIED_FILE_ID }}
+        run: |
+          umask 077
+          node scripts/backup-database.mjs
