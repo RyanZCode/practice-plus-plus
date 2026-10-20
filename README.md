@@ -1,5 +1,7 @@
 # Practice++
 
+[Open Practice++](https://practice-plus-plus.pages.dev/)
+
 Finishing the Blind 75, NeetCode 150, or LeetCode Interview 150 list leaves a question: what should you practice next? A completed list does not tell you which patterns you can recognize independently, where you still rely on hints, or what you are starting to forget.
 
 Practice++ uses your attempt history to identify gaps and plan practice around them. Daily plans combine new problems with targeted review, helping you revisit weak areas and test your understanding on unfamiliar problems.
@@ -55,4 +57,4 @@ Scheduling runs in pure functions with explicit dates and inputs, which makes ti
 
 Supabase handles GitHub and Google sign-in. The API verifies identity, scopes user-owned records to that identity, and enforces pattern visibility. PostgreSQL stores structured learning summaries and evidence rather than full chat transcripts or source code. AI context is assembled from bounded relational queries, without a vector database. Provider keys stay in browser memory by default, with opt-in browser storage; they are excluded from server persistence and logs.
 
-GitHub Actions runs formatting, lint, type checks, tests against disposable PostgreSQL, workspace builds, and a Docker build. Staging migrations run before frontend deployment. Production database promotion is manual and uses a tested revision.
+GitHub Actions runs formatting, lint, type checks, tests against disposable PostgreSQL, workspace builds, and a Docker build. Staging migrations run before frontend deployment. Production database promotion is manual and uses a tested revision. Daily production database backups are encrypted with age and stored in a private Backblaze B2 bucket, with download hash verification after each upload.
