@@ -6,7 +6,7 @@ import { pinoHttp } from "pino-http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  createClaimsAccessTokenVerifier,
+  createUserAccessTokenVerifier,
   getAuthenticatedIdentity,
   requireAuthentication,
   type AccessTokenVerifier,
@@ -61,31 +61,47 @@ afterEach(async () => {
 describe("Supabase access-token verification", () => {
   it("resolves the verified token subject", async () => {
     const client = {
-      getClaims: vi.fn().mockResolvedValue({
-        data: { claims: { sub: "supabase-user-123" } },
+      getUser: vi.fn().mockResolvedValue({
+        data: { user: { id: "supabase-user-123" } },
         error: null,
       }),
     };
-    const verifier = createClaimsAccessTokenVerifier(client);
+    const verifier = createUserAccessTokenVerifier(client);
 
     await expect(verifier.verify("valid-token")).resolves.toEqual({
       subject: "supabase-user-123",
     });
-    expect(client.getClaims).toHaveBeenCalledWith("valid-token");
+    expect(client.getUser).toHaveBeenCalledWith("valid-token");
   });
 
-  it("rejects failed verification and claims without a subject", async () => {
-    const failedVerifier = createClaimsAccessTokenVerifier({
-      getClaims: vi.fn().mockResolvedValue({ data: null, error: new Error("invalid signature") }),
+  it("rejects failed verification and users without an identifier", async () => {
+    const failedVerifier = createUserAccessTokenVerifier({
+      getUser: vi
+        .fn()
+        .mockResolvedValue({ data: { user: null }, error: new Error("invalid signature") }),
     });
-    const missingSubjectVerifier = createClaimsAccessTokenVerifier({
-      getClaims: vi.fn().mockResolvedValue({ data: { claims: {} }, error: null }),
+    const missingSubjectVerifier = createUserAccessTokenVerifier({
+      getUser: vi.fn().mockResolvedValue({ data: { user: {} }, error: null }),
     });
 
     await expect(failedVerifier.verify("invalid-token")).rejects.toThrow(
       "Access token verification failed",
     );
     await expect(missingSubjectVerifier.verify("invalid-token")).rejects.toThrow(
+      "Access token verification failed",
+    );
+  });
+
+  it("rejects a previously valid token after its account is deleted", async () => {
+    const client = {
+      getUser: vi
+        .fn()
+        .mockResolvedValueOnce({ data: { user: { id: "deleted-user" } }, error: null })
+        .mockResolvedValueOnce({ data: { user: null }, error: null }),
+    };
+    const verifier = createUserAccessTokenVerifier(client);
+    await expect(verifier.verify("unexpired-token")).resolves.toEqual({ subject: "deleted-user" });
+    await expect(verifier.verify("unexpired-token")).rejects.toThrow(
       "Access token verification failed",
     );
   });
