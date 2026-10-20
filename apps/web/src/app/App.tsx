@@ -104,6 +104,7 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
   const [settingsReturn, setSettingsReturn] = useState<{ view: ActiveView; label: string } | null>(
     null,
   );
+  const [historyProblem, setHistoryProblem] = useState<{ id: string; title: string } | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("practice");
   const [visitedViews, setVisitedViews] = useState<ReadonlySet<ActiveView>>(
     () => new Set(["practice"]),
@@ -414,6 +415,9 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
           {!isLoading && !loadFailed && !isOnboarding && visitedViews.has("history") ? (
             <div hidden={activeView !== "history"}>
               <AttemptHistory
+                key={historyProblem?.id ?? "all"}
+                problem={historyProblem}
+                onClearProblem={() => setHistoryProblem(null)}
                 apiUrl={apiUrl}
                 token={session.access_token}
                 isActive={activeView === "history"}
@@ -427,6 +431,10 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
                 apiUrl={apiUrl}
                 token={session.access_token}
                 isActive={activeView === "analytics"}
+                onProblemHistory={(problem) => {
+                  setHistoryProblem(problem);
+                  navigate("history");
+                }}
               />
             </div>
           ) : null}

@@ -55,6 +55,7 @@ it("renders decision-oriented analytics with definitions and no skill-score clai
           {
             patternId: "10000000-0000-4000-8000-000000000001",
             patternName: "Graphs",
+            problems: [],
             classification: "NEEDS_PRACTICE",
             fresh: {
               sampleCount: 5,

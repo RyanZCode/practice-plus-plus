@@ -9,7 +9,9 @@ import {
   type MemorySuggestion,
   type ReportAttempt,
 } from "@practice-plus-plus/contracts";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { LoadingStatus } from "../../shared/LoadingStatus";
+import { assessmentFields } from "../assessments/assessmentFields";
 
 const assistanceOptions: { type: Assistance["type"]; label: string }[] = [
   { type: "CLARIFICATION", label: "Clarification" },
@@ -45,12 +47,22 @@ export function AttemptOutcomeForm({
   canDraftAssessment: boolean;
   completedCode: string;
   onCompletedCodeChange: (value: string) => void;
-  onDraftAssessment: (input: DraftAssessmentInput) => Promise<void>;
+  onDraftAssessment: (input: DraftAssessmentInput) => Promise<AttemptAssessmentDraft | null>;
   onConfirm: (input: ConfirmAttempt) => Promise<void>;
   onReport: (input: ReportAttempt) => Promise<void>;
   initialIncomplete: boolean;
   onLearningProfile: () => void;
 }) {
+  const form = useRef<HTMLFormElement>(null);
+  const optionalDetails = useRef<HTMLDetailsElement>(null);
+  const learningSummary = useRef<HTMLDetailsElement>(null);
+  const [drafting, setDrafting] = useState(false);
+  const [generated, setGenerated] = useState(false);
+  const [changedFields, setChangedFields] = useState<string[]>([]);
+  const updated = (field: string) =>
+    changedFields.includes(field) ? (
+      <span className="assessment-updated">Updated by AI</span>
+    ) : null;
   const [outcome, setOutcome] = useState<ConfirmAttempt["outcome"] | "">(
     initialIncomplete && attempt.outcome === null
       ? "INCOMPLETE"
@@ -97,8 +109,59 @@ export function AttemptOutcomeForm({
     return Object.values(current).every((value) => value === null) ? null : current;
   }
 
+  async function draftAssessment() {
+    setDrafting(true);
+    try {
+      const draft = await onDraftAssessment({
+        completedCode: completedCode.trim() || null,
+        currentSummary: currentSummaryForDraft(),
+      });
+      if (draft === null || form.current === null) return;
+      const changes: string[] = [];
+      for (const [key, value] of Object.entries(assessmentFields(draft))) {
+        if (key === "outcome") {
+          if (outcome !== value) changes.push(key);
+          setOutcome(draft.outcome);
+        } else if (key === "reproduced") {
+          if (String(reproduced) !== value) changes.push(key);
+          setReproduced(draft.reproducedFromMemory);
+        } else if (key.startsWith("summary.")) {
+          const field = key.slice(8) as keyof typeof summary;
+          if (summary[field] !== value) changes.push(key);
+          setSummary((current) => ({ ...current, [field]: value }));
+        } else {
+          const control = form.current.elements.namedItem(key);
+          if (
+            control instanceof HTMLInputElement ||
+            control instanceof HTMLSelectElement ||
+            control instanceof HTMLTextAreaElement
+          ) {
+            if (control.value !== value) changes.push(key);
+            control.value = value;
+          }
+        }
+      }
+      setChangedFields(changes);
+      setGenerated(true);
+      if (
+        changes.some((field) =>
+          ["confidence", "optimality", "minutes", "approach", "notes"].includes(field),
+        ) &&
+        optionalDetails.current
+      ) {
+        optionalDetails.current.open = true;
+      }
+      if (changes.some((field) => field.startsWith("summary.")) && learningSummary.current) {
+        learningSummary.current.open = true;
+      }
+    } finally {
+      setDrafting(false);
+    }
+  }
+
   return (
     <form
+      ref={form}
       className="outcome-form page-surface"
       onSubmit={(event) => {
         event.preventDefault();
@@ -138,6 +201,7 @@ export function AttemptOutcomeForm({
     >
       <fieldset disabled={busy}>
         <legend>{canConfirm ? "Review and confirm" : "Report your result"}</legend>
+        {updated("outcome")}
         <div className="attempt-outcomes" role="group" aria-label="Outcome">
           {(
             [
@@ -198,7 +262,7 @@ export function AttemptOutcomeForm({
           </p>
         ) : null}
         {attempt.outcome !== null ? (
-          <details>
+          <details open>
             <summary>AI assessment (optional)</summary>
             <label>
               Completed code (optional)
@@ -217,21 +281,28 @@ export function AttemptOutcomeForm({
               type="button"
               className="secondary-button"
               disabled={busy || !canDraftAssessment}
-              onClick={() =>
-                void onDraftAssessment({
-                  completedCode: completedCode.trim() || null,
-                  currentSummary: currentSummaryForDraft(),
-                })
-              }
+              onClick={() => void draftAssessment()}
             >
-              {assessmentDraft === null ? "Draft assessment with AI" : "Regenerate AI draft"}
+              {drafting
+                ? "Drafting assessment…"
+                : assessmentDraft === null
+                  ? "Draft assessment with AI"
+                  : "Regenerate AI draft"}
             </button>
+            {drafting ? (
+              <LoadingStatus>Reviewing your attempt and drafting feedback…</LoadingStatus>
+            ) : null}
             {!canDraftAssessment ? (
               <p className="settings-help">Add your OpenAI API key in Practice settings first.</p>
             ) : null}
-            {assessmentDraft !== null ? (
+            {assessmentDraft !== null && !drafting ? (
               <p role="status">
-                AI draft applied below. Review and edit every field before confirming. Based on:{" "}
+                {generated
+                  ? changedFields.length === 0
+                    ? "AI draft ready. No fields changed."
+                    : "AI draft applied. Changed fields are marked “Updated by AI” below."
+                  : "Saved AI draft loaded. Review and edit the fields below before confirming."}{" "}
+                Based on:{" "}
                 {assessmentDraft.evidence
                   .map((item) => item.toLowerCase().replaceAll("_", " "))
                   .join(", ")}
@@ -293,7 +364,7 @@ export function AttemptOutcomeForm({
         </details>
         {reviewed ? (
           <fieldset className="attempt-reproduction">
-            <legend>Try the solution from memory</legend>
+            <legend>Try the solution from memory {updated("reproduced")}</legend>
             <p>
               Close the reference and try coding the solution without looking. Either result keeps
               the outcome gave up, or you can leave this unanswered.
@@ -376,10 +447,10 @@ export function AttemptOutcomeForm({
           </fieldset>
         ) : null}
         {canConfirm ? (
-          <details>
+          <details ref={optionalDetails}>
             <summary>Optional details</summary>
             <label>
-              Confidence
+              Confidence {updated("confidence")}
               <select name="confidence" defaultValue={assessmentDraft?.confidence ?? ""}>
                 <option value="">Not specified</option>
                 <option value="CONFIDENT">Confident</option>
@@ -387,7 +458,7 @@ export function AttemptOutcomeForm({
               </select>
             </label>
             <label>
-              Solution quality
+              Solution quality {updated("optimality")}
               <select name="optimality" defaultValue={assessmentDraft?.optimality ?? ""}>
                 <option value="">Not specified</option>
                 <option value="OPTIMAL">Optimal</option>
@@ -396,7 +467,7 @@ export function AttemptOutcomeForm({
               </select>
             </label>
             <label>
-              Time spent (minutes)
+              Time spent (minutes) {updated("minutes")}
               <input
                 name="minutes"
                 type="number"
@@ -411,7 +482,7 @@ export function AttemptOutcomeForm({
               />
             </label>
             <label>
-              Approach (brief description, no source code)
+              Approach (brief description, no source code) {updated("approach")}
               <textarea
                 name="approach"
                 maxLength={1000}
@@ -420,7 +491,7 @@ export function AttemptOutcomeForm({
               />
             </label>
             <label>
-              Notes (no source code)
+              Notes (no source code) {updated("notes")}
               <textarea
                 name="notes"
                 maxLength={5000}
@@ -431,7 +502,7 @@ export function AttemptOutcomeForm({
           </details>
         ) : null}
         {canConfirm ? (
-          <details>
+          <details ref={learningSummary}>
             <summary>Learning summary (optional)</summary>
             <p className="settings-help">
               Review or edit this structured summary if useful. Keep it concise and do not include
@@ -449,7 +520,7 @@ export function AttemptOutcomeForm({
               ] as const
             ).map(([field, label]) => (
               <label key={field}>
-                {label}
+                {label} {updated(`summary.${field}`)}
                 <textarea
                   rows={2}
                   maxLength={1000}
@@ -481,11 +552,13 @@ export function AttemptOutcomeForm({
         ) : null}
         {canConfirm ? (
           <button type="submit" disabled={busy || outcome === ""}>
-            {busy
-              ? "Saving…"
-              : successfulRedo
-                ? "Confirm outcome and next action"
-                : "Confirm outcome"}
+            {drafting
+              ? "Drafting assessment…"
+              : busy
+                ? "Saving…"
+                : successfulRedo
+                  ? "Confirm outcome and next action"
+                  : "Confirm outcome"}
           </button>
         ) : null}
       </fieldset>

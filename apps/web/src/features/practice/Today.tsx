@@ -17,6 +17,38 @@ export function PracticeType({ redo }: { redo: boolean }) {
   );
 }
 
+export function DailyProgress({
+  completed,
+  required,
+  generatingPlan = false,
+}: {
+  completed: number;
+  required: number | null;
+  generatingPlan?: boolean;
+}) {
+  return (
+    <section className="today-progress page-surface">
+      <h3>Daily progress</h3>
+      <p className="today-progress-value">
+        {completed}
+        <span> / {generatingPlan ? "-" : (required ?? "-")}</span>
+      </p>
+      {required !== null && required > 0 ? (
+        <progress value={completed} max={required} aria-label="Daily completion" />
+      ) : null}
+      <p className="settings-help">
+        {generatingPlan
+          ? "Preparing your plan"
+          : required === null
+            ? "Create a plan to begin"
+            : required === 0
+              ? "No practice available"
+              : "Completed from today's plan"}
+      </p>
+    </section>
+  );
+}
+
 export function Today({
   apiUrl,
   token,
@@ -325,25 +357,11 @@ export function Today({
           ) : null}
         </div>
         <aside className="today-sidebar" aria-label="Daily progress and recent practice">
-          <section className="today-progress page-surface">
-            <h3>Daily progress</h3>
-            <p className="today-progress-value">
-              {completed}
-              <span> / {generatingPlan ? "-" : (plan?.items.length ?? "-")}</span>
-            </p>
-            {plan && plan.items.length > 0 ? (
-              <progress value={completed} max={plan.items.length} aria-label="Daily completion" />
-            ) : null}
-            <p className="settings-help">
-              {generatingPlan
-                ? "Preparing your plan"
-                : plan === null
-                  ? "Create a plan to begin"
-                  : plan.items.length === 0
-                    ? "No practice available"
-                    : "Completed from today's plan"}
-            </p>
-          </section>
+          <DailyProgress
+            completed={completed}
+            required={plan?.items.length ?? null}
+            generatingPlan={generatingPlan}
+          />
           <RecentPracticePanel apiUrl={apiUrl} token={token} refresh={refresh} />
         </aside>
       </div>

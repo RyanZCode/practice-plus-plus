@@ -10,6 +10,7 @@ import {
 import { useAuth } from "../auth/auth";
 import { useModelDiscovery } from "../settings/ModelDiscovery";
 import { AiRateLimitError, recentCoachMessages, streamTutor } from "../coach/coachApi";
+import { LoadingStatus } from "../../shared/LoadingStatus";
 import { MarkdownMessage } from "../../shared/MarkdownMessage";
 import { OpenAIModelSelect } from "../settings/OpenAIModelSelect";
 import { ReasoningEffortSelect } from "../settings/ReasoningEffortSelect";
@@ -468,9 +469,16 @@ export function AttemptTutor({
               <li key={index} data-role={message.role}>
                 <strong>{message.role === "user" ? "You" : `Tutor: ${message.label}`}</strong>
                 {message.role === "assistant" ? (
-                  <MarkdownMessage>
-                    {message.content || (busy ? "Thinking…" : "No response received.")}
-                  </MarkdownMessage>
+                  <>
+                    {message.content ? (
+                      <MarkdownMessage>{message.content}</MarkdownMessage>
+                    ) : !busy ? (
+                      <p>No response received.</p>
+                    ) : null}
+                    {!message.complete && busy && index === messages.length - 1 ? (
+                      <LoadingStatus>{message.content ? "Responding…" : "Thinking…"}</LoadingStatus>
+                    ) : null}
+                  </>
                 ) : (
                   <p className="plain-message">{message.content}</p>
                 )}
@@ -517,7 +525,7 @@ export function AttemptTutor({
               </div>
             ) : null}
             {checkpointBusy ? (
-              <p role="status">Saving learning automatically…</p>
+              <LoadingStatus>Saving learning automatically…</LoadingStatus>
             ) : checkpointSaved && !checkpointError ? (
               <p role="status">Learning saved automatically.</p>
             ) : null}

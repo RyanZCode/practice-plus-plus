@@ -1,6 +1,6 @@
 import { tutorHintNames, type Attempt } from "@practice-plus-plus/contracts";
 import type { ReactNode } from "react";
-import { PracticeType } from "../practice/Today";
+import { DailyProgress, PracticeType } from "../practice/Today";
 import { formatRemainingSeconds } from "./attemptState";
 
 export function AttemptWorkspace({
@@ -68,9 +68,12 @@ export function AttemptWorkspace({
         </a>
       </header>
       <ol className="attempt-steps" aria-label="Attempt phases">
-        {["Solve", "Solution review", "Result"].map((step) => (
-          <li key={step} aria-current={phase === step ? "step" : undefined}>
-            {step === "Solution review" ? "Solution review (if needed)" : step}
+        {["Solve", "Solution review", "Result"].map((step, index) => (
+          <li key={step}>
+            <span className="attempt-step" aria-current={phase === step ? "step" : undefined}>
+              <span aria-hidden="true">{index + 1}</span>
+              {step === "Solution review" ? "Solution review (if needed)" : step}
+            </span>
           </li>
         ))}
       </ol>
@@ -174,12 +177,14 @@ export function AttemptWorkspace({
                     Keep solving
                   </button>
                 ) : null}
+              </div>
+            ) : null}
+            <div className="attempt-secondary-actions">
+              {attempt.outcome === null ? (
                 <button type="button" className="text-button" disabled={busy} onClick={onGiveUp}>
                   Give up and review
                 </button>
-              </div>
-            ) : null}
-            <div className="attempt-discard-action">
+              ) : null}
               <button
                 type="button"
                 className="text-button danger-button"
@@ -190,28 +195,22 @@ export function AttemptWorkspace({
               </button>
             </div>
           </section>
-          <section className="page-surface attempt-status">
-            <h4>Today</h4>
-            <p>{required === null ? "No saved plan" : `${completed} / ${required} complete`}</p>
-            <p className="settings-help">
-              Only confirmed assigned results count toward daily completion.
-            </p>
-            {attempt.assistance.length > 0 ? (
-              <>
-                <h4>Recorded help</h4>
-                <ul>
-                  {attempt.assistance.map((help, index) => (
-                    <li key={index}>
-                      {help.type.toLowerCase().replaceAll("_", " ")}
-                      {help.hintLevel === null
-                        ? ""
-                        : ` (${tutorHintNames[help.hintLevel - 1] ?? `Guidance step ${help.hintLevel}`})`}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : null}
-          </section>
+          <DailyProgress completed={completed} required={required} />
+          {attempt.assistance.length > 0 ? (
+            <section className="page-surface attempt-status">
+              <h4>Recorded help</h4>
+              <ul>
+                {attempt.assistance.map((help, index) => (
+                  <li key={index}>
+                    {help.type.toLowerCase().replaceAll("_", " ")}
+                    {help.hintLevel === null
+                      ? ""
+                      : ` (${tutorHintNames[help.hintLevel - 1] ?? `Guidance step ${help.hintLevel}`})`}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
         </aside>
         <div className="attempt-main">
           <div hidden={reporting}>{tutor}</div>

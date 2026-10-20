@@ -29,11 +29,46 @@ function attempt(
     optimality: null,
     patternIds: [arrays],
     assistance: [],
+    problem: {
+      id: `30000000-0000-4000-8000-${id.toString().padStart(12, "0")}`,
+      leetcodeId: id,
+      title: `Problem ${id}`,
+    },
     ...overrides,
   };
 }
 
 describe("pattern evidence aggregation", () => {
+  it("lists each practiced problem once, by its latest qualifying attempt, across fresh and redo history", () => {
+    const first = attempt(1, "INDEPENDENT");
+    const otherPattern = attempt(4, "ASSISTED", { patternIds: [graphs] });
+    const result = aggregatePatternEvidence(
+      [
+        { id: arrays, name: "Arrays & Hashing" },
+        { id: graphs, name: "Graphs" },
+      ],
+      [
+        first,
+        attempt(2, "INDEPENDENT"),
+        attempt(3, "ASSISTED", { type: "REDO", problem: first.problem }),
+        otherPattern,
+        attempt(5, "INCOMPLETE"),
+        attempt(10, "INDEPENDENT"),
+      ],
+      "2026-09-17",
+    );
+    expect(result.patterns[0]?.problems).toEqual([
+      { ...first.problem, lastAttemptAt: "2026-09-12T12:00:00.000Z", practiceDate: "2026-09-12" },
+      {
+        ...attempt(2, "INDEPENDENT").problem,
+        lastAttemptAt: "2026-09-11T12:00:00.000Z",
+        practiceDate: "2026-09-11",
+      },
+    ]);
+    expect(result.patterns[1]?.problems.map((problem) => problem.id)).toEqual([
+      otherPattern.problem.id,
+    ]);
+  });
   it("classifies recent fresh evidence and keeps redo outcomes separate", () => {
     const result = aggregatePatternEvidence(
       [
