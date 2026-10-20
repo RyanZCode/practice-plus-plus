@@ -1,6 +1,8 @@
 import type { Request, RequestHandler } from "express";
 
 import { getAuthenticatedIdentity } from "../../shared/auth.js";
+import { HttpError } from "../../shared/errors.js";
+import { retryTransaction } from "../../shared/database.js";
 
 export interface ApplicationProfile {
   readonly authSubject: string;
@@ -14,7 +16,12 @@ export interface ProfileStore {
   resolveByAuthSubject(authSubject: string): Promise<ApplicationProfile>;
 }
 
-interface ProfileClient {
+interface ProfileTransaction {
+  readonly accountDeletion: {
+    findUnique(options: {
+      where: { authSubject: string };
+    }): Promise<{ authSubject: string } | null>;
+  };
   readonly userProfile: {
     upsert(options: {
       create: { authSubject: string };
@@ -24,16 +31,33 @@ interface ProfileClient {
   };
 }
 
+interface ProfileClient {
+  $transaction<T>(
+    work: (client: ProfileTransaction) => Promise<T>,
+    options: { isolationLevel: "Serializable" },
+  ): Promise<T>;
+}
+
 const applicationProfiles = new WeakMap<Request, ApplicationProfile>();
 
 export function createPrismaProfileStore(client: ProfileClient): ProfileStore {
   return {
     resolveByAuthSubject(authSubject) {
-      return client.userProfile.upsert({
-        create: { authSubject },
-        update: {},
-        where: { authSubject },
-      });
+      return retryTransaction(() =>
+        client.$transaction(
+          async (transaction) => {
+            if (await transaction.accountDeletion.findUnique({ where: { authSubject } })) {
+              throw new HttpError(403, "This account has been deleted.");
+            }
+            return transaction.userProfile.upsert({
+              create: { authSubject },
+              update: {},
+              where: { authSubject },
+            });
+          },
+          { isolationLevel: "Serializable" },
+        ),
+      );
     },
   };
 }

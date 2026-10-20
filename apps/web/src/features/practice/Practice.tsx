@@ -10,6 +10,7 @@ import type {
 } from "@practice-plus-plus/contracts";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { LoadingStatus } from "../../shared/LoadingStatus";
+import { closeOnBackdropClick } from "../../shared/dialog";
 import {
   loadDailyPlan,
   loadSavedDailyPlan,
@@ -527,6 +528,7 @@ export function Practice({
       <dialog
         ref={decisionDialog}
         className="attempt-dialog"
+        onClick={busy ? undefined : closeOnBackdropClick}
         onCancel={(event) => {
           if (busy) event.preventDefault();
           else setDecision(null);
@@ -586,6 +588,7 @@ export function Practice({
       <dialog
         ref={completionDialog}
         className="attempt-dialog"
+        onClick={closeOnBackdropClick}
         onCancel={() => setSaved(null)}
         onClose={() => setSaved(null)}
         aria-labelledby="attempt-confirmation-heading"

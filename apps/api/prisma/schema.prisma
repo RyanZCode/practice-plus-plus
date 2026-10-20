@@ -41,6 +41,13 @@ enum UserRole {
   ADMINISTRATOR
 }
 
+model AccountDeletion {
+  authSubject String   @id @map("auth_subject") @db.Uuid
+  deletedAt   DateTime @default(now()) @map("deleted_at") @db.Timestamptz(3)
+
+  @@map("account_deletions")
+}
+
 model UserProfile {
   id                      String                   @id @default(uuid()) @db.Uuid
   authSubject             String                   @unique @map("auth_subject") @db.Uuid

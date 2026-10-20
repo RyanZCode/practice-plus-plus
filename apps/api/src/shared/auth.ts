@@ -11,9 +11,9 @@ export interface AccessTokenVerifier {
   verify(accessToken: string): Promise<AuthenticatedIdentity>;
 }
 
-interface ClaimsClient {
-  getClaims(accessToken: string): Promise<{
-    data: { claims: { sub?: unknown } } | null;
+interface UserClient {
+  getUser(accessToken: string): Promise<{
+    data: { user: { id?: unknown } | null };
     error: unknown;
   }>;
 }
@@ -32,14 +32,14 @@ export function createSupabaseAccessTokenVerifier(
     },
   });
 
-  return createClaimsAccessTokenVerifier(client.auth);
+  return createUserAccessTokenVerifier(client.auth);
 }
 
-export function createClaimsAccessTokenVerifier(client: ClaimsClient): AccessTokenVerifier {
+export function createUserAccessTokenVerifier(client: UserClient): AccessTokenVerifier {
   return {
     async verify(accessToken) {
-      const { data, error } = await client.getClaims(accessToken);
-      const subject = data?.claims.sub;
+      const { data, error } = await client.getUser(accessToken);
+      const subject = data.user?.id;
 
       if (error !== null || typeof subject !== "string" || subject.trim() === "") {
         throw new Error("Access token verification failed");

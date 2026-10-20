@@ -19,6 +19,9 @@ import { clearTutorConversationsForUser } from "../features/tutor/tutorConversat
 import { defaultOpenAiModel } from "../shared/aiSelection";
 import { loadTheme, resolveTheme, saveTheme, type ThemePreference } from "../shared/theme";
 import { NavigationIcon } from "./NavigationIcon";
+import { LegalLinks } from "../shared/LegalLinks";
+import { DeleteAccountDialog } from "../features/auth/DeleteAccountDialog";
+import { DetailDialog } from "../shared/DetailDialog";
 
 interface AppProps {
   readonly apiUrl: string;
@@ -100,6 +103,9 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
   const [isLoading, setIsLoading] = useState(true);
   const [isOnboarding, setIsOnboarding] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [manageAccountOpen, setManageAccountOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDetailsElement>(null);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("practice");
   const [settingsReturn, setSettingsReturn] = useState<{ view: ActiveView; label: string } | null>(
     null,
@@ -119,6 +125,24 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
   useEffect(() => {
     if (mobileMenuOpen) mobileMenuRef.current?.querySelector("button")?.focus();
   }, [mobileMenuOpen]);
+
+  useEffect(() => {
+    function closeMenus(event: PointerEvent): void {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (!accountMenuRef.current?.contains(target)) {
+        accountMenuRef.current?.removeAttribute("open");
+      }
+      if (
+        !mobileMenuRef.current?.contains(target) &&
+        !mobileMenuButtonRef.current?.contains(target)
+      ) {
+        setMobileMenuOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", closeMenus);
+    return () => document.removeEventListener("pointerdown", closeMenus);
+  }, []);
 
   useEffect(() => {
     if (window.location.pathname === "/auth/callback") {
@@ -204,6 +228,12 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
     setSettingsReturn({ view, label });
   }
 
+  function openManageAccount(): void {
+    accountMenuRef.current?.removeAttribute("open");
+    setMobileMenuOpen(false);
+    setManageAccountOpen(true);
+  }
+
   const showNavigation = !isLoading && !loadFailed && !isOnboarding;
 
   return (
@@ -229,7 +259,16 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
           </>
         ) : null}
 
-        <details className="account-summary">
+        <details
+          className="account-summary"
+          ref={accountMenuRef}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              accountMenuRef.current?.removeAttribute("open");
+              accountMenuRef.current?.querySelector("summary")?.focus();
+            }
+          }}
+        >
           <summary aria-label="Account">
             {(session.user.email ?? "Account").charAt(0).toUpperCase()}
           </summary>
@@ -237,6 +276,9 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
             <p className="account-email">
               {session.user.email === undefined ? "You’re signed in." : session.user.email}
             </p>
+            <button className="manage-account-button" type="button" onClick={openManageAccount}>
+              Manage account
+            </button>
             <button
               className="sign-out-button"
               type="button"
@@ -314,6 +356,9 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
           >
             <Navigation activeView={activeView} onNavigate={navigate} secondary mobile />
             <p className="account-email">{session.user.email}</p>
+            <button className="manage-account-button" type="button" onClick={openManageAccount}>
+              Manage account
+            </button>
             <button
               className="mobile-sign-out"
               type="button"
@@ -486,7 +531,38 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
             />
           ) : null}
         </main>
+        <footer className="workspace-footer">
+          <LegalLinks />
+        </footer>
       </section>
+      <DetailDialog
+        open={manageAccountOpen}
+        title="Manage account"
+        subtitle={session.user.email ?? "You’re signed in."}
+        onClose={() => setManageAccountOpen(false)}
+      >
+        <div className="manage-account-content">
+          <h4>Delete account</h4>
+          <p>Permanently delete your sign-in account and all personal practice data.</p>
+          <button
+            type="button"
+            className="danger-button"
+            onClick={() => {
+              setManageAccountOpen(false);
+              setDeleteAccountOpen(true);
+            }}
+          >
+            Delete account
+          </button>
+        </div>
+      </DetailDialog>
+      <DeleteAccountDialog
+        apiUrl={apiUrl}
+        token={session.access_token}
+        open={deleteAccountOpen}
+        onClose={() => setDeleteAccountOpen(false)}
+        onDeleted={handleSignOut}
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { closeOnBackdropClick } from "./dialog";
 
 export function DetailDialog({
   open,
@@ -33,7 +34,13 @@ export function DetailDialog({
   }, [open]);
 
   return (
-    <dialog ref={dialog} className="detail-dialog" aria-labelledby={titleId} onClose={onClose}>
+    <dialog
+      ref={dialog}
+      className="detail-dialog"
+      aria-labelledby={titleId}
+      onClose={onClose}
+      onClick={closeOnBackdropClick}
+    >
       <header className="detail-dialog-heading">
         <div>
           <h3 id={titleId}>{title}</h3>

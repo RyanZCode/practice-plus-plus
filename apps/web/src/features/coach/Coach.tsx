@@ -21,6 +21,7 @@ import {
 } from "../learning-context/summaryApi";
 import { openAiSelection } from "../../shared/aiSelection";
 import { ExternalAiExport } from "../external-ai/ExternalAiExport";
+import { closeOnBackdropClick } from "../../shared/dialog";
 
 interface Message {
   role: "user" | "assistant";
@@ -339,7 +340,12 @@ export function Coach({
           </details>
         </div>
       </div>
-      <dialog ref={clearDialog} className="attempt-dialog" aria-labelledby="coach-clear-heading">
+      <dialog
+        ref={clearDialog}
+        className="attempt-dialog"
+        aria-labelledby="coach-clear-heading"
+        onClick={closeOnBackdropClick}
+      >
         <h3 id="coach-clear-heading">Clear conversation?</h3>
         <p>
           This clears messages and the unsent draft in this tab. Saved checkpoints and approved

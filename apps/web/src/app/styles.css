@@ -248,6 +248,7 @@ body {
   background: var(--surface);
 }
 
+.manage-account-button,
 .sign-out-button,
 .mobile-sign-out {
   min-height: auto;
@@ -260,6 +261,7 @@ body {
   font-weight: 500;
 }
 
+.manage-account-button:hover:not(:disabled),
 .sign-out-button:hover:not(:disabled),
 .mobile-sign-out:hover:not(:disabled) {
   color: var(--accent);
@@ -329,6 +331,110 @@ h1 + p {
   display: grid;
   gap: 0.75rem;
   margin-top: 1.5rem;
+}
+
+.auth-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.auth-provider-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+.legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1rem;
+  margin-top: 1.5rem;
+  font-size: 0.85rem;
+}
+
+.legal-links a {
+  color: var(--muted);
+}
+
+.workspace-footer {
+  padding: 0 1.5rem 1.5rem;
+  text-align: center;
+}
+
+.manage-account-button {
+  display: block;
+}
+
+.manage-account-content {
+  display: grid;
+  justify-items: start;
+  gap: 1rem;
+}
+
+.manage-account-content h4,
+.manage-account-content p {
+  margin: 0;
+}
+
+.delete-account-dialog {
+  width: min(32rem, calc(100vw - 3rem));
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.delete-account-dialog::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+.delete-account-dialog form {
+  display: grid;
+  gap: 1rem;
+}
+
+.delete-account-dialog h2 {
+  margin: 0;
+}
+
+.delete-account-dialog p {
+  margin: 0;
+}
+
+.delete-account-dialog .account-actions {
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.delete-account-dialog label {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.delete-account-dialog input {
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+}
+
+.danger-button:not(:disabled) {
+  color: #fff;
+  background: #b42318;
+  border-color: #b42318;
+}
+
+.danger-button:hover:not(:disabled) {
+  background: #912018;
+  border-color: #912018;
 }
 
 button {

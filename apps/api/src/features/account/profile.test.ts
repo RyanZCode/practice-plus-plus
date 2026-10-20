@@ -12,7 +12,12 @@ describe("Prisma profile store", () => {
       updatedAt: new Date("2026-09-04T12:00:00Z"),
     };
     const upsert = vi.fn().mockResolvedValue(profile);
-    const store = createPrismaProfileStore({ userProfile: { upsert } });
+    const transaction = {
+      userProfile: { upsert },
+      accountDeletion: { findUnique: vi.fn().mockResolvedValue(null) },
+    };
+    const client = { $transaction: vi.fn().mockImplementation((work) => work(transaction)) };
+    const store = createPrismaProfileStore(client);
 
     await expect(store.resolveByAuthSubject(profile.authSubject)).resolves.toEqual(profile);
     expect(upsert).toHaveBeenCalledWith({
@@ -20,5 +25,40 @@ describe("Prisma profile store", () => {
       update: {},
       where: { authSubject: profile.authSubject },
     });
+    expect(client.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: "Serializable",
+    });
+  });
+
+  it("does not recreate a profile after account deletion", async () => {
+    const transaction = {
+      userProfile: { upsert: vi.fn() },
+      accountDeletion: { findUnique: vi.fn().mockResolvedValue({ authSubject: "deleted-user" }) },
+    };
+    const store = createPrismaProfileStore({
+      $transaction: vi.fn().mockImplementation((work) => work(transaction)),
+    });
+    await expect(store.resolveByAuthSubject("deleted-user")).rejects.toMatchObject({
+      statusCode: 403,
+    });
+    expect(transaction.userProfile.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rechecks the deletion marker after a concurrent transaction conflict", async () => {
+    const transaction = {
+      userProfile: { upsert: vi.fn() },
+      accountDeletion: { findUnique: vi.fn().mockResolvedValue({ authSubject: "deleted-user" }) },
+    };
+    const client = {
+      $transaction: vi
+        .fn()
+        .mockRejectedValueOnce({ code: "P2034" })
+        .mockImplementation((work) => work(transaction)),
+    };
+    await expect(
+      createPrismaProfileStore(client).resolveByAuthSubject("deleted-user"),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(client.$transaction).toHaveBeenCalledTimes(2);
+    expect(transaction.userProfile.upsert).not.toHaveBeenCalled();
   });
 });

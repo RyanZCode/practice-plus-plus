@@ -9,6 +9,8 @@ import {
 export * from "./learnerContext.js";
 export * from "./context.js";
 
+export const deleteAccountSchema = z.object({ confirmation: z.literal("DELETE") }).strict();
+
 export const providerIdSchema = z.enum(["openai"]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 

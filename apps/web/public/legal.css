@@ -1,0 +1,65 @@
+:root {
+  color-scheme: light dark;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  line-height: 1.65;
+  color: #202b3d;
+  background: #f3f5f8;
+}
+
+body {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+}
+
+header a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+header img {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.4rem;
+}
+
+h1 {
+  line-height: 1.2;
+  margin-top: 2rem;
+}
+
+h2 {
+  font-size: 1.2rem;
+  margin-top: 2rem;
+}
+
+a {
+  color: #315fc1;
+  overflow-wrap: anywhere;
+}
+
+a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 3rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #e8ecf5;
+    background: #13171e;
+  }
+
+  a {
+    color: #92b2ff;
+  }
+}

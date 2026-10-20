@@ -18,6 +18,10 @@ import { createPrismaLearningContextStore } from "../features/learning-context/l
 import { createPrismaAssessmentStore } from "../features/assessments/assessments.js";
 import { createPrismaAnalyticsStore } from "../features/analytics/analytics.js";
 import { initializeErrorMonitoring } from "../shared/errorMonitoring.js";
+import {
+  createPrismaAccountDeletion,
+  createSupabaseIdentityDeletion,
+} from "../features/account/deletion.js";
 
 initializeErrorMonitoring(
   process.env.ERROR_MONITORING_DSN,
@@ -33,6 +37,17 @@ const dailyPlanStore = createPrismaDailyPlanStore(database);
 const attemptStore = createPrismaAttemptStore(database);
 const app = createApp({
   authentication: {
+    ...(process.env.SUPABASE_SECRET_KEY
+      ? {
+          accountDeletion: {
+            deletePracticeData: createPrismaAccountDeletion(database),
+            deleteIdentity: createSupabaseIdentityDeletion(
+              config.supabaseUrl,
+              process.env.SUPABASE_SECRET_KEY,
+            ),
+          },
+        }
+      : {}),
     tutor: {
       assembler: contextAssembler,
       provider,

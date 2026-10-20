@@ -52,8 +52,10 @@ import { createLogger } from "../shared/logger.js";
 import { getProviders } from "../shared/providers.js";
 import { createAiRequestLimit } from "../shared/aiRequestLimit.js";
 import { reportFailedRequests } from "../shared/errorMonitoring.js";
+import { createAccountRouter, type AccountDeletionOptions } from "../features/account/deletion.js";
 
 interface AuthenticationOptions {
+  readonly accountDeletion?: AccountDeletionOptions;
   readonly tutor?: TutorOptions;
   readonly coach?: CoachOptions;
   readonly dailyPlanStore?: DailyPlanStore;
@@ -159,6 +161,13 @@ export function createApp(options: AppOptions = {}): Express {
     app.get("/profile", authenticate, resolveProfile, (request, response) => {
       response.json({ id: getApplicationProfile(request).id });
     });
+
+    app.use(
+      "/account",
+      authenticate,
+      express.json(),
+      createAccountRouter(options.authentication.accountDeletion),
+    );
 
     app.get("/ai/providers", (_request, response) => {
       response.json(getProviders());

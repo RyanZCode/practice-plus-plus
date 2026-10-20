@@ -1,0 +1,1 @@
+ALTER TABLE "account_deletions" ENABLE ROW LEVEL SECURITY;
