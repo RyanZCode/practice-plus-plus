@@ -1,6 +1,6 @@
 # Practice++
 
-[Open Practice++](https://practice-plus-plus.pages.dev/)
+[practiceplusplus.com](https://practiceplusplus.com/)
 
 Finishing the Blind 75, NeetCode 150, or LeetCode Interview 150 list leaves a question: what should you practice next? A completed list does not tell you which patterns you can recognize independently, where you still rely on hints, or what you are starting to forget.
 
@@ -16,13 +16,14 @@ Problems open on LeetCode. The attempt timer gives the user time to work indepen
 
 ![Timer and attempt outcome controls](assets/screenshots/attempt.jpg)
 
-Results distinguish independent solves, assisted solves, give-ups, and incomplete attempts. AI can draft an assessment, but the user confirms it before it affects history or scheduling. Problem patterns stay hidden until the user solves the problem or gives up. After a successful redo, the user can repeat it, move to a new problem with the same pattern, or stop reviewing it.
+Results distinguish independent solves, assisted solves, give-ups, and incomplete attempts. The attempt workspace shows the current step: Solve, Solution review (if needed), or Result. AI can draft an assessment and marks the fields it changes, but the user confirms it before it affects history or scheduling. Problem patterns stay hidden until the user solves the problem or gives up. After a successful redo, the user can repeat it, move to a new problem with the same pattern, or stop reviewing it.
 
 ## Coaching and progress
 
 - Coach and the attempt tutor use goals, teaching preferences, previous attempts, and learning checkpoints to provide relevant help.
 - The learning profile shows what the app has inferred and the evidence behind it. Users can correct or remove memories and checkpoints.
-- History and analytics distinguish performance on fresh problems from retention on redos. Pattern summaries show sample counts and flag insufficient evidence. A calendar tracks completed practice against the daily target.
+- History is searchable by problem title or number, with attempt details in focused dialogs.
+- Analytics distinguish performance on fresh problems from retention on redos. Pattern summaries show sample counts, flag insufficient evidence, and link recent practiced problems to their history. A calendar tracks completed practice against the daily target.
 - Integrated AI uses the user's OpenAI key, with account-specific model discovery. Markdown context exports also support planning and tutoring in an external AI conversation. The app works without AI.
 - The catalog contains 3,647 published problems, searchable by number or title and filterable by difficulty and availability. Catalog imports go through administrator review before publication.
 
