@@ -110,6 +110,8 @@ describe("attempt routes", () => {
       "page=1.5",
       "page=invalid",
       "problemId=invalid",
+      "query=one&query=two",
+      `query=${"a".repeat(201)}`,
       "page=1&userProfileId=other",
     ]) {
       expect((await fetch(`${url}/attempts?${query}`, { headers })).status).toBe(400);
@@ -123,6 +125,8 @@ describe("attempt routes", () => {
       (await fetch(`${url}/attempts?page=2&problemId=${attempt.problem.id}`, { headers })).status,
     ).toBe(200);
     expect(history).toHaveBeenLastCalledWith(userId, { page: 2, problemId: attempt.problem.id });
+    expect((await fetch(`${url}/attempts?query=Two%20Sum&page=1`, { headers })).status).toBe(200);
+    expect(history).toHaveBeenLastCalledWith(userId, { page: 1, query: "Two Sum" });
   });
   it("authenticates result reporting and rejects incomplete or forged input", async () => {
     const { store } = database();
@@ -908,6 +912,21 @@ describe("attempt persistence", () => {
       expect.objectContaining({
         where: { userProfileId: userId, confirmedAt: { not: null }, problemId },
       }),
+    );
+  });
+  it.each([
+    ["sum", [{ title: { contains: "sum", mode: "insensitive" } }]],
+    [" 1 ", [{ title: { contains: "1", mode: "insensitive" } }, { leetcodeId: 1 }]],
+    ["999999999999", [{ title: { contains: "999999999999", mode: "insensitive" } }]],
+  ])("searches all confirmed history for %s before paginating", async (query, OR) => {
+    const { tx, store } = database();
+    tx.attempt.count.mockResolvedValue(0);
+    tx.attempt.findMany.mockResolvedValue([]);
+    await store.history(userId, { page: 2, problemId, query });
+    const where = { userProfileId: userId, confirmedAt: { not: null }, problemId, problem: { OR } };
+    expect(tx.attempt.count).toHaveBeenCalledWith({ where });
+    expect(tx.attempt.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where, skip: 20, take: 20 }),
     );
   });
   it.each(["INDEPENDENT", "ASSISTED", "GAVE_UP"] as const)(

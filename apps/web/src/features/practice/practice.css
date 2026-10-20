@@ -155,6 +155,17 @@
   text-decoration: underline;
 }
 
+.practice .text-button:active:not(:disabled),
+.practice .text-button:disabled {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.practice .text-button:disabled {
+  color: var(--muted);
+}
+
 .plan-creation-actions {
   display: grid;
   gap: 0.9rem;
@@ -318,6 +329,12 @@
   text-align: center;
 }
 
+.today-progress h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
 .today-progress-value {
   margin: 0.85rem 0;
   font-size: 2rem;
@@ -459,7 +476,6 @@
 }
 
 .attempt-header-meta,
-.attempt-steps,
 .tutor-help-actions {
   display: flex;
   align-items: center;
@@ -472,16 +488,42 @@
 }
 
 .attempt-steps {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
   list-style: none;
   margin: 1.3rem 0;
   padding: 0;
-  color: var(--muted);
-  font-size: 0.85rem;
 }
 
-.attempt-steps [aria-current="step"] {
-  color: var(--accent);
-  font-weight: 500;
+.attempt-steps li {
+  display: flex;
+  align-items: center;
+  flex: 1 0 auto;
+  gap: 1rem;
+}
+
+.attempt-steps li:last-child {
+  flex: 0 0 auto;
+}
+
+.attempt-steps li:not(:last-child)::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+@media (max-width: 48rem) {
+  .attempt-steps,
+  .attempt-steps li {
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .attempt-steps li:not(:last-child)::after {
+    margin-top: 0.95rem;
+  }
 }
 
 .attempt-split {
@@ -617,8 +659,16 @@
   padding: 0.4rem 0;
 }
 
-.attempt-discard-action {
-  margin-top: 0.75rem;
+.attempt-secondary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+}
+
+.attempt-secondary-actions .danger-button {
+  margin-inline-start: auto;
 }
 
 .attempt-workspace .text-button.danger-button {

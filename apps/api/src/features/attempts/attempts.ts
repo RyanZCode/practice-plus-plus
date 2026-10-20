@@ -154,10 +154,24 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
       });
     },
     async history(userProfileId, query) {
+      const search = query.query?.trim() ?? "";
+      const number = /^\d+$/.test(search) ? Number(search) : null;
       const where = {
         userProfileId,
         confirmedAt: { not: null },
         ...(query.problemId === undefined ? {} : { problemId: query.problemId }),
+        ...(search === ""
+          ? {}
+          : {
+              problem: {
+                OR: [
+                  { title: { contains: search, mode: "insensitive" } },
+                  ...(number !== null && number > 0 && number <= 2147483647
+                    ? [{ leetcodeId: number }]
+                    : []),
+                ],
+              },
+            }),
       } satisfies Prisma.AttemptWhereInput;
       const [total, records] = await Promise.all([
         client.attempt.count({ where }),
@@ -751,7 +765,7 @@ function parseHistoryQuery(rawQuery: unknown): AttemptHistoryQuery {
     throw new HttpError(400, "Invalid history page.");
   }
   const query = rawQuery as Record<string, unknown>;
-  if (Object.keys(query).some((key) => key !== "page" && key !== "problemId")) {
+  if (Object.keys(query).some((key) => key !== "page" && key !== "problemId" && key !== "query")) {
     throw new HttpError(400, "Invalid history page.");
   }
   const rawPage = query.page;
@@ -762,7 +776,11 @@ function parseHistoryQuery(rawQuery: unknown): AttemptHistoryQuery {
       : typeof query.problemId === "string"
         ? query.problemId
         : null;
-  const parsed = attemptHistoryQuerySchema.safeParse({ page, problemId });
+  const parsed = attemptHistoryQuerySchema.safeParse({
+    page,
+    problemId,
+    ...(query.query === undefined ? {} : { query: query.query }),
+  });
   if (!parsed.success) throw new HttpError(400, "Invalid history page.");
   return parsed.data;
 }

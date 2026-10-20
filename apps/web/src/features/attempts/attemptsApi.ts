@@ -65,6 +65,7 @@ export async function loadAttemptHistory(
 ) {
   const params = new URLSearchParams({ page: String(query.page) });
   if (query.problemId !== undefined) params.set("problemId", query.problemId);
+  if (query.query) params.set("query", query.query);
   return attemptHistoryResponseSchema.parse(
     await request(apiUrl, token, `/attempts?${params.toString()}`),
   );

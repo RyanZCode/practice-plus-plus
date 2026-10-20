@@ -19,6 +19,7 @@ type AnalyticsAttempt = {
   confidence: "CONFIDENT" | "SHAKY" | null;
   optimality: "OPTIMAL" | "SUBOPTIMAL" | "UNKNOWN" | null;
   patternIds: readonly string[];
+  problem: { id: string; leetcodeId: number; title: string };
   assistance: readonly { type: string; hintLevel: number | null }[];
 };
 
@@ -121,9 +122,28 @@ export function aggregatePatternEvidence(
               ? "NEEDS_PRACTICE"
               : "NO_CURRENT_WEAKNESS_SIGNAL";
 
+      const problems = new Map<
+        string,
+        PatternEvidenceResponse["patterns"][number]["problems"][number]
+      >();
+      for (const attempt of involving.toSorted(
+        (a, b) => b.startedAt.localeCompare(a.startedAt) || a.id.localeCompare(b.id),
+      )) {
+        const problem = attempt.problem;
+        if (!problems.has(problem.id)) {
+          problems.set(problem.id, {
+            id: problem.id,
+            leetcodeId: problem.leetcodeId,
+            title: problem.title,
+            lastAttemptAt: attempt.startedAt,
+            practiceDate: attempt.practiceDate,
+          });
+        }
+      }
       return {
         patternId: pattern.id,
         patternName: pattern.name,
+        problems: [...problems.values()],
         classification,
         fresh: {
           sampleCount: fresh.length,
@@ -174,7 +194,14 @@ export function createPrismaAnalyticsStore(client: PrismaClient): AnalyticsStore
             confidence: true,
             optimality: true,
             assistance: { select: { type: true, hintLevel: true } },
-            problem: { select: { problemPatterns: { select: { patternId: true } } } },
+            problem: {
+              select: {
+                id: true,
+                leetcodeId: true,
+                title: true,
+                problemPatterns: { select: { patternId: true } },
+              },
+            },
           },
         }),
         client.reviewObligation.findMany({

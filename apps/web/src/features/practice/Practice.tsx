@@ -9,6 +9,7 @@ import type {
   PracticeSettings,
 } from "@practice-plus-plus/contracts";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { LoadingStatus } from "../../shared/LoadingStatus";
 import {
   loadDailyPlan,
   loadSavedDailyPlan,
@@ -797,10 +798,10 @@ export function Practice({
             }
           >
             {(classifying || attempt.outcome !== null) && assessmentLoadedFor !== attempt.id ? (
-              <p role="status">Loading assessment draft…</p>
+              <LoadingStatus>Loading assessment draft…</LoadingStatus>
             ) : classifying || attempt.outcome !== null ? (
               <AttemptOutcomeForm
-                key={`${attempt.id}-${attempt.solutionReviewedAt ?? "solving"}-${JSON.stringify(attempt.summary)}-${assessmentDraft?.updatedAt ?? "no-draft"}-${incomplete}`}
+                key={`${attempt.id}-${attempt.solutionReviewedAt ?? "solving"}-${incomplete}`}
                 attempt={attempt}
                 initialIncomplete={incomplete}
                 onLearningProfile={() => onNavigate("learning")}
@@ -824,18 +825,19 @@ export function Practice({
                         .filter((message) => message.complete)
                         .map(({ role, content }) => ({ role, content })),
                     );
-                    setAssessmentDraft(
-                      await generateAssessmentDraft(apiUrl, token, {
-                        selection: openAiSelection(defaultModel, models, defaultReasoningEffort),
-                        apiKey: browserKey.getKey(userId) ?? "",
-                        attemptId: attempt.id,
-                        completedCode: code,
-                        currentSummary,
-                        tutorMessages,
-                      }),
-                    );
+                    const draft = await generateAssessmentDraft(apiUrl, token, {
+                      selection: openAiSelection(defaultModel, models, defaultReasoningEffort),
+                      apiKey: browserKey.getKey(userId) ?? "",
+                      attemptId: attempt.id,
+                      completedCode: code,
+                      currentSummary,
+                      tutorMessages,
+                    });
+                    setAssessmentDraft(draft);
+                    return draft;
                   } catch (reason) {
                     setError(message(reason));
+                    return null;
                   } finally {
                     setBusy(false);
                   }
@@ -924,6 +926,7 @@ export function Practice({
                       {extraPracticeError}
                     </p>
                   )}
+                  {busy ? <LoadingStatus>Choosing your next problem…</LoadingStatus> : null}
                   <div className="account-actions">
                     <button
                       type="button"

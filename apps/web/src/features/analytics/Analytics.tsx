@@ -6,6 +6,7 @@ import {
 } from "@practice-plus-plus/contracts";
 import { useEffect, useState } from "react";
 import { loadAnalytics, loadStreakCalendar } from "./analyticsApi";
+import { DetailDialog } from "../../shared/DetailDialog";
 
 const classificationLabels = {
   UNTESTED: "Untested",
@@ -25,10 +26,12 @@ export function Analytics({
   apiUrl,
   token,
   isActive = true,
+  onProblemHistory,
 }: {
   apiUrl: string;
   token: string;
   isActive?: boolean;
+  onProblemHistory: (problem: { id: string; title: string }) => void;
 }) {
   const [analytics, setAnalytics] = useState<PatternEvidenceResponse>();
   const [error, setError] = useState<string>();
@@ -82,17 +85,26 @@ export function Analytics({
       </section>
     );
   if (analytics === undefined) return null;
-  return <AnalyticsView analytics={analytics} apiUrl={apiUrl} token={token} />;
+  return (
+    <AnalyticsView
+      analytics={analytics}
+      apiUrl={apiUrl}
+      token={token}
+      onProblemHistory={onProblemHistory}
+    />
+  );
 }
 
 export function AnalyticsView({
   analytics,
   apiUrl,
   token,
+  onProblemHistory,
 }: {
   analytics: PatternEvidenceResponse;
   apiUrl?: string;
   token?: string;
+  onProblemHistory?: ((problem: { id: string; title: string }) => void) | undefined;
 }) {
   const [showUntested, setShowUntested] = useState(false);
   const patterns = [...analytics.patterns].sort(comparePatterns);
@@ -203,11 +215,19 @@ export function AnalyticsView({
           <span>Fresh outcomes</span>
         </div>
         {tested.map((pattern) => (
-          <PatternRow key={pattern.patternId} pattern={pattern} />
+          <PatternRow
+            key={pattern.patternId}
+            pattern={pattern}
+            onProblemHistory={onProblemHistory}
+          />
         ))}
         <div id="untested-patterns" hidden={!showUntested && tested.length > 0}>
           {untested.map((pattern) => (
-            <PatternRow key={pattern.patternId} pattern={pattern} />
+            <PatternRow
+              key={pattern.patternId}
+              pattern={pattern}
+              onProblemHistory={onProblemHistory}
+            />
           ))}
         </div>
         {untested.length > 0 && tested.length > 0 ? (
@@ -289,12 +309,24 @@ export function AnalyticsView({
   );
 }
 
-function PatternRow({ pattern }: { pattern: PatternEvidence }) {
+function PatternRow({
+  pattern,
+  onProblemHistory,
+}: {
+  pattern: PatternEvidence;
+  onProblemHistory?: ((problem: { id: string; title: string }) => void) | undefined;
+}) {
+  const [open, setOpen] = useState(false);
   const { fresh, redo } = pattern;
   const redoSamples = redo.outcomes.independent + redo.outcomes.assisted + redo.outcomes.gaveUp;
   return (
-    <details className="pattern-row">
-      <summary>
+    <div className="pattern-row">
+      <button
+        type="button"
+        className="pattern-row-trigger"
+        aria-haspopup="dialog"
+        onClick={() => setOpen(true)}
+      >
         <strong>{pattern.patternName}</strong>
         <span className="pattern-classification">
           <span
@@ -315,54 +347,106 @@ function PatternRow({ pattern }: { pattern: PatternEvidence }) {
         <span className="row-chevron" aria-hidden="true">
           ›
         </span>
-      </summary>
-      <div className="pattern-details">
-        <dl className="progress-facts">
-          <div>
-            <dt>Fresh evidence weight</dt>
-            <dd>
-              {fresh.weightedTotal.toFixed(1)} total · {fresh.weightedWeakSignals.toFixed(1)} needs
-              practice
-            </dd>
-          </div>
-          <div>
-            <dt>Exact redos, separate from fresh</dt>
-            <dd>
-              {redoSamples === 0
-                ? "No completed redos"
-                : `${redo.outcomes.independent + redo.outcomes.assisted} / ${redoSamples} solved (${formatPercent(redo.successRate)})`}
-            </dd>
-            <dd className="detail-caption">
-              {redo.outcomes.independent} independent · {redo.outcomes.assisted} assisted ·{" "}
-              {redo.outcomes.gaveUp} gave up · {redo.outcomes.incomplete} incomplete
-            </dd>
-          </div>
-          <div>
-            <dt>Last practiced, fresh or redo</dt>
-            <dd>{pattern.lastPracticed === null ? "Never" : formatDate(pattern.lastPracticed)}</dd>
-          </div>
-          <div>
-            <dt>Exposure, last 7 practice dates</dt>
-            <dd>
-              {pattern.recentExposureShare === null
-                ? "No recent practice"
-                : `${formatPercent(pattern.recentExposureShare)} of weighted exposure${pattern.overconcentrated ? ", concentrated" : ""}`}
-            </dd>
-          </div>
-          {pattern.highestConceptualHintLevel === null ? null : (
+      </button>
+      <DetailDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title={pattern.patternName}
+        subtitle={`${classificationLabels[pattern.classification]}${pattern.stale ? " · Stale" : ""} · ${fresh.sampleCount} / 10 fresh samples`}
+      >
+        <div className="pattern-details">
+          <dl className="progress-facts">
             <div>
-              <dt>Highest conceptual hint</dt>
-              <dd>{tutorHintNames[pattern.highestConceptualHintLevel - 1] ?? "Guidance step"}</dd>
+              <dt>Fresh outcomes</dt>
+              <dd>
+                {fresh.outcomes.independent} independent · {fresh.outcomes.assisted} assisted ·{" "}
+                {fresh.outcomes.gaveUp} gave up
+              </dd>
             </div>
-          )}
-        </dl>
-        {fresh.sampleCount < 5 ? (
-          <p className="detail-caption">
-            At least 5 fresh samples are needed for a directional signal.
-          </p>
-        ) : null}
-      </div>
-    </details>
+            <div>
+              <dt>Exact redos, separate from fresh</dt>
+              <dd>
+                {redoSamples === 0
+                  ? "No completed redos"
+                  : `${redo.outcomes.independent + redo.outcomes.assisted} / ${redoSamples} solved (${formatPercent(redo.successRate)})`}
+              </dd>
+              <dd className="detail-caption">
+                {redo.outcomes.independent} independent · {redo.outcomes.assisted} assisted ·{" "}
+                {redo.outcomes.gaveUp} gave up · {redo.outcomes.incomplete} incomplete
+              </dd>
+            </div>
+            <div>
+              <dt>Last practiced, fresh or redo</dt>
+              <dd>
+                {pattern.lastPracticed === null ? "Never" : formatDate(pattern.lastPracticed)}
+              </dd>
+            </div>
+            <div>
+              <dt>Exposure, last 7 practice dates</dt>
+              <dd>
+                {pattern.recentExposureShare === null
+                  ? "No recent practice"
+                  : `${formatPercent(pattern.recentExposureShare)} of weighted exposure${pattern.overconcentrated ? ", concentrated" : ""}`}
+              </dd>
+            </div>
+          </dl>
+          <details className="pattern-calculation">
+            <summary>How this signal is calculated</summary>
+            <dl className="progress-facts">
+              <div>
+                <dt>Fresh evidence weight</dt>
+                <dd>
+                  {fresh.weightedTotal.toFixed(1)} total · {fresh.weightedWeakSignals.toFixed(1)}{" "}
+                  needs practice
+                </dd>
+              </div>
+              {pattern.highestConceptualHintLevel === null ? null : (
+                <div>
+                  <dt>Highest conceptual hint</dt>
+                  <dd>
+                    {tutorHintNames[pattern.highestConceptualHintLevel - 1] ?? "Guidance step"}
+                  </dd>
+                </div>
+              )}
+            </dl>
+            <p className="detail-caption">
+              Fresh evidence uses the latest 10 confirmed, non-incomplete fresh attempts. Assisted
+              attempts, giving up, shaky confidence, and suboptimal solutions count toward the
+              needs-practice signal. Multi-pattern attempts split their weight equally.
+            </p>
+          </details>
+          <details className="pattern-problems">
+            <summary>Practiced problems ({pattern.problems.length})</summary>
+            {pattern.problems.length === 0 ? (
+              <p>No confirmed, non-incomplete problems in this pattern yet.</p>
+            ) : (
+              <ol>
+                {pattern.problems.map((problem) => (
+                  <li key={problem.id}>
+                    <button
+                      type="button"
+                      className="pattern-problem-link"
+                      onClick={() => {
+                        setOpen(false);
+                        onProblemHistory?.(problem);
+                      }}
+                    >
+                      {problem.leetcodeId}. {problem.title}
+                    </button>
+                    <time dateTime={problem.practiceDate}>{formatDate(problem.practiceDate)}</time>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </details>
+          {fresh.sampleCount < 5 ? (
+            <p className="detail-caption">
+              At least 5 fresh samples are needed for a directional signal.
+            </p>
+          ) : null}
+        </div>
+      </DetailDialog>
+    </div>
   );
 }
 

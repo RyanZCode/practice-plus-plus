@@ -576,6 +576,7 @@ export const attemptHistoryPageSize = 20;
 export const attemptHistoryQuerySchema = z.strictObject({
   page: z.number().int().positive(),
   problemId: z.uuid().optional(),
+  query: z.string().trim().max(200).optional(),
 });
 export type AttemptHistoryQuery = z.infer<typeof attemptHistoryQuerySchema>;
 export const attemptHistoryResponseSchema = z.strictObject({
@@ -612,6 +613,17 @@ const assistanceCountsSchema = z.strictObject({
 export const patternEvidenceSchema = z.strictObject({
   patternId: z.uuid(),
   patternName: z.enum(mvpPatternNames),
+  problems: z
+    .array(
+      z.strictObject({
+        id: z.uuid(),
+        leetcodeId: z.number().int().positive(),
+        title: z.string(),
+        lastAttemptAt: z.string().datetime(),
+        practiceDate: z.iso.date(),
+      }),
+    )
+    .default([]),
   classification: z.enum([
     "UNTESTED",
     "INSUFFICIENT_EVIDENCE",
