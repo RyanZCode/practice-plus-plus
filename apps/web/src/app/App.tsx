@@ -44,6 +44,7 @@ const secondaryNavigationItems: typeof navigationItems = [
 ];
 
 export function App({ apiUrl }: AppProps) {
+  const { isDemo } = useAuth();
   const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
     loadTheme(window.localStorage),
   );
@@ -70,7 +71,7 @@ export function App({ apiUrl }: AppProps) {
 
   function changeTheme(preference: ThemePreference): void {
     setThemePreference(preference);
-    saveTheme(window.localStorage, preference);
+    if (!isDemo) saveTheme(window.localStorage, preference);
   }
 
   return (
@@ -92,7 +93,7 @@ interface AccountPageProps extends AppProps {
 }
 
 function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProps) {
-  const { signOut, state } = useAuth();
+  const { signOut, state, isDemo } = useAuth();
   const userId = authenticatedUserId(state);
   const accessToken = state.status === "authenticated" ? state.session.access_token : null;
   const accessTokenRef = useRef(accessToken);
@@ -276,22 +277,47 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
             <p className="account-email">
               {session.user.email === undefined ? "You’re signed in." : session.user.email}
             </p>
-            <button className="manage-account-button" type="button" onClick={openManageAccount}>
-              Manage account
-            </button>
+            {!isDemo ? (
+              <button className="manage-account-button" type="button" onClick={openManageAccount}>
+                Manage account
+              </button>
+            ) : null}
             <button
               className="sign-out-button"
               type="button"
               disabled={isSigningOut}
               onClick={() => void handleSignOut()}
             >
-              {isSigningOut ? "Signing out…" : "Sign out"}
+              {isDemo ? "Exit demo" : isSigningOut ? "Signing out…" : "Sign out"}
             </button>
           </div>
         </details>
       </aside>
 
       <section className="workspace-panel">
+        {isDemo ? (
+          <div className="demo-banner" aria-label="Demo mode">
+            <p>
+              <strong>Demo mode:</strong> Explore a fictional learner’s practice. Changes reset when
+              you refresh or leave.
+            </p>
+            <div>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  clearTutorConversationsForUser(window.sessionStorage, session.user.id);
+                  window.location.reload();
+                }}
+              >
+                Reset demo
+              </button>
+              <a className="secondary-button" href="/">
+                Create your account
+              </a>
+            </div>
+          </div>
+        ) : null}
         <header className="mobile-header">
           <h1 className="mobile-brand-heading">
             <button
@@ -357,16 +383,18 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
             <Navigation activeView={activeView} onNavigate={navigate} secondary mobile />
             <div className="mobile-menu-account">
               <p className="account-email">{session.user.email}</p>
-              <button className="manage-account-button" type="button" onClick={openManageAccount}>
-                Manage account
-              </button>
+              {!isDemo ? (
+                <button className="manage-account-button" type="button" onClick={openManageAccount}>
+                  Manage account
+                </button>
+              ) : null}
               <button
                 className="mobile-sign-out"
                 type="button"
                 disabled={isSigningOut}
                 onClick={() => void handleSignOut()}
               >
-                {isSigningOut ? "Signing out…" : "Sign out"}
+                {isDemo ? "Exit demo" : isSigningOut ? "Signing out…" : "Sign out"}
               </button>
             </div>
           </div>

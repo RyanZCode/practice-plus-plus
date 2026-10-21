@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from "../../shared/apiFetch";
 import {
   patternEvidenceResponseSchema,
   streakCalendarResponseSchema,

@@ -1,6 +1,6 @@
 import { tutorHintNames, type Attempt } from "@practice-plus-plus/contracts";
 import type { ReactNode } from "react";
-import { DailyProgress, PracticeType } from "../practice/Today";
+import { PracticeType } from "../practice/Today";
 import { formatRemainingSeconds } from "./attemptState";
 
 export function AttemptWorkspace({
@@ -8,8 +8,7 @@ export function AttemptWorkspace({
   seconds,
   busy,
   recording,
-  completed,
-  required,
+  dailyProgress,
   onPause,
   onSkip,
   onReport,
@@ -25,8 +24,7 @@ export function AttemptWorkspace({
   seconds: number;
   busy: boolean;
   recording: boolean;
-  completed: number;
-  required: number | null;
+  dailyProgress: ReactNode;
   onPause: () => void;
   onSkip: () => void;
   onReport: (incomplete: boolean) => void;
@@ -195,7 +193,7 @@ export function AttemptWorkspace({
               </button>
             </div>
           </section>
-          <DailyProgress completed={completed} required={required} />
+          {dailyProgress}
           {attempt.assistance.length > 0 ? (
             <section className="page-surface attempt-status">
               <h4>Recorded help</h4>

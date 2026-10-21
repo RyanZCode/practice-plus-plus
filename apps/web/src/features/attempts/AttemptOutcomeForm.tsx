@@ -34,6 +34,7 @@ export function AttemptOutcomeForm({
   memorySuggestions,
   assessmentDraft,
   canDraftAssessment,
+  showAssessment = true,
   completedCode,
   onCompletedCodeChange,
   onDraftAssessment,
@@ -45,6 +46,7 @@ export function AttemptOutcomeForm({
   memorySuggestions: MemorySuggestion[];
   assessmentDraft: AttemptAssessmentDraft | null;
   canDraftAssessment: boolean;
+  showAssessment?: boolean;
   completedCode: string;
   onCompletedCodeChange: (value: string) => void;
   onDraftAssessment: (input: DraftAssessmentInput) => Promise<AttemptAssessmentDraft | null>;
@@ -261,7 +263,7 @@ export function AttemptOutcomeForm({
             no longer be incomplete.
           </p>
         ) : null}
-        {attempt.outcome !== null ? (
+        {attempt.outcome !== null && showAssessment ? (
           <details open>
             <summary>AI assessment (optional)</summary>
             <label>
@@ -274,24 +276,26 @@ export function AttemptOutcomeForm({
                 onChange={(event) => onCompletedCodeChange(event.target.value)}
               />
             </label>
-            <p className="settings-help">
+            <p className="settings-help assessment-help">
               Used only when drafting the AI assessment. It is not saved with the attempt.
             </p>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={busy || !canDraftAssessment}
-              onClick={() => void draftAssessment()}
-            >
-              {drafting
-                ? "Drafting assessment…"
-                : assessmentDraft === null
-                  ? "Draft assessment with AI"
-                  : "Regenerate AI draft"}
-            </button>
-            {drafting ? (
-              <LoadingStatus>Reviewing your attempt and drafting feedback…</LoadingStatus>
-            ) : null}
+            <div className="assessment-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={busy || !canDraftAssessment}
+                onClick={() => void draftAssessment()}
+              >
+                {drafting
+                  ? "Drafting assessment…"
+                  : assessmentDraft === null
+                    ? "Draft assessment with AI"
+                    : "Regenerate AI draft"}
+              </button>
+              {drafting ? (
+                <LoadingStatus>Reviewing your attempt and drafting feedback…</LoadingStatus>
+              ) : null}
+            </div>
             {!canDraftAssessment ? (
               <p className="settings-help">Add your OpenAI API key in Practice settings first.</p>
             ) : null}

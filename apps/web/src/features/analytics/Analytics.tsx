@@ -625,7 +625,7 @@ export function StreakCalendarView({
     <section className="streak-section page-surface" aria-labelledby="streak-heading">
       <div className="analytics-section-heading">
         <h3 id="streak-heading">Consistency</h3>
-        <span>Daily plan completion</span>
+        <span>Daily target completion</span>
       </div>
       <div className="streak-layout">
         <div>

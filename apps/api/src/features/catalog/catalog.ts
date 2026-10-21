@@ -28,6 +28,7 @@ export const catalogProblemSelect = {
 
 export interface CatalogStore {
   listPublished(userProfileId: string, query: CatalogListQuery): Promise<CatalogResponse>;
+  listPublic(query: CatalogListQuery): Promise<CatalogResponse>;
   findPublished(problemId: string): Promise<CatalogProblem | null>;
   findSolvedDetails(
     userProfileId: string,
@@ -37,38 +38,11 @@ export interface CatalogStore {
 
 export function createPrismaCatalogStore(client: PrismaClient): CatalogStore {
   return {
-    async listPublished(userProfileId, query) {
-      const where = catalogWhere(userProfileId, query);
-      const orderBy = catalogOrderBy(query);
-      const [total, problems] = await Promise.all([
-        client.problem.count({ where }),
-        client.problem.findMany({
-          where,
-          select: catalogProblemSelect,
-          orderBy,
-          skip: query.page * catalogPageSize,
-          take: catalogPageSize,
-        }),
-      ]);
-      const solvedAttempts =
-        problems.length === 0
-          ? []
-          : await client.attempt.findMany({
-              where: {
-                ...solvedAttemptFilter(userProfileId),
-                problemId: { in: problems.map((problem) => problem.id) },
-              },
-              select: { problemId: true },
-            });
-      const solvedProblemIds = new Set(solvedAttempts.map((attempt) => attempt.problemId));
-
-      return {
-        problems: problems.map((problem) =>
-          toCatalogListProblem(problem, solvedProblemIds.has(problem.id)),
-        ),
-        total,
-        nextPage: (query.page + 1) * catalogPageSize < total ? query.page + 1 : null,
-      };
+    listPublished(userProfileId, query) {
+      return listCatalog(client, userProfileId, query);
+    },
+    listPublic(query) {
+      return listCatalog(client, null, { ...query, progress: [] });
     },
     async findPublished(problemId) {
       return client.problem.findFirst({
@@ -100,6 +74,17 @@ export function createPrismaCatalogStore(client: PrismaClient): CatalogStore {
       });
     },
   };
+}
+
+export function createPublicCatalogRouter(store: CatalogStore): Router {
+  const router = Router();
+
+  router.get("/problems", async (request, response) => {
+    const query = parseCatalogListQuery(request.query);
+    response.json(catalogResponseSchema.parse(await store.listPublic(query)));
+  });
+
+  return router;
 }
 
 export function createCatalogRouter(store: CatalogStore): Router {
@@ -140,6 +125,44 @@ export function createCatalogRouter(store: CatalogStore): Router {
   });
 
   return router;
+}
+
+async function listCatalog(
+  client: PrismaClient,
+  userProfileId: string | null,
+  query: CatalogListQuery,
+): Promise<CatalogResponse> {
+  const where = catalogWhere(userProfileId, query);
+  const orderBy = catalogOrderBy(query);
+  const [total, problems] = await Promise.all([
+    client.problem.count({ where }),
+    client.problem.findMany({
+      where,
+      select: catalogProblemSelect,
+      orderBy,
+      skip: query.page * catalogPageSize,
+      take: catalogPageSize,
+    }),
+  ]);
+  const solvedAttempts =
+    userProfileId === null || problems.length === 0
+      ? []
+      : await client.attempt.findMany({
+          where: {
+            ...solvedAttemptFilter(userProfileId),
+            problemId: { in: problems.map((problem) => problem.id) },
+          },
+          select: { problemId: true },
+        });
+  const solvedProblemIds = new Set(solvedAttempts.map((attempt) => attempt.problemId));
+
+  return {
+    problems: problems.map((problem) =>
+      toCatalogListProblem(problem, solvedProblemIds.has(problem.id)),
+    ),
+    total,
+    nextPage: (query.page + 1) * catalogPageSize < total ? query.page + 1 : null,
+  };
 }
 
 function parseCatalogListQuery(rawQuery: unknown): CatalogListQuery {
@@ -191,7 +214,10 @@ function readQueryPage(value: unknown): number {
   return page;
 }
 
-function catalogWhere(userProfileId: string, query: CatalogListQuery): Prisma.ProblemWhereInput {
+function catalogWhere(
+  userProfileId: string | null,
+  query: CatalogListQuery,
+): Prisma.ProblemWhereInput {
   const filters: Prisma.ProblemWhereInput[] = [{ published: true }];
   const numericQuery = /^\d+$/.test(query.query) ? Number(query.query) : null;
 
@@ -208,7 +234,7 @@ function catalogWhere(userProfileId: string, query: CatalogListQuery): Prisma.Pr
   if (query.availability.length > 0) {
     filters.push({ availability: { in: query.availability } });
   }
-  if (query.progress.length === 1) {
+  if (userProfileId !== null && query.progress.length === 1) {
     filters.push({
       attempts:
         query.progress[0] === "SOLVED"

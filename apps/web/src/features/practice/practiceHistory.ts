@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from "../../shared/apiFetch";
 import type { StreakCalendarResponse } from "@practice-plus-plus/contracts";
 import { loadStreakCalendar } from "../analytics/analyticsApi";
 

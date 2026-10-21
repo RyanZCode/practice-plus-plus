@@ -2,7 +2,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
-import { AuthProvider } from "../features/auth/auth";
+import { AuthProvider, DemoAuthProvider } from "../features/auth/auth";
+import { demoApiUrl } from "../shared/apiFetch";
 import { readConfig } from "../shared/config";
 import { ErrorBoundary } from "../shared/ErrorBoundary";
 import { getSupabaseClient } from "../shared/supabase";
@@ -22,6 +23,13 @@ document.documentElement.dataset.theme = resolveTheme(
 );
 
 function Root() {
+  if (window.location.pathname === "/demo") {
+    return (
+      <DemoAuthProvider>
+        <App apiUrl={demoApiUrl} />
+      </DemoAuthProvider>
+    );
+  }
   const config = readConfig();
   const client = getSupabaseClient(config);
 

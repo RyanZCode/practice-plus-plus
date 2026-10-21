@@ -5,7 +5,11 @@ import type { Logger } from "pino";
 import { pinoHttp } from "pino-http";
 
 import { createAttemptRouter, type AttemptStore } from "../features/attempts/attempts.js";
-import { createCatalogRouter, type CatalogStore } from "../features/catalog/catalog.js";
+import {
+  createCatalogRouter,
+  createPublicCatalogRouter,
+  type CatalogStore,
+} from "../features/catalog/catalog.js";
 import {
   createCatalogImportRouter,
   type CatalogImportStore,
@@ -99,7 +103,10 @@ export function createApp(options: AppOptions = {}): Express {
     }),
   );
   if (options.webOrigin !== undefined) {
-    app.use(cors({ origin: options.webOrigin }));
+    app.use((request, response, next) => {
+      const origin = request.path === "/catalog/public/problems" ? true : options.webOrigin;
+      cors({ origin })(request, response, next);
+    });
   }
   app.use("/health", createHealthRouter(options.readinessChecks));
 
@@ -192,6 +199,7 @@ export function createApp(options: AppOptions = {}): Express {
     }
 
     if (options.authentication.catalogStore !== undefined) {
+      app.use("/catalog/public", createPublicCatalogRouter(options.authentication.catalogStore));
       app.use(
         "/catalog",
         authenticate,

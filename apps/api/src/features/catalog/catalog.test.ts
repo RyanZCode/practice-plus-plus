@@ -45,6 +45,11 @@ function createStore(): CatalogStore {
       total: 1,
       nextPage: null,
     }),
+    listPublic: vi.fn().mockResolvedValue({
+      problems: [{ ...problem, solved: false }],
+      total: 1,
+      nextPage: null,
+    }),
     findPublished: vi.fn().mockResolvedValue(hiddenProblem),
     findSolvedDetails: vi.fn().mockResolvedValue(problemDetails),
   };
