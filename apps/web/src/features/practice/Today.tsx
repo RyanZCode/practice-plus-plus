@@ -1,5 +1,11 @@
-import type { Attempt, DailyPlan, PracticeSettings } from "@practice-plus-plus/contracts";
-import { useState, type ReactNode } from "react";
+import type {
+  Attempt,
+  DailyPlan,
+  PracticeSettings,
+  StreakCalendarResponse,
+} from "@practice-plus-plus/contracts";
+import { useEffect, useState, type ReactNode } from "react";
+import { loadStreakCalendar } from "../analytics/analyticsApi";
 import { formatRemainingSeconds } from "../attempts/attemptState";
 import { RecentPracticePanel } from "./RecentPractice";
 import { practiceDateLabel } from "./practiceHistory";
@@ -34,7 +40,12 @@ export function DailyProgress({
         <span> / {generatingPlan ? "-" : (required ?? "-")}</span>
       </p>
       {required !== null && required > 0 ? (
-        <progress value={completed} max={required} aria-label="Daily completion" />
+        <progress
+          value={Math.min(completed, required)}
+          max={required}
+          aria-label="Daily completion"
+          data-complete={completed >= required ? "true" : undefined}
+        />
       ) : null}
       <p className="settings-help">
         {generatingPlan
@@ -45,6 +56,79 @@ export function DailyProgress({
               ? "No practice available"
               : "Completed from today's plan"}
       </p>
+    </section>
+  );
+}
+
+export function DailyProgressPanel({
+  apiUrl,
+  token,
+  refresh,
+  onProgressChange,
+  generatingPlan = false,
+}: {
+  apiUrl: string;
+  token: string;
+  refresh: number;
+  onProgressChange?: ((day: StreakCalendarResponse["days"][number] | null) => void) | undefined;
+  generatingPlan?: boolean;
+}) {
+  const [day, setDay] = useState<StreakCalendarResponse["days"][number]>();
+  const [error, setError] = useState<string>();
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setDay(undefined);
+    setError(undefined);
+    void loadStreakCalendar(apiUrl, token)
+      .then((calendar) => {
+        const today = calendar.days.find((day) => day.date === calendar.asOfPracticeDate);
+        if (!today) throw new Error("Daily progress is unavailable.");
+        if (active) {
+          setDay(today);
+          onProgressChange?.(today);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setError("Unable to load daily progress.");
+          onProgressChange?.(null);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [apiUrl, token, refresh, retry, onProgressChange]);
+
+  if (day)
+    return (
+      <DailyProgress
+        completed={day.completedCount ?? 0}
+        required={day.requiredCount}
+        generatingPlan={generatingPlan}
+      />
+    );
+  return (
+    <section className="today-progress page-surface">
+      <h3>Daily progress</h3>
+      {error ? (
+        <>
+          <p role="alert" className="settings-help">
+            {error}
+          </p>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => setRetry((value) => value + 1)}
+          >
+            Try again
+          </button>
+        </>
+      ) : (
+        <p role="status" className="settings-help">
+          Loading daily progress…
+        </p>
+      )}
     </section>
   );
 }
@@ -69,6 +153,7 @@ export function Today({
   onExternalAi,
   onExtra,
   onStop,
+  onDailyProgressChange,
   children,
 }: {
   apiUrl: string;
@@ -90,6 +175,8 @@ export function Today({
   onExternalAi: () => void;
   onExtra: () => void;
   onStop: () => void;
+  onDailyProgressChange?:
+    ((day: StreakCalendarResponse["days"][number] | null) => void) | undefined;
   children?: ReactNode;
 }) {
   const [planningMethod, setPlanningMethod] = useState<"AI" | "WITHOUT_AI" | "EXTERNAL">("AI");
@@ -333,7 +420,7 @@ export function Today({
                             Resume attempt
                           </button>
                         ) : item === next ? (
-                          <span className="today-item-status">Not started</span>
+                          <span className="today-item-status">Up next</span>
                         ) : (
                           <button
                             type="button"
@@ -357,9 +444,11 @@ export function Today({
           ) : null}
         </div>
         <aside className="today-sidebar" aria-label="Daily progress and recent practice">
-          <DailyProgress
-            completed={completed}
-            required={plan?.items.length ?? null}
+          <DailyProgressPanel
+            apiUrl={apiUrl}
+            token={token}
+            refresh={refresh}
+            onProgressChange={onDailyProgressChange}
             generatingPlan={generatingPlan}
           />
           <RecentPracticePanel apiUrl={apiUrl} token={token} refresh={refresh} />

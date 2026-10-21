@@ -83,6 +83,11 @@ export function SignInPage() {
             {pendingProvider === "google" ? "Opening Google…" : "Continue with Google"}
           </button>
         </div>
+        <div className="auth-divider">or</div>
+        <a className="demo-entry secondary-button" href="/demo">
+          Try demo
+        </a>
+        <p className="auth-help">Explore with sample data. No signup or API key needed.</p>
         <LegalLinks />
       </section>
     </main>

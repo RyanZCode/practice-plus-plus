@@ -12,6 +12,7 @@ import { BrowserKeySettings } from "./BrowserKeySettings";
 import { OpenAIModelSelect } from "./OpenAIModelSelect";
 import { ReasoningEffortSelect } from "./ReasoningEffortSelect";
 import { savePracticeSettings } from "./settingsApi";
+import { useAuth } from "../auth/auth";
 
 export type SettingsSection = "practice" | "reviews" | "ai" | "appearance";
 
@@ -61,6 +62,7 @@ export function PracticeSettings({
   readonly onReturn?: () => void;
   readonly returnLabel?: string;
 }) {
+  const { isDemo } = useAuth();
   const [draft, setDraft] = useState<SettingsDraft>(() => toDraft(settings));
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string>();
@@ -549,14 +551,20 @@ export function PracticeSettings({
             <h3 id="settings-section-heading" ref={heading} tabIndex={-1}>
               {title}
             </h3>
-            {section === "ai" ? (
+            {section === "ai" && isDemo ? (
+              <p className="settings-help">
+                The demo uses prerecorded AI examples. Create your account to connect your own
+                provider.
+              </p>
+            ) : null}
+            {section === "ai" && !isDemo ? (
               <>
                 <p className="settings-help">Use your OpenAI account for in-app AI features.</p>
                 <BrowserKeySettings embedded disabled={saving} />
                 <p className="settings-help">Key and storage changes take effect immediately.</p>
               </>
             ) : null}
-            {["practice", "reviews", "ai"].includes(section) ? (
+            {["practice", "reviews", "ai"].includes(section) && !(isDemo && section === "ai") ? (
               <form
                 id="practice-settings"
                 className="settings-form"

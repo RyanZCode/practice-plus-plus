@@ -25,6 +25,7 @@ import {
   type StoredTutorMessage,
 } from "./tutorConversationStorage";
 import { openAiSelection } from "../../shared/aiSelection";
+import { demoTutorConversation } from "../demo/demoConversations";
 
 const actions = ["Get a small nudge", "Show me the key idea", "Outline the approach"];
 type Message = StoredTutorMessage;
@@ -54,11 +55,11 @@ export function AttemptTutor({
   onBusy: (busy: boolean) => void;
   onAiSetup: () => void;
 }) {
-  const { browserKey } = useAuth();
+  const { browserKey, isDemo } = useAuth();
   const { models } = useModelDiscovery();
   const keyState = useSyncExternalStore(browserKey.subscribe, browserKey.getSnapshot);
   const [model, setModel] = useState(defaultModel);
-  const canUseAi = keyState.hasKey && models.some((entry) => entry.id === model);
+  const canUseAi = !isDemo && keyState.hasKey && models.some((entry) => entry.id === model);
   useEffect(() => setModel(defaultModel), [defaultModel]);
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort | null>(
     defaultReasoningEffort,
@@ -67,7 +68,11 @@ export function AttemptTutor({
   const [draft, setDraft] = useState("");
   const messageInput = useRef<HTMLTextAreaElement>(null);
   const settingsMenu = useRef<HTMLDetailsElement>(null);
-  const stored = useRef(loadTutorConversation(window.sessionStorage, userId, attempt.id));
+  const stored = useRef(
+    isDemo
+      ? { messages: demoTutorConversation(attempt.problem.slug), checkpointIndex: 0 }
+      : loadTutorConversation(window.sessionStorage, userId, attempt.id),
+  );
   const [messages, setMessages] = useState<Message[]>(stored.current.messages);
   const [help, setHelp] = useState<TutorHelp>({ type: "CLARIFICATION" });
   const [busy, setBusy] = useState(false);
@@ -87,12 +92,14 @@ export function AttemptTutor({
     [],
   );
   useEffect(() => {
+    if (isDemo) return;
     saveTutorConversation(window.sessionStorage, userId, attempt.id, {
       messages,
       checkpointIndex,
     });
-  }, [attempt.id, checkpointIndex, messages, userId]);
+  }, [attempt.id, checkpointIndex, isDemo, messages, userId]);
   useEffect(() => {
+    if (isDemo) return;
     let active = true;
     void loadMemorySuggestions(apiUrl, token, attempt.id)
       .then((items) => {
@@ -102,7 +109,7 @@ export function AttemptTutor({
     return () => {
       active = false;
     };
-  }, [apiUrl, token, attempt.id]);
+  }, [apiUrl, token, attempt.id, isDemo]);
   useEffect(() => {
     const container = messagesRef.current;
     if (container !== null) container.scrollTop = container.scrollHeight;
@@ -299,24 +306,29 @@ export function AttemptTutor({
         >
           <summary>Tutor settings</summary>
           <div className="attempt-tutor-settings-panel">
-            <OpenAIModelSelect value={model} disabled={busy || disabled} onChange={setModel} />
+            <OpenAIModelSelect
+              value={model}
+              disabled={isDemo || busy || disabled}
+              onChange={setModel}
+            />
             <ReasoningEffortSelect
               model={model}
               value={reasoningEffort}
-              disabled={busy || disabled}
+              disabled={isDemo || busy || disabled}
               onChange={setReasoningEffort}
             />
-            <button type="button" className="text-button" onClick={onAiSetup}>
+            <button type="button" className="text-button" disabled={isDemo} onClick={onAiSetup}>
               Open AI settings
             </button>
           </div>
         </details>
       </div>
       <p className="settings-help">
-        Messages and code are sent to OpenAI and kept in this browser session. Help categories and
-        requested hint levels are recorded.
+        {isDemo
+          ? "Sample conversation. AI controls are disabled in the demo. This example does not record assistance for your attempt."
+          : "Messages and code are sent to OpenAI and kept in this browser session. Help categories and requested hint levels are recorded."}
       </p>
-      {!keyState.hasKey ? (
+      {!isDemo && !keyState.hasKey ? (
         <div className="tutor-unavailable" role="status">
           <p>Add an API key to use the tutor. You can keep solving without AI.</p>
           <button type="button" className="secondary-button" onClick={onAiSetup}>
@@ -324,7 +336,7 @@ export function AttemptTutor({
           </button>
         </div>
       ) : null}
-      {keyState.hasKey && !canUseAi ? (
+      {!isDemo && keyState.hasKey && !canUseAi ? (
         <p role="status">Choose a discovered model in Tutor settings before requesting help.</p>
       ) : null}
       <div className="tutor-workspace">
@@ -496,7 +508,7 @@ export function AttemptTutor({
                 rows={3}
                 maxLength={16000}
                 value={draft}
-                disabled={busy || disabled}
+                disabled={isDemo || busy || disabled}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.ctrlKey && event.key === "Enter" && draft.trim().length > 0) {
@@ -584,7 +596,7 @@ export function AttemptTutor({
                   <button
                     type="button"
                     className="secondary-button"
-                    disabled={busy || checkpointBusy}
+                    disabled={isDemo || busy || checkpointBusy}
                     onClick={() => {
                       setMessages([]);
                       setCheckpointIndex(0);

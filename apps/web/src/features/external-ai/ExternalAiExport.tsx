@@ -8,6 +8,7 @@ import {
 import { useState, type FormEvent } from "react";
 import { createExternalAiExport } from "./externalAiApi";
 import { confirmExternalPlan, validateExternalPlan } from "../planning/planningApi";
+import { demoApiUrl } from "../../shared/apiFetch";
 
 type Selection =
   | "COACH"
@@ -64,6 +65,15 @@ export function ExternalAiExport({
   const [status, setStatus] = useState<string>();
   const [recommendation, setRecommendation] = useState("");
   const [preview, setPreview] = useState<PlanningPreview | null>(null);
+
+  if (apiUrl === demoApiUrl) {
+    return (
+      <p className="settings-help">
+        External AI exports are available with your own account. Explore the prerecorded Coach and
+        tutor examples in this demo.
+      </p>
+    );
+  }
 
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

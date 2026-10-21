@@ -369,6 +369,18 @@
   background: var(--accent);
 }
 
+.today-progress progress[data-complete="true"] {
+  accent-color: var(--calendar-completed);
+}
+
+.today-progress progress[data-complete="true"]::-webkit-progress-value {
+  background: var(--calendar-completed);
+}
+
+.today-progress progress[data-complete="true"]::-moz-progress-bar {
+  background: var(--calendar-completed);
+}
+
 .recent-practice-heading {
   display: flex;
   align-items: center;
@@ -389,7 +401,8 @@
 
 .recent-practice-days {
   display: grid;
-  gap: 0.7rem;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  gap: 0.7rem 0.6rem;
   list-style: none;
   margin: 1rem 0;
   padding: 0;
@@ -397,9 +410,9 @@
 
 .recent-practice-day {
   display: grid;
-  grid-template-columns: 3.4rem minmax(0, 1fr) 2.8rem;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 0.6rem;
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
 }
@@ -418,11 +431,15 @@
 .recent-practice-fill {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--calendar-completed);
 }
 
 .day-partial .recent-practice-fill {
-  background: light-dark(#84510b, #efc481);
+  background: var(--calendar-partial);
+}
+
+.day-missed .recent-practice-track {
+  background: var(--calendar-missed-fill);
 }
 
 .day-neutral .recent-practice-track,
@@ -436,6 +453,7 @@
 
 .recent-practice-count {
   text-align: right;
+  white-space: nowrap;
 }
 
 .problems-heading {
@@ -813,6 +831,22 @@
   border-top: 1px solid var(--border);
 }
 
+.outcome-form p.assessment-help {
+  margin-bottom: 1rem;
+}
+
+.assessment-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+}
+
+.assessment-actions .loading-status {
+  gap: 0.75rem;
+  margin: 0;
+}
+
 .attempt-dialog {
   width: min(32rem, calc(100% - 2rem));
   max-height: calc(100% - 2rem);
@@ -840,6 +874,194 @@
 .attempt-dialog h3 {
   margin: 0;
   font-weight: 500;
+}
+
+.completion-dialog[open] {
+  gap: 1.4rem;
+}
+
+.completion-heading {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.completion-heading h3 {
+  font-size: 1.65rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.completion-heading p {
+  margin: 0.4rem 0 0;
+}
+
+.completion-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  color: light-dark(#18704b, #8be1b5);
+  background: light-dark(#edf8f1, #1e3930);
+}
+
+.completion-icon svg {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.completion-problem {
+  display: grid;
+  justify-items: start;
+  gap: 0.65rem;
+}
+
+.completion-problem > strong {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.completion-outcome {
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.35rem;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.completion-progress > div {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.completion-progress > div > span,
+.completion-progress strong span {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.completion-progress progress {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 0.55rem;
+  border: 0;
+  border-radius: 0.3rem;
+  overflow: hidden;
+  background: var(--subtle);
+  accent-color: var(--accent);
+  pointer-events: none;
+}
+
+.completion-progress progress::-webkit-progress-bar {
+  background: var(--subtle);
+}
+
+.completion-progress progress::-webkit-progress-value {
+  background: var(--accent);
+}
+
+.completion-progress progress::-moz-progress-bar {
+  background: var(--accent);
+}
+
+.completion-progress progress[data-complete="true"] {
+  accent-color: var(--calendar-completed);
+}
+
+.completion-progress progress[data-complete="true"]::-webkit-progress-value {
+  background: var(--calendar-completed);
+}
+
+.completion-progress progress[data-complete="true"]::-moz-progress-bar {
+  background: var(--calendar-completed);
+}
+
+.completion-follow-up {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--subtle);
+}
+
+.completion-follow-up h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.completion-follow-up p {
+  margin: 0;
+}
+
+.completion-follow-up details {
+  margin-top: 0.6rem;
+}
+
+.completion-actions {
+  gap: 0.75rem;
+}
+
+.completion-actions > button {
+  flex: 1 1 10rem;
+}
+
+.completion-dialog[data-daily-complete] {
+  border-color: var(--accent);
+  background: linear-gradient(155deg, var(--accent-soft), var(--surface) 55%);
+}
+
+.completion-dialog[data-daily-complete] .completion-heading {
+  flex-direction: column;
+  gap: 1.1rem;
+  text-align: center;
+  padding: 0.5rem 0;
+}
+
+.completion-dialog[data-daily-complete] .completion-heading h3 {
+  font-size: 2rem;
+}
+
+.completion-dialog[data-daily-complete] .completion-icon {
+  flex-basis: auto;
+  width: 4.5rem;
+  height: 4.5rem;
+  color: light-dark(#986000, #f7d77c);
+  background: light-dark(#fff0c5, #42371f);
+  box-shadow: 0 0 0 0.5rem light-dark(#fff7e3, #302b22);
+  animation: completion-pop 300ms ease-out;
+}
+
+.completion-dialog[data-daily-complete] .completion-icon svg {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.completion-actions .completion-finish {
+  order: -1;
+}
+
+@keyframes completion-pop {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .completion-dialog[data-daily-complete] .completion-icon {
+    animation: none;
+  }
 }
 
 @media (max-width: 58rem) {
@@ -959,8 +1181,4 @@
   .today-next .practice-type + .account-actions {
     margin-top: 0.3rem;
   }
-}
-
-.day-missed .recent-practice-track {
-  background: light-dark(#fff1f2, #4a1c29);
 }

@@ -1,3 +1,4 @@
+import { apiFetch as fetch } from "../../shared/apiFetch";
 import { deleteAccountSchema } from "@practice-plus-plus/contracts";
 
 export async function deleteAccount(apiUrl: string, token: string, confirmation: string) {

@@ -140,7 +140,7 @@ describe("analytics empty states", () => {
   });
 });
 
-it("renders partial and missed counts without neutral or future legend entries", () => {
+it("renders partial, missed, and extra counts without neutral or future legend entries", () => {
   const html = renderToStaticMarkup(
     createElement(StreakCalendarView, {
       calendar: {
@@ -150,6 +150,14 @@ it("renders partial and missed counts without neutral or future legend entries",
         month: "2026-09",
         days: [
           {
+            date: "2026-09-17",
+            status: "COMPLETED",
+            isCurrent: true,
+            requiredCount: 2,
+            completedCount: 3,
+            neutralReason: null,
+          },
+          {
             date: "2026-09-16",
             status: "COMPLETED",
             isCurrent: false,
@@ -158,9 +166,9 @@ it("renders partial and missed counts without neutral or future legend entries",
             neutralReason: null,
           },
           {
-            date: "2026-09-17",
-            status: "CURRENT",
-            isCurrent: true,
+            date: "2026-09-13",
+            status: "PARTIAL",
+            isCurrent: false,
             requiredCount: 2,
             completedCount: 1,
             neutralReason: null,
@@ -195,8 +203,12 @@ it("renders partial and missed counts without neutral or future legend entries",
   expect(html).toContain("1/3");
   expect(html).not.toContain("Neutral");
   expect(html).not.toContain("Future</li>");
-  expect(html).toContain('data-status="CURRENT"');
+  expect(html).toContain('aria-current="date"');
   expect(html).toContain("0/2");
   expect(html).toContain("Counts can exceed the target");
+  expect(html).toContain("streak-day streak-day-completed streak-day-today");
+  expect(html).toContain("3 of 2 completed.");
+  expect(html).toContain("3/2");
+  expect(html).not.toContain("Extra practice");
   expect(html).not.toContain("motivational context");
 });

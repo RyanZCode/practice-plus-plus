@@ -14,13 +14,16 @@ export interface WebConfig {
 }
 
 export function readConfig(environment: Environment = import.meta.env): WebConfig {
-  const apiUrl = environment.VITE_API_URL?.trim() || (environment.DEV ? LOCAL_API_URL : undefined);
-
   return {
-    apiUrl: readUrl("VITE_API_URL", apiUrl),
+    apiUrl: readApiUrl(environment),
     supabasePublishableKey: readPublishableKey(environment.VITE_SUPABASE_PUBLISHABLE_KEY),
     supabaseUrl: readUrl("VITE_SUPABASE_URL", environment.VITE_SUPABASE_URL?.trim()),
   };
+}
+
+export function readApiUrl(environment: Environment = import.meta.env): string {
+  const apiUrl = environment.VITE_API_URL?.trim() || (environment.DEV ? LOCAL_API_URL : undefined);
+  return readUrl("VITE_API_URL", apiUrl);
 }
 
 function readUrl(name: string, value: string | undefined): string {

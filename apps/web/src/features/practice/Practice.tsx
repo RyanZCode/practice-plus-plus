@@ -7,6 +7,7 @@ import type {
   MemorySuggestion,
   ReasoningEffort,
   PracticeSettings,
+  StreakCalendarResponse,
 } from "@practice-plus-plus/contracts";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { LoadingStatus } from "../../shared/LoadingStatus";
@@ -49,7 +50,8 @@ import {
   type CatalogSortDirection,
 } from "./catalogBrowse";
 import { CatalogProblemDetails } from "./CatalogProblemDetails";
-import { Today } from "./Today";
+import { Today, DailyProgressPanel } from "./Today";
+import { practiceDateLabel } from "./practiceHistory";
 import { ExternalAiExport } from "../external-ai/ExternalAiExport";
 import { openAiSelection } from "../../shared/aiSelection";
 import "./practice.css";
@@ -77,7 +79,7 @@ export function Practice({
   defaultModel: string;
   defaultReasoningEffort: ReasoningEffort | null;
 }) {
-  const { browserKey } = useAuth();
+  const { browserKey, isDemo } = useAuth();
   const { models } = useModelDiscovery();
   const keyState = useSyncExternalStore(browserKey.subscribe, browserKey.getSnapshot);
   const [showAttempt, setShowAttempt] = useState(false);
@@ -105,6 +107,10 @@ export function Practice({
   const decisionDialog = useRef<HTMLDialogElement>(null);
   const completionDialog = useRef<HTMLDialogElement>(null);
   const [saved, setSaved] = useState<Attempt | null>(null);
+  const [finishedAssignments, setFinishedAssignments] = useState(false);
+  const [dailyProgress, setDailyProgress] = useState<StreakCalendarResponse["days"][number] | null>(
+    null,
+  );
   const [memorySuggestions, setMemorySuggestions] = useState<MemorySuggestion[]>([]);
   const [assessmentDraft, setAssessmentDraft] = useState<AttemptAssessmentDraft | null>(null);
   const [assessmentLoadedFor, setAssessmentLoadedFor] = useState<string | null>(null);
@@ -125,6 +131,8 @@ export function Practice({
   const catalogFilterMenu = useRef<HTMLDetailsElement>(null);
   const catalogSentinel = useRef<HTMLDivElement>(null);
   const catalogLoadingMoreRef = useRef(false);
+  const dailyCompletedCount = dailyProgress?.completedCount ?? 0;
+  const dailyRequiredCount = dailyProgress?.requiredCount ?? plan?.items.length ?? 0;
 
   useEffect(() => {
     function closeMenus(event: PointerEvent): void {
@@ -450,6 +458,7 @@ export function Practice({
     plan.items.length > 0 &&
     plan.items.every((item) => item.status === "FINISHED");
   const extraPracticeStarted = plan !== null && extraPracticeDate === plan.practiceDate;
+  const celebrateDailyPlan = finishedAssignments && !loading && error === undefined && planComplete;
   const extraPracticeDismissed = plan !== null && extraPracticeDismissedDate === plan.practiceDate;
 
   function resetCatalogControls(): void {
@@ -587,7 +596,8 @@ export function Practice({
       </dialog>
       <dialog
         ref={completionDialog}
-        className="attempt-dialog"
+        className="attempt-dialog completion-dialog"
+        data-daily-complete={celebrateDailyPlan || undefined}
         onClick={closeOnBackdropClick}
         onCancel={() => setSaved(null)}
         onClose={() => setSaved(null)}
@@ -595,10 +605,60 @@ export function Practice({
       >
         {saved ? (
           <>
-            <h3 id="attempt-confirmation-heading">Attempt confirmed</h3>
-            <p>
-              {saved.problem.title} · {saved.outcome?.toLowerCase().replaceAll("_", " ")}
-            </p>
+            <header className="completion-heading">
+              <span className="completion-icon" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  {celebrateDailyPlan ? (
+                    <>
+                      <path d="M8 3h8v6a4 4 0 0 1-8 0V3ZM8 5H5v2a4 4 0 0 0 4 4m7-6h3v2a4 4 0 0 1-4 4M12 13v5m-4 3h8m-6-3h4l2 3H8l2-3Z" />
+                    </>
+                  ) : (
+                    <path d="m6 12 4 4 8-8" />
+                  )}
+                </svg>
+              </span>
+              <div>
+                <h3 id="attempt-confirmation-heading">
+                  {celebrateDailyPlan
+                    ? "You did it!"
+                    : saved.outcome === "INCOMPLETE"
+                      ? "Progress saved"
+                      : saved.outcome === "GAVE_UP"
+                        ? "Practice logged"
+                        : "Nice work!"}
+                </h3>
+                <p className="settings-help">
+                  {celebrateDailyPlan
+                    ? "All of today’s assignments are complete. Nicely done."
+                    : saved.outcome === "INDEPENDENT"
+                      ? "You solved it on your own."
+                      : saved.outcome === "ASSISTED"
+                        ? "You worked through it with help."
+                        : saved.outcome === "GAVE_UP"
+                          ? "Your attempt is saved. Come back for another try."
+                          : "Pick this up again when you’re ready."}
+                </p>
+              </div>
+            </header>
+            <div className="completion-problem">
+              <strong>{saved.problem.title}</strong>
+              <span className="completion-outcome">
+                {saved.outcome === "INDEPENDENT"
+                  ? "Independent solve"
+                  : saved.outcome === "ASSISTED"
+                    ? "Assisted solve"
+                    : saved.outcome === "GAVE_UP"
+                      ? "Gave up"
+                      : "Incomplete"}
+              </span>
+            </div>
             {loading ? (
               <p role="status">Updating daily progress…</p>
             ) : error !== undefined ? (
@@ -612,12 +672,29 @@ export function Practice({
                   Reload progress
                 </button>
               </div>
+            ) : plan === null ? (
+              <p className="settings-help">Outside a saved daily plan</p>
+            ) : dailyProgress === null ? (
+              <p role="status">Updating daily progress…</p>
             ) : (
-              <p>
-                {plan === null
-                  ? "Outside a saved daily plan"
-                  : `${plan.items.filter((item) => item.status === "FINISHED").length} / ${plan.items.length} assigned problems complete`}
-              </p>
+              <section className="completion-progress" aria-label="Daily assignment progress">
+                <div>
+                  <span>Today's assignments</span>
+                  <strong>
+                    {dailyCompletedCount} <span>of {dailyRequiredCount} complete</span>
+                  </strong>
+                </div>
+                <progress
+                  aria-label="Assigned problems complete"
+                  value={Math.min(dailyCompletedCount, dailyRequiredCount)}
+                  max={dailyRequiredCount || 1}
+                  data-complete={
+                    dailyRequiredCount > 0 && dailyCompletedCount >= dailyRequiredCount
+                      ? "true"
+                      : undefined
+                  }
+                />
+              </section>
             )}
             {saved.outcome === "INCOMPLETE" ? (
               <p className="settings-help">
@@ -625,35 +702,43 @@ export function Practice({
                 replace this assignment.
               </p>
             ) : null}
-            {saved.review !== null ? (
-              <>
+            <section className="completion-follow-up" aria-label="Next practice action">
+              <h4>What’s next</h4>
+              {saved.review !== null ? (
+                <>
+                  <p>
+                    Next {saved.outcome === "INCOMPLETE" ? "retry" : "review"}:{" "}
+                    <strong>
+                      {practiceDateLabel(
+                        saved.review.manualDueDate ?? saved.review.generatedDueDate,
+                        { month: "short", day: "numeric", year: "numeric" },
+                      )}
+                    </strong>
+                  </p>
+                  <details>
+                    <summary>Change due date</summary>
+                    <ReviewDateForm
+                      apiUrl={apiUrl}
+                      token={token}
+                      attemptId={saved.id}
+                      review={saved.review}
+                      onSaved={(updated) =>
+                        setSaved((previous) =>
+                          previous === null ? null : { ...previous, review: updated.review },
+                        )
+                      }
+                    />
+                  </details>
+                </>
+              ) : (
                 <p>
-                  Next {saved.outcome === "INCOMPLETE" ? "retry" : "review"}:{" "}
-                  {saved.review.manualDueDate ?? saved.review.generatedDueDate}
+                  {saved.nextAction?.type === "TRANSFER"
+                    ? `Fresh same-pattern transfer: ${saved.nextAction.pattern}. Eligible ${saved.nextAction.dueDate ?? "7 calendar days after this attempt"}. A matching problem is selected when a daily plan has space.`
+                    : "No review scheduled for this problem."}
                 </p>
-                <details>
-                  <summary>Change due date</summary>
-                  <ReviewDateForm
-                    apiUrl={apiUrl}
-                    token={token}
-                    attemptId={saved.id}
-                    review={saved.review}
-                    onSaved={(updated) =>
-                      setSaved((previous) =>
-                        previous === null ? null : { ...previous, review: updated.review },
-                      )
-                    }
-                  />
-                </details>
-              </>
-            ) : (
-              <p>
-                {saved.nextAction?.type === "TRANSFER"
-                  ? `Fresh same-pattern transfer: ${saved.nextAction.pattern}. Eligible ${saved.nextAction.dueDate ?? "7 calendar days after this attempt"}. A matching problem is selected when a daily plan has space.`
-                  : "No automatic follow-up."}
-              </p>
-            )}
-            <div className="account-actions">
+              )}
+            </section>
+            <div className="account-actions completion-actions">
               {!loading &&
               error === undefined &&
               plan?.items.find((item) => item.status === "PENDING") ? (
@@ -678,6 +763,7 @@ export function Practice({
               {!loading && error === undefined && planComplete ? (
                 <button
                   type="button"
+                  className={celebrateDailyPlan ? "secondary-button" : undefined}
                   onClick={() => {
                     setSaved(null);
                     setShowExtra(true);
@@ -689,7 +775,7 @@ export function Practice({
               ) : null}
               <button
                 type="button"
-                className="secondary-button"
+                className={celebrateDailyPlan ? "completion-finish" : "secondary-button"}
                 onClick={() => {
                   if (planComplete) stopExtra();
                   setSaved(null);
@@ -724,8 +810,13 @@ export function Practice({
             seconds={seconds}
             busy={busy || tutorBusy}
             recording={classifying}
-            completed={plan?.items.filter((item) => item.status === "FINISHED").length ?? 0}
-            required={plan?.items.length ?? null}
+            dailyProgress={
+              <DailyProgressPanel
+                apiUrl={apiUrl}
+                token={token}
+                refresh={reload + refresh + planRefresh}
+              />
+            }
             onPause={() =>
               void update(() =>
                 attempt.timerPausedAt == null
@@ -811,6 +902,7 @@ export function Practice({
                 memorySuggestions={memorySuggestions}
                 assessmentDraft={assessmentDraft}
                 canDraftAssessment={keyState.hasKey}
+                showAssessment={!isDemo}
                 completedCode={completedCode}
                 onCompletedCodeChange={setCompletedCode}
                 onDraftAssessment={async ({ completedCode: code, currentSummary }) => {
@@ -859,6 +951,19 @@ export function Practice({
                     setClassifying(false);
                     setLoading(true);
                     setShowAttempt(false);
+                    setDailyProgress(null);
+                    setFinishedAssignments(
+                      confirmed.outcome !== "INCOMPLETE" &&
+                        plan !== null &&
+                        plan.items.some(
+                          (item) =>
+                            item.problem.id === confirmed.problem.id && item.status !== "FINISHED",
+                        ) &&
+                        plan.items.every(
+                          (item) =>
+                            item.problem.id === confirmed.problem.id || item.status === "FINISHED",
+                        ),
+                    );
                     setSaved(confirmed);
                     setReload((value) => value + 1);
                   } catch (reason) {
@@ -898,6 +1003,7 @@ export function Practice({
                 setExtraPracticeDismissedDate(null);
               }}
               onStop={stopExtra}
+              onDailyProgressChange={setDailyProgress}
             >
               {externalPlanning && (plan === null || plan.items.length === 0) ? (
                 <ExternalAiExport
@@ -921,7 +1027,7 @@ export function Practice({
                   </h3>
                   <p>
                     {extraPracticeStarted
-                      ? "Choose one more eligible problem, or finish for today."
+                      ? "Choose another eligible problem."
                       : "Extra practice is optional. It counts in your calendar without changing today's saved plan or target."}
                   </p>
                   {extraPracticeError === undefined ? null : (
@@ -950,16 +1056,6 @@ export function Practice({
                     >
                       {extraPracticeStarted ? "Choose another without AI" : "Continue without AI"}
                     </button>
-                    {extraPracticeStarted ? (
-                      <button
-                        className="secondary-button"
-                        type="button"
-                        disabled={busy}
-                        onClick={stopExtra}
-                      >
-                        Done with extra practice
-                      </button>
-                    ) : null}
                   </div>
                   {!keyState.hasKey ? (
                     <p className="settings-help">

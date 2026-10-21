@@ -22,6 +22,7 @@ import {
 import { openAiSelection } from "../../shared/aiSelection";
 import { ExternalAiExport } from "../external-ai/ExternalAiExport";
 import { closeOnBackdropClick } from "../../shared/dialog";
+import { demoCoachConversation } from "../demo/demoConversations";
 
 interface Message {
   role: "user" | "assistant";
@@ -50,7 +51,7 @@ export function Coach({
   onPlanSaved: (plan: DailyPlan) => void;
   isActive: boolean;
 }) {
-  const { browserKey } = useAuth();
+  const { browserKey, isDemo } = useAuth();
   const { models } = useModelDiscovery();
   const keyState = useSyncExternalStore(browserKey.subscribe, browserKey.getSnapshot);
   const [model, setModel] = useState(defaultModel);
@@ -61,7 +62,7 @@ export function Coach({
   useEffect(() => setReasoningEffort(defaultReasoningEffort), [defaultReasoningEffort]);
   const [purpose, setPurpose] = useState<CoachRequest["purpose"]>("GENERAL");
   const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => (isDemo ? demoCoachConversation : []));
   const [busy, setBusy] = useState(false);
   const [checkpointBusy, setCheckpointBusy] = useState(false);
   const [checkpointIndex, setCheckpointIndex] = useState(0);
@@ -75,7 +76,7 @@ export function Coach({
   const menus = useRef<HTMLDivElement>(null);
   const clearDialog = useRef<HTMLDialogElement>(null);
   const messageInput = useRef<HTMLTextAreaElement>(null);
-  const canUseAi = keyState.hasKey && models.some((entry) => entry.id === model);
+  const canUseAi = !isDemo && keyState.hasKey && models.some((entry) => entry.id === model);
   const automaticCheckpointEnd = useRef(0);
   const checkpointIds = useRef(new Map<number, string>());
   const active = useRef<AbortController | null>(null);
@@ -89,7 +90,7 @@ export function Coach({
   );
 
   useEffect(() => {
-    if (!isActive) return;
+    if (!isActive || isDemo) return;
     let active = true;
     setSuggestionsError(undefined);
     void loadMemorySuggestions(apiUrl, token)
@@ -105,7 +106,7 @@ export function Coach({
     return () => {
       active = false;
     };
-  }, [apiUrl, token, isActive, suggestionsReload]);
+  }, [apiUrl, token, isActive, isDemo, suggestionsReload]);
 
   useEffect(() => {
     const container = messagesRef.current;
@@ -253,7 +254,11 @@ export function Coach({
       <div className="coach-heading">
         <div>
           <h2>Coach</h2>
-          <p className="settings-help">Discuss your practice, progress, and next steps.</p>
+          <p className="settings-help">
+            {isDemo
+              ? "Sample conversation. AI controls are disabled in the demo."
+              : "Discuss your practice, progress, and next steps."}
+          </p>
         </div>
         <div
           className="coach-toolbar"
@@ -273,6 +278,7 @@ export function Coach({
             type="button"
             aria-expanded={externalOpen}
             aria-controls="coach-external"
+            disabled={isDemo}
             onClick={() => setExternalOpen((open) => !open)}
           >
             External AI
@@ -292,21 +298,21 @@ export function Coach({
                 Conversation focus
                 <select
                   value={purpose}
-                  disabled={busy}
+                  disabled={busy || isDemo}
                   onChange={(event) => setPurpose(event.target.value as CoachRequest["purpose"])}
                 >
                   <option value="GENERAL">General coaching</option>
                   <option value="PLANNING">Practice planning</option>
                 </select>
               </label>
-              <OpenAIModelSelect value={model} disabled={busy} onChange={setModel} />
+              <OpenAIModelSelect value={model} disabled={busy || isDemo} onChange={setModel} />
               <ReasoningEffortSelect
                 model={model}
                 value={reasoningEffort}
-                disabled={busy}
+                disabled={busy || isDemo}
                 onChange={setReasoningEffort}
               />
-              <button type="button" className="text-button" onClick={onAiSetup}>
+              <button type="button" className="text-button" disabled={isDemo} onClick={onAiSetup}>
                 Open AI settings
               </button>
             </div>
@@ -328,7 +334,9 @@ export function Coach({
               <button
                 type="button"
                 className="secondary-button"
-                disabled={busy || checkpointBusy || (messages.length === 0 && draft.length === 0)}
+                disabled={
+                  isDemo || busy || checkpointBusy || (messages.length === 0 && draft.length === 0)
+                }
                 onClick={() => clearDialog.current?.showModal()}
               >
                 Clear conversation…
@@ -392,7 +400,7 @@ export function Coach({
           />
         </div>
       ) : null}
-      {!keyState.hasKey ? (
+      {!isDemo && !keyState.hasKey ? (
         <div className="coach-unavailable" role="status">
           <p>Use your own AI chat, or add an OpenAI API key to chat here.</p>
           <button type="button" className="secondary-button" onClick={onAiSetup}>
@@ -400,7 +408,7 @@ export function Coach({
           </button>
         </div>
       ) : null}
-      {keyState.hasKey && !canUseAi ? (
+      {!isDemo && keyState.hasKey && !canUseAi ? (
         <p role="status">Choose a discovered model in Configure before sending a message.</p>
       ) : null}
       <form className="coach-conversation page-surface" onSubmit={(event) => void send(event)}>
