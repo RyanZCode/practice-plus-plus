@@ -355,37 +355,26 @@ function AccountPage({ apiUrl, onThemeChange, themePreference }: AccountPageProp
             }}
           >
             <Navigation activeView={activeView} onNavigate={navigate} secondary mobile />
-            <p className="account-email">{session.user.email}</p>
-            <button className="manage-account-button" type="button" onClick={openManageAccount}>
-              Manage account
-            </button>
-            <button
-              className="mobile-sign-out"
-              type="button"
-              disabled={isSigningOut}
-              onClick={() => void handleSignOut()}
-            >
-              {isSigningOut ? "Signing out…" : "Sign out"}
-            </button>
+            <div className="mobile-menu-account">
+              <p className="account-email">{session.user.email}</p>
+              <button className="manage-account-button" type="button" onClick={openManageAccount}>
+                Manage account
+              </button>
+              <button
+                className="mobile-sign-out"
+                type="button"
+                disabled={isSigningOut}
+                onClick={() => void handleSignOut()}
+              >
+                {isSigningOut ? "Signing out…" : "Sign out"}
+              </button>
+            </div>
           </div>
         ) : null}
 
         {showNavigation ? (
           <div className="mobile-navigation">
             <Navigation activeView={activeView} onNavigate={navigate} mobile />
-            <button
-              className="navigation-button mobile-more"
-              type="button"
-              aria-expanded={mobileMenuOpen}
-              aria-controls="mobile-menu"
-              onClick={(event) => {
-                mobileMenuButtonRef.current = event.currentTarget;
-                setMobileMenuOpen((open) => !open);
-              }}
-            >
-              <NavigationIcon name="more" />
-              <span>More</span>
-            </button>
           </div>
         ) : null}
 
