@@ -137,7 +137,7 @@ describe("daily plan persistence", () => {
     }
     expect(tx.dailyPlan.create).not.toHaveBeenCalled();
   });
-  it("keeps a confirmed incomplete item out of daily completion", async () => {
+  it("reopens a legacy incomplete assignment", async () => {
     const { tx, store } = database();
     tx.dailyPlan.findUnique.mockResolvedValue({
       practiceDate: new Date("2026-09-09T00:00:00Z"),
@@ -155,7 +155,7 @@ describe("daily plan persistence", () => {
       ],
     });
 
-    expect((await store.current(userProfileId, now)).items[0]?.status).toBe("INCOMPLETE");
+    expect((await store.current(userProfileId, now)).items[0]?.status).toBe("PENDING");
   });
   it("requires settings and retains the empty fallback while no work is eligible", async () => {
     const { tx, store } = database();

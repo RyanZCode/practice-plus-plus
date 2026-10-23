@@ -26,6 +26,10 @@ type DraftAssessmentInput = {
   currentSummary: NonNullable<ConfirmAttempt["summary"]> | null;
 };
 
+function confirmableOutcome(outcome: unknown): outcome is ConfirmAttempt["outcome"] {
+  return outcome === "INDEPENDENT" || outcome === "ASSISTED" || outcome === "GAVE_UP";
+}
+
 export function AttemptOutcomeForm({
   attempt,
   busy,
@@ -38,7 +42,6 @@ export function AttemptOutcomeForm({
   completedCode,
   onCompletedCodeChange,
   onDraftAssessment,
-  initialIncomplete,
   onLearningProfile,
 }: {
   attempt: Attempt;
@@ -52,7 +55,6 @@ export function AttemptOutcomeForm({
   onDraftAssessment: (input: DraftAssessmentInput) => Promise<AttemptAssessmentDraft | null>;
   onConfirm: (input: ConfirmAttempt) => Promise<void>;
   onReport: (input: ReportAttempt) => Promise<void>;
-  initialIncomplete: boolean;
   onLearningProfile: () => void;
 }) {
   const form = useRef<HTMLFormElement>(null);
@@ -66,9 +68,11 @@ export function AttemptOutcomeForm({
       <span className="assessment-updated">Updated by AI</span>
     ) : null;
   const [outcome, setOutcome] = useState<ConfirmAttempt["outcome"] | "">(
-    initialIncomplete && attempt.outcome === null
-      ? "INCOMPLETE"
-      : (assessmentDraft?.outcome ?? attempt.outcome ?? suggestedOutcome(attempt.assistance) ?? ""),
+    confirmableOutcome(assessmentDraft?.outcome)
+      ? assessmentDraft.outcome
+      : confirmableOutcome(attempt.outcome)
+        ? attempt.outcome
+        : (suggestedOutcome(attempt.assistance) ?? ""),
   );
   const [assistance, setAssistance] = useState<Assistance[]>([]);
   const [reproduced, setReproduced] = useState<boolean | null>(
@@ -92,7 +96,7 @@ export function AttemptOutcomeForm({
   const nextActionType = selectedAction ?? (outcome === "ASSISTED" ? "REPEAT" : "COMPLETE");
   const required = suggestedOutcome([...attempt.assistance, ...assistance]);
   const reviewed = required === "GAVE_UP";
-  const canConfirm = outcome === "INCOMPLETE" || attempt.outcome !== null;
+  const canConfirm = attempt.outcome !== null;
 
   function toggleHelp(type: Assistance["type"], checked: boolean) {
     const next = checked
@@ -122,8 +126,13 @@ export function AttemptOutcomeForm({
       const changes: string[] = [];
       for (const [key, value] of Object.entries(assessmentFields(draft))) {
         if (key === "outcome") {
-          if (outcome !== value) changes.push(key);
-          setOutcome(draft.outcome);
+          if (draft.outcome === "INCOMPLETE") {
+            if (outcome !== "") changes.push(key);
+            setOutcome("");
+          } else {
+            if (outcome !== draft.outcome) changes.push(key);
+            setOutcome(draft.outcome);
+          }
         } else if (key === "reproduced") {
           if (String(reproduced) !== value) changes.push(key);
           setReproduced(draft.reproducedFromMemory);
@@ -210,7 +219,6 @@ export function AttemptOutcomeForm({
               ["INDEPENDENT", "Independent", "Solved without substantive help"],
               ["ASSISTED", "Assisted", "Solved with substantive help"],
               ["GAVE_UP", "Gave up", "Ended solving without a solve"],
-              ["INCOMPLETE", "Incomplete", "Stopped without a final result"],
             ] as const
           ).map(([value, label, description]) => (
             <label key={value}>
@@ -227,9 +235,7 @@ export function AttemptOutcomeForm({
                       attempt.outcome === "GAVE_UP"
                     : value === "ASSISTED"
                       ? reviewed || attempt.outcome === "GAVE_UP"
-                      : value === "INCOMPLETE"
-                        ? reviewed || attempt.outcome !== null
-                        : false
+                      : false
                 }
                 onChange={() => setOutcome(value)}
               />
@@ -240,12 +246,6 @@ export function AttemptOutcomeForm({
             </label>
           ))}
         </div>
-        {outcome === "INCOMPLETE" ? (
-          <p className="settings-help">
-            Save unfinished work and schedule a retry. Patterns stay hidden, and this assignment
-            does not count toward daily completion.
-          </p>
-        ) : null}
         {!canConfirm ? (
           <button
             type="button"
@@ -258,10 +258,7 @@ export function AttemptOutcomeForm({
           </button>
         ) : null}
         {attempt.outcome !== null ? (
-          <p>
-            Result reported. You can review the optional details before confirming. This attempt can
-            no longer be incomplete.
-          </p>
+          <p>Result reported. You can review the optional details before confirming.</p>
         ) : null}
         {attempt.outcome !== null && showAssessment ? (
           <details open>

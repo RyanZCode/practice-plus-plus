@@ -102,7 +102,6 @@ export function Practice({
   const [reload, setReload] = useState(0);
   const [now, setNow] = useState(Date.now());
   const [classifying, setClassifying] = useState(false);
-  const [incomplete, setIncomplete] = useState(false);
   const [decision, setDecision] = useState<"cancel" | "give-up" | null>(null);
   const decisionDialog = useRef<HTMLDialogElement>(null);
   const completionDialog = useRef<HTMLDialogElement>(null);
@@ -497,7 +496,6 @@ export function Practice({
       setAttempt(next);
       setShowAttempt(true);
       setClassifying(false);
-      setIncomplete(false);
       setShowExtra(false);
       setExtraPracticeDate(plan?.practiceDate ?? null);
       setSaved(null);
@@ -510,7 +508,6 @@ export function Practice({
 
   function startProblem(problemId: string): void {
     setClassifying(false);
-    setIncomplete(false);
     onNavigate("practice");
     void update(() => startAttempt(apiUrl, token, problemId));
   }
@@ -551,13 +548,8 @@ export function Practice({
         <p>
           {decision === "cancel"
             ? "This deletes the attempt and its linked help, drafts, and summaries. No result or retry is saved. Today's assignment becomes available to start again."
-            : "This reports gave up and reveals the patterns. You can review a solution and try it from memory. Either recall result keeps the outcome gave up."}
+            : "This records the attempt as Gave up and reveals its patterns. After reviewing a solution, you can try solving the problem from memory. The attempt stays marked Gave up whether or not you solve it."}
         </p>
-        {decision === "cancel" ? (
-          <p className="settings-help">
-            To keep unfinished work and schedule a retry, save it as incomplete instead.
-          </p>
-        ) : null}
         <div className="account-actions">
           <button
             type="button"
@@ -571,13 +563,12 @@ export function Practice({
                 ).then((updated) => {
                   if (updated) {
                     setClassifying(false);
-                    setIncomplete(false);
                     setDecision(null);
                   }
                 });
             }}
           >
-            {busy ? "Saving…" : decision === "cancel" ? "Discard attempt" : "Give up and continue"}
+            {busy ? "Saving…" : decision === "cancel" ? "Discard attempt" : "Give up"}
           </button>
           <button
             type="button"
@@ -825,10 +816,7 @@ export function Practice({
               )
             }
             onSkip={() => void update(() => skipTimer(apiUrl, token, attempt.id))}
-            onReport={(unfinished) => {
-              setIncomplete(unfinished);
-              setClassifying(true);
-            }}
+            onReport={() => setClassifying(true)}
             onReturn={() => setClassifying(false)}
             onGiveUp={() => setDecision("give-up")}
             onCancel={() => setDecision("cancel")}
@@ -895,9 +883,8 @@ export function Practice({
               <LoadingStatus>Loading assessment draft…</LoadingStatus>
             ) : classifying || attempt.outcome !== null ? (
               <AttemptOutcomeForm
-                key={`${attempt.id}-${attempt.solutionReviewedAt ?? "solving"}-${incomplete}`}
+                key={`${attempt.id}-${attempt.solutionReviewedAt ?? "solving"}`}
                 attempt={attempt}
-                initialIncomplete={incomplete}
                 onLearningProfile={() => onNavigate("learning")}
                 memorySuggestions={memorySuggestions}
                 assessmentDraft={assessmentDraft}
@@ -953,8 +940,7 @@ export function Practice({
                     setShowAttempt(false);
                     setDailyProgress(null);
                     setFinishedAssignments(
-                      confirmed.outcome !== "INCOMPLETE" &&
-                        plan !== null &&
+                      plan !== null &&
                         plan.items.some(
                           (item) =>
                             item.problem.id === confirmed.problem.id && item.status !== "FINISHED",
@@ -1097,16 +1083,28 @@ export function Practice({
                   </div>
                 </div>
                 <div className="catalog-toolbar">
-                  <label className="catalog-search">
-                    <span className="visually-hidden">Search problems</span>
-                    <input
-                      type="search"
-                      inputMode="search"
-                      placeholder="Search number or title"
-                      value={catalogQuery}
-                      onChange={(event) => setCatalogQuery(event.target.value)}
-                    />
-                  </label>
+                  <div className="search-field catalog-search-field">
+                    <label className="catalog-search">
+                      <span className="visually-hidden">Search problems</span>
+                      <input
+                        type="search"
+                        inputMode="search"
+                        placeholder="Search number or title"
+                        value={catalogQuery}
+                        onChange={(event) => setCatalogQuery(event.target.value)}
+                      />
+                    </label>
+                    {catalogQuery !== "" ? (
+                      <button
+                        type="button"
+                        className="search-clear-button"
+                        aria-label="Clear search"
+                        onClick={() => setCatalogQuery("")}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
                   <details
                     ref={catalogSortMenu}
                     className="catalog-sort-menu"

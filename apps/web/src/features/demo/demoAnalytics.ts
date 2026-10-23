@@ -12,7 +12,6 @@ function outcomes(attempts: Attempt[]) {
     independent: attempts.filter((item) => item.outcome === "INDEPENDENT").length,
     assisted: attempts.filter((item) => item.outcome === "ASSISTED").length,
     gaveUp: attempts.filter((item) => item.outcome === "GAVE_UP").length,
-    incomplete: attempts.filter((item) => item.outcome === "INCOMPLETE").length,
   };
 }
 

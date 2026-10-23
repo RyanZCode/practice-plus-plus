@@ -38,7 +38,7 @@ Results distinguish independent solves, assisted solves, give-ups, and incomplet
 
 ```mermaid
 flowchart LR
-    Web[React + Vite<br/>Cloudflare Pages] --> API[Express API<br/>Docker on Railway]
+    Web[React + Vite<br/>Cloudflare Pages] --> API[Express API<br/>Docker on Google Cloud Run]
     Web --> Auth[Supabase Auth]
     API --> Auth
     API --> DB[(PostgreSQL<br/>Prisma)]

@@ -28,6 +28,8 @@ interface SettingsDraft {
   attemptTimerMinutes: string;
   defaultAiModel: string;
   difficultyPreference: ProblemDifficultyPreference;
+  preferredLanguage: string;
+  otherPreferredLanguage: string;
   reasoningEffort: ReasoningEffort | "";
   dailyTarget: string;
   highInterval: string;
@@ -93,6 +95,10 @@ export function PracticeSettings({
       attemptTimerMinutes: Number(draft.attemptTimerMinutes),
       allowPremiumProblems: draft.allowPremiumProblems,
       difficultyPreference: draft.difficultyPreference,
+      preferredLanguage:
+        draft.preferredLanguage === "OTHER"
+          ? draft.otherPreferredLanguage
+          : draft.preferredLanguage || null,
       dailyTarget: Number(draft.dailyTarget),
       redoIntervals: {
         high: Number(draft.highInterval),
@@ -132,13 +138,15 @@ export function PracticeSettings({
               ? "Choose a valid timezone."
               : field === "resetTime"
                 ? "Choose a valid practice-day reset time."
-                : field === "attemptTimerMinutes"
-                  ? "Choose a whole-number timer from 1 to 180 minutes."
-                  : field === "redoIntervals"
-                    ? onboarding
-                      ? "Use whole-number review intervals from 1 to 90, with High ≤ Medium ≤ Low."
-                      : "Use whole-number review intervals from 1 to 90, with Soonest ≤ Standard ≤ Later."
-                    : "Check your AI model and reasoning settings.",
+                : field === "preferredLanguage"
+                  ? "Enter a programming language using 1 to 50 characters."
+                  : field === "attemptTimerMinutes"
+                    ? "Choose a whole-number timer from 1 to 180 minutes."
+                    : field === "redoIntervals"
+                      ? onboarding
+                        ? "Use whole-number review intervals from 1 to 90, with High ≤ Medium ≤ Low."
+                        : "Use whole-number review intervals from 1 to 90, with Soonest ≤ Standard ≤ Later."
+                      : "Check your AI model and reasoning settings.",
         );
         return null;
       }
@@ -286,6 +294,37 @@ export function PracticeSettings({
   );
   const preferenceControls = (
     <div className="settings-section">
+      <label>
+        Preferred programming language
+        <select
+          value={draft.preferredLanguage}
+          disabled={saving}
+          onChange={(event) => setDraft({ ...draft, preferredLanguage: event.target.value })}
+        >
+          <option value="">No preference</option>
+          {programmingLanguages.map((language) => (
+            <option key={language} value={language}>
+              {language}
+            </option>
+          ))}
+          <option value="OTHER">Other</option>
+        </select>
+        <span className="settings-help">
+          Used for AI code examples unless you ask for another language.
+        </span>
+      </label>
+      {draft.preferredLanguage === "OTHER" ? (
+        <label>
+          Other programming language
+          <input
+            type="text"
+            value={draft.otherPreferredLanguage}
+            maxLength={50}
+            disabled={saving}
+            onChange={(event) => setDraft({ ...draft, otherPreferredLanguage: event.target.value })}
+          />
+        </label>
+      ) : null}
       <label>
         Automatic problem difficulty
         <select
@@ -620,10 +659,16 @@ export function PracticeSettings({
 }
 
 function toDraft(settings: SavedPracticeSettings | null): SettingsDraft {
+  const preferredLanguage = settings?.preferredLanguage ?? null;
+  const hasCommonLanguage = programmingLanguages.some((language) => language === preferredLanguage);
   return {
     allowPremiumProblems: settings?.allowPremiumProblems ?? true,
     defaultAiModel: settings?.defaultAiModel ?? defaultOpenAiModel,
     difficultyPreference: settings?.difficultyPreference ?? "ANY",
+    preferredLanguage:
+      preferredLanguage === null ? "" : hasCommonLanguage ? preferredLanguage : "OTHER",
+    otherPreferredLanguage:
+      preferredLanguage !== null && !hasCommonLanguage ? preferredLanguage : "",
     reasoningEffort: settings?.reasoningEffort ?? "",
     attemptTimerMinutes: String(settings?.attemptTimerMinutes ?? 30),
     dailyTarget: String(settings?.dailyTarget ?? 2),
@@ -634,6 +679,21 @@ function toDraft(settings: SavedPracticeSettings | null): SettingsDraft {
     timeZone: settings?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC",
   };
 }
+
+const programmingLanguages = [
+  "Python",
+  "Java",
+  "JavaScript",
+  "TypeScript",
+  "C++",
+  "C#",
+  "Go",
+  "Rust",
+  "Kotlin",
+  "Swift",
+  "C",
+  "Ruby",
+] as const;
 
 const supportedTimeZones = (() => {
   try {

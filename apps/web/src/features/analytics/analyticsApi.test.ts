@@ -6,7 +6,7 @@ const response = {
   summary: {
     freshOutcomes: { independent: 2, assisted: 1, gaveUp: 0 },
     redo: {
-      outcomes: { independent: 1, assisted: 0, gaveUp: 0, incomplete: 0 },
+      outcomes: { independent: 1, assisted: 0, gaveUp: 0 },
       successRate: 1,
     },
     assistance: {

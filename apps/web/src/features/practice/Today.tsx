@@ -352,10 +352,9 @@ export function Today({
               </>
             ) : (
               <>
-                <h3 id="today-next-heading">Today's plan is closed</h3>
+                <h3 id="today-next-heading">Finish your current attempt</h3>
                 <p className="settings-help">
-                  An assignment was confirmed incomplete and does not count toward daily completion.
-                  Other practice will not replace it in this saved plan.
+                  Complete or discard the active attempt to continue today's plan.
                 </p>
                 <div className="account-actions">
                   <button type="button" onClick={onBrowse}>
@@ -406,10 +405,8 @@ export function Today({
                           </p>
                           <PracticeType redo={item.kind === "REDO"} />
                         </div>
-                        {item.status === "FINISHED" || item.status === "INCOMPLETE" ? (
-                          <span className={`today-item-status status-${item.status.toLowerCase()}`}>
-                            {item.status === "FINISHED" ? "Completed" : "Incomplete"}
-                          </span>
+                        {item.status === "FINISHED" ? (
+                          <span className="today-item-status status-finished">Completed</span>
                         ) : item.status === "ACTIVE" || attempt?.problem.id === item.problem.id ? (
                           <button
                             type="button"

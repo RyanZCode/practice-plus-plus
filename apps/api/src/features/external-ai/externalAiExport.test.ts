@@ -26,6 +26,7 @@ const packet: ContextPacket = {
     lowIntervalDays: 7,
     allowPremiumProblems: true,
     difficultyPreference: "ANY",
+    preferredLanguage: null,
   },
   goals: [],
   preferences: [],

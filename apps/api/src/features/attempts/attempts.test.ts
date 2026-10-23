@@ -223,6 +223,7 @@ describe("attempt routes", () => {
     }
     for (const body of [
       {},
+      { outcome: "INCOMPLETE" },
       { outcome: "REDO" },
       { outcome: "INDEPENDENT", code: "private code" },
       { outcome: "INDEPENDENT", userProfileId: userId },
@@ -255,16 +256,8 @@ describe("attempt routes", () => {
       headers,
       body: JSON.stringify({ outcome: "INCOMPLETE" }),
     });
-    expect(confirmed.status).toBe(200);
-    expect(store.confirm).toHaveBeenCalledExactlyOnceWith(
-      userId,
-      attempt.id,
-      confirmAttemptSchema.parse({ outcome: "INCOMPLETE" }),
-      expect.any(Date),
-    );
-    const payload = await confirmed.text();
-    expect(payload).not.toContain("patterns");
-    expect(payload).not.toContain("userProfileId");
+    expect(confirmed.status).toBe(400);
+    expect(store.confirm).not.toHaveBeenCalled();
   });
   it("requires authentication and uses the verified profile for every operation", async () => {
     const store = {
@@ -563,23 +556,25 @@ describe("attempt persistence", () => {
     expect(tx.attempt.update).not.toHaveBeenCalled();
     expect(tx.reviewObligation.updateMany).not.toHaveBeenCalled();
   });
-  it.each(["GAVE_UP", "INCOMPLETE"])(
-    "keeps automatic follow-up for %s redos and rejects a next action",
-    async (outcome) => {
-      const { tx, store } = database();
-      tx.attempt.findFirst.mockResolvedValue({ ...record, type: "REDO" });
-      await expect(
-        store.confirm(
-          userId,
-          attempt.id,
-          confirmAttemptSchema.parse({ outcome, nextAction: { type: "COMPLETE" } }),
-          new Date(),
-        ),
-      ).rejects.toThrow("only to successful redos");
-      await store.confirm(userId, attempt.id, confirmAttemptSchema.parse({ outcome }), new Date());
-      expect(tx.attempt.update.mock.calls[0]?.[0].data.review.create.urgency).toBe("HIGH");
-    },
-  );
+  it("keeps automatic follow-up for gave-up redos and rejects a next action", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue({ ...record, type: "REDO" });
+    await expect(
+      store.confirm(
+        userId,
+        attempt.id,
+        confirmAttemptSchema.parse({ outcome: "GAVE_UP", nextAction: { type: "COMPLETE" } }),
+        new Date(),
+      ),
+    ).rejects.toThrow("only to successful redos");
+    await store.confirm(
+      userId,
+      attempt.id,
+      confirmAttemptSchema.parse({ outcome: "GAVE_UP" }),
+      new Date(),
+    );
+    expect(tx.attempt.update.mock.calls[0]?.[0].data.review.create.urgency).toBe("HIGH");
+  });
   it("rejects redo actions on fresh attempts", async () => {
     const { tx, store } = database();
     tx.attempt.findFirst.mockResolvedValue(record);
@@ -603,7 +598,14 @@ describe("attempt persistence", () => {
     tx.dailyPlanItem.findFirst.mockResolvedValue({ id: "item", transferId: "transfer" });
     await store.start(userId, problemId, new Date("2026-09-09T12:00:00Z"));
     expect(tx.dailyPlanItem.findFirst).toHaveBeenCalledWith({
-      where: { userProfileId: userId, problemId, attemptId: null },
+      where: {
+        userProfileId: userId,
+        problemId,
+        OR: [
+          { attemptId: null },
+          { attempt: { is: { confirmedAt: { not: null }, outcome: "INCOMPLETE" } } },
+        ],
+      },
     });
     expect(tx.dailyPlanItem.update).toHaveBeenCalledWith({
       where: { id: "item" },
@@ -636,7 +638,7 @@ describe("attempt persistence", () => {
     await store.confirm(
       userId,
       attempt.id,
-      confirmAttemptSchema.parse({ outcome: "INCOMPLETE" }),
+      confirmAttemptSchema.parse({ outcome: "GAVE_UP" }),
       now,
     );
     expect(tx.reviewObligation.updateMany).toHaveBeenCalledWith({
@@ -650,11 +652,11 @@ describe("attempt persistence", () => {
       where: { attemptId: attempt.id, resolvedAt: null, sourceAttempt: { userProfileId: userId } },
       data: { resolvedAt: now },
     });
-    tx.attempt.findFirst.mockResolvedValue({ ...record, confirmedAt: now, outcome: "INCOMPLETE" });
+    tx.attempt.findFirst.mockResolvedValue({ ...record, confirmedAt: now, outcome: "GAVE_UP" });
     await store.confirm(
       userId,
       attempt.id,
-      confirmAttemptSchema.parse({ outcome: "INCOMPLETE" }),
+      confirmAttemptSchema.parse({ outcome: "GAVE_UP" }),
       now,
     );
     expect(tx.reviewObligation.updateMany).toHaveBeenCalledTimes(1);
@@ -664,7 +666,6 @@ describe("attempt persistence", () => {
     ["INDEPENDENT", null, null],
     ["ASSISTED", "MEDIUM", "2026-09-11"],
     ["GAVE_UP", "HIGH", "2026-09-08"],
-    ["INCOMPLETE", "HIGH", "2026-09-08"],
   ] as const)(
     "creates review work atomically for %s using current intervals and the attempt date",
     async (outcome, urgency, due) => {
@@ -748,7 +749,7 @@ describe("attempt persistence", () => {
       store.confirm(
         userId,
         attempt.id,
-        confirmAttemptSchema.parse({ outcome: "INCOMPLETE" }),
+        confirmAttemptSchema.parse({ outcome: "GAVE_UP" }),
         new Date(),
       ),
     ).rejects.toMatchObject({ statusCode: 409 });
@@ -948,14 +949,6 @@ describe("attempt persistence", () => {
       expect(await store.active(userId)).toEqual(result);
       expect(await store.report(userId, attempt.id, { outcome })).toEqual(result);
       expect(tx.attempt.update).toHaveBeenCalledTimes(1);
-      await expect(
-        store.confirm(
-          userId,
-          attempt.id,
-          confirmAttemptSchema.parse({ outcome: "INCOMPLETE" }),
-          new Date(),
-        ),
-      ).rejects.toMatchObject({ statusCode: 409 });
     },
   );
 
@@ -991,17 +984,17 @@ describe("attempt persistence", () => {
     tx.attempt.findFirst.mockResolvedValue(record);
     tx.attempt.update.mockResolvedValue({
       ...record,
-      outcome: "INCOMPLETE",
+      outcome: "GAVE_UP",
       confirmedAt: new Date(),
     });
     expect(
       await store.confirm(
         userId,
         attempt.id,
-        confirmAttemptSchema.parse({ outcome: "INCOMPLETE" }),
+        confirmAttemptSchema.parse({ outcome: "GAVE_UP" }),
         new Date(),
       ),
-    ).not.toHaveProperty("patterns");
+    ).toHaveProperty("patterns");
   });
 
   it("rejects reporting another user's attempt, confirmed attempts, and contradictory results", async () => {
@@ -1046,26 +1039,23 @@ describe("attempt persistence", () => {
     await store.reviewSolution(userId, attempt.id, now);
     expect(tx.attempt.update).toHaveBeenCalledTimes(1);
   });
-  it.each(["INDEPENDENT", "ASSISTED", "INCOMPLETE"])(
-    "rejects %s after solution review",
-    async (outcome) => {
-      const { tx, store } = database();
-      tx.attempt.findFirst.mockResolvedValue({
-        ...record,
-        outcome: "GAVE_UP",
-        assistance: [{ type: "SOLUTION_REVIEW", hintLevel: null }],
-      });
-      await expect(
-        store.confirm(
-          userId,
-          attempt.id,
-          confirmAttemptSchema.parse({ outcome, reproducedFromMemory: true }),
-          new Date(),
-        ),
-      ).rejects.toMatchObject({ statusCode: 409 });
-      expect(tx.attempt.update).not.toHaveBeenCalled();
-    },
-  );
+  it.each(["INDEPENDENT", "ASSISTED"])("rejects %s after solution review", async (outcome) => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue({
+      ...record,
+      outcome: "GAVE_UP",
+      assistance: [{ type: "SOLUTION_REVIEW", hintLevel: null }],
+    });
+    await expect(
+      store.confirm(
+        userId,
+        attempt.id,
+        confirmAttemptSchema.parse({ outcome, reproducedFromMemory: true }),
+        new Date(),
+      ),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(tx.attempt.update).not.toHaveBeenCalled();
+  });
   it.each([true, false])(
     "confirms gave-up with reproduction %s and keeps confirmed submissions immutable",
     async (reproducedFromMemory) => {
@@ -1255,7 +1245,7 @@ describe("attempt persistence", () => {
         store.confirm(
           userId,
           attempt.id,
-          confirmAttemptSchema.parse({ outcome: "INCOMPLETE" }),
+          confirmAttemptSchema.parse({ outcome: "GAVE_UP" }),
           new Date(),
         ),
     ]) {

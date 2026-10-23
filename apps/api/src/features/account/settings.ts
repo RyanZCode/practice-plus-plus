@@ -14,6 +14,7 @@ interface PracticeSettingsRecord {
   readonly attemptTimerMinutes: number;
   readonly allowPremiumProblems: boolean;
   readonly difficultyPreference: "ANY" | "EASIER" | "MEDIUM_ONLY";
+  readonly preferredLanguage: string | null;
   readonly dailyTarget: number;
   readonly highIntervalDays: number;
   readonly lowIntervalDays: number;
@@ -93,6 +94,7 @@ function toPracticeSettings(record: PracticeSettingsRecord): PracticeSettings {
     attemptTimerMinutes: record.attemptTimerMinutes,
     allowPremiumProblems: record.allowPremiumProblems,
     difficultyPreference: record.difficultyPreference,
+    preferredLanguage: record.preferredLanguage,
     dailyTarget: record.dailyTarget,
     redoIntervals: {
       high: record.highIntervalDays,
@@ -111,6 +113,7 @@ function toPracticeSettingsRecord(settings: PracticeSettings): PracticeSettingsR
     attemptTimerMinutes: settings.attemptTimerMinutes,
     allowPremiumProblems: settings.allowPremiumProblems,
     difficultyPreference: settings.difficultyPreference,
+    preferredLanguage: settings.preferredLanguage,
     dailyTarget: settings.dailyTarget,
     highIntervalDays: settings.redoIntervals.high,
     lowIntervalDays: settings.redoIntervals.low,

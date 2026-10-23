@@ -37,7 +37,7 @@ describe("attempt confirmation", () => {
       false,
     );
   });
-  it.each(["INDEPENDENT", "ASSISTED", "GAVE_UP", "INCOMPLETE"])(
+  it.each(["INDEPENDENT", "ASSISTED", "GAVE_UP"])(
     "accepts %s without optional details",
     (outcome) => {
       expect(confirmAttemptSchema.parse({ outcome })).toMatchObject({
@@ -47,6 +47,9 @@ describe("attempt confirmation", () => {
       });
     },
   );
+  it("rejects incomplete as a confirmed result", () => {
+    expect(confirmAttemptSchema.safeParse({ outcome: "INCOMPLETE" }).success).toBe(false);
+  });
   it.each([
     {},
     { outcome: "REDO" },

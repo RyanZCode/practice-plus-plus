@@ -142,7 +142,7 @@ describe("pattern evidence aggregation", () => {
     expect(result.summary).toMatchObject({
       freshOutcomes: { independent: 3, assisted: 1, gaveUp: 1 },
       redo: {
-        outcomes: { independent: 1, assisted: 1, gaveUp: 1, incomplete: 1 },
+        outcomes: { independent: 1, assisted: 1, gaveUp: 1 },
         successRate: 2 / 3,
       },
       assistance: { conceptualHint: 1, debugging: 1, solutionReview: 1 },
@@ -173,7 +173,7 @@ describe("pattern evidence aggregation", () => {
       outcomes: { independent: 3, assisted: 1, gaveUp: 1 },
     });
     expect(evidence.redo).toEqual({
-      outcomes: { independent: 1, assisted: 1, gaveUp: 1, incomplete: 1 },
+      outcomes: { independent: 1, assisted: 1, gaveUp: 1 },
       successRate: 2 / 3,
     });
     expect(evidence.assistance.debugging).toBe(1);
@@ -297,7 +297,7 @@ it("authenticates pattern analytics and uses the resolved profile", async () => 
     summary: {
       freshOutcomes: { independent: 0, assisted: 0, gaveUp: 0 },
       redo: {
-        outcomes: { independent: 0, assisted: 0, gaveUp: 0, incomplete: 0 },
+        outcomes: { independent: 0, assisted: 0, gaveUp: 0 },
         successRate: null,
       },
       assistance: {

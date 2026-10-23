@@ -1828,8 +1828,15 @@ summary:focus-visible {
   gap: 0.75rem;
 }
 
-.history-search label {
+.search-field {
+  position: relative;
+}
+
+.search-field label {
   display: block;
+}
+
+.history-search-field {
   flex: 1;
   min-width: min(100%, 12rem);
   max-width: 34rem;
@@ -2245,6 +2252,10 @@ details[open] > summary > .row-chevron {
   margin-top: 1rem;
 }
 
+.catalog-search-field {
+  min-width: 0;
+}
+
 .catalog-search input,
 .history-search input {
   width: 100%;
@@ -2257,6 +2268,39 @@ details[open] > summary > .row-chevron {
   background: var(--subtle);
   font: inherit;
   font-weight: 400;
+}
+
+.search-field input[type="search"] {
+  padding-right: 2.75rem;
+}
+
+.search-field input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search-clear-button {
+  position: absolute;
+  top: 50%;
+  right: 0.45rem;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  background: transparent;
+  font-size: 1.35rem;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+.search-clear-button:hover:not(:disabled) {
+  border-color: transparent;
+  color: var(--text);
+  background: var(--secondary-hover);
 }
 
 .catalog-toolbar input:focus-visible,
@@ -2653,7 +2697,7 @@ details[open] > summary > .row-chevron {
     grid-template-columns: 1fr auto auto;
   }
 
-  .catalog-search {
+  .catalog-search-field {
     grid-column: 1 / -1;
   }
 
