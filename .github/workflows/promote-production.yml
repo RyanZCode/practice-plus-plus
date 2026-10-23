@@ -260,6 +260,7 @@ jobs:
           echo "image=$image_digest" >> "$GITHUB_OUTPUT"
 
   backup-production:
+    if: ${{ always() && needs.validate-main.result == 'success' && needs.verify-staging.result == 'success' && needs.prepare-release.result == 'success' }}
     needs: [validate-main, verify-staging, prepare-release]
     uses: ./.github/workflows/backup-production.yml
     secrets: inherit
