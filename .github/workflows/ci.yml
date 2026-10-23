@@ -175,7 +175,7 @@ jobs:
         run: |
           service="practice-plus-plus-staging-api"
           region="us-east5"
-          tag="staging-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          tag="s${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           if [[ "$IMAGE" != us-east5-docker.pkg.dev/practice-plus-plus/practice-plus-plus/api@sha256:* ]]; then
             echo "The staging API image digest is missing or invalid."
             exit 1
