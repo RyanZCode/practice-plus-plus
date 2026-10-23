@@ -35,7 +35,7 @@ const assessmentJsonSchema = {
     "evidence",
   ],
   properties: {
-    outcome: { type: "string", enum: ["INDEPENDENT", "ASSISTED", "GAVE_UP", "INCOMPLETE"] },
+    outcome: { type: "string", enum: ["INDEPENDENT", "ASSISTED", "GAVE_UP"] },
     confidence: { type: ["string", "null"], enum: ["CONFIDENT", "SHAKY", null] },
     optimality: { type: ["string", "null"], enum: ["OPTIMAL", "SUBOPTIMAL", "UNKNOWN", null] },
     timeSpentSeconds: { type: ["integer", "null"], minimum: 0, maximum: 2147483647 },

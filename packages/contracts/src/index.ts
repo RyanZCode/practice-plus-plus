@@ -191,7 +191,7 @@ export const assessmentEvidenceSchema = z.enum([
   "TUTOR_CONVERSATION",
 ]);
 export const attemptAssessmentDraftInputSchema = z.strictObject({
-  outcome: z.enum(["INDEPENDENT", "ASSISTED", "GAVE_UP", "INCOMPLETE"]),
+  outcome: z.enum(["INDEPENDENT", "ASSISTED", "GAVE_UP"]),
   confidence: z.enum(["CONFIDENT", "SHAKY"]).nullable(),
   optimality: z.enum(["OPTIMAL", "SUBOPTIMAL", "UNKNOWN"]).nullable(),
   timeSpentSeconds: z.number().int().nonnegative().max(2147483647).nullable(),
@@ -220,6 +220,7 @@ export const attemptAssessmentRequestSchema = z.strictObject({
 export type AttemptAssessmentRequest = z.infer<typeof attemptAssessmentRequestSchema>;
 
 export const attemptAssessmentDraftSchema = attemptAssessmentDraftInputSchema.extend({
+  outcome: z.enum(["INDEPENDENT", "ASSISTED", "GAVE_UP", "INCOMPLETE"]),
   id: z.uuid(),
   attemptId: z.uuid(),
   createdAt: z.iso.datetime(),
@@ -268,6 +269,7 @@ export const practiceSettingsSchema = z
     attemptTimerMinutes: z.number().int().min(1).max(180),
     allowPremiumProblems: z.boolean(),
     difficultyPreference: problemDifficultyPreferenceSchema,
+    preferredLanguage: z.string().trim().min(1).max(50).nullable().default(null),
     dailyTarget: z.number().int().min(1).max(20),
     redoIntervals: z.strictObject({
       high: wholeDaysSchema,
@@ -520,7 +522,7 @@ export const redoNextActionSchema = z.discriminatedUnion("type", [
 ]);
 export const confirmAttemptSchema = z.strictObject({
   nextAction: redoNextActionSchema.optional(),
-  outcome: attemptOutcomeSchema,
+  outcome: z.enum(["INDEPENDENT", "ASSISTED", "GAVE_UP"]),
   confidence: z.enum(["CONFIDENT", "SHAKY"]).nullable().default(null),
   optimality: z.enum(["OPTIMAL", "SUBOPTIMAL", "UNKNOWN"]).nullable().default(null),
   assistance: z.array(assistanceSchema).max(5).default([]),
@@ -599,10 +601,9 @@ const outcomeCountsSchema = z.strictObject({
   independent: z.number().int().nonnegative(),
   assisted: z.number().int().nonnegative(),
   gaveUp: z.number().int().nonnegative(),
-  incomplete: z.number().int().nonnegative(),
 });
 
-const learningOutcomeCountsSchema = outcomeCountsSchema.omit({ incomplete: true });
+const learningOutcomeCountsSchema = outcomeCountsSchema;
 
 const assistanceCountsSchema = z.strictObject({
   clarification: z.number().int().nonnegative(),
@@ -716,7 +717,7 @@ export const dailyPlanSchema = z
           problem: catalogProblemSchema,
           kind: z.enum(["DIAGNOSTIC", "FRESH", "REDO", "TRANSFER"]),
           explanation: z.string(),
-          status: z.enum(["PENDING", "ACTIVE", "FINISHED", "INCOMPLETE"]),
+          status: z.enum(["PENDING", "ACTIVE", "FINISHED"]),
         }),
       )
       .max(20),

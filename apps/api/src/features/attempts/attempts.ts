@@ -259,13 +259,6 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
     },
     async confirm(userProfileId, attemptId, input, now) {
       return change(userProfileId, attemptId, async (tx, record) => {
-        if (
-          record.outcome !== null &&
-          record.outcome !== "INCOMPLETE" &&
-          input.outcome === "INCOMPLETE"
-        ) {
-          throw new HttpError(409, "A reported result cannot become incomplete.");
-        }
         if (record.outcome === "ASSISTED" && input.outcome === "INDEPENDENT") {
           throw new HttpError(409, "An assisted result cannot become independent.");
         }
@@ -473,7 +466,14 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
           practiceDateFor(now, plan) === plan.practiceDate.toISOString().slice(0, 10)
         ) {
           const item = await tx.dailyPlanItem.findFirst({
-            where: { userProfileId, problemId, attemptId: null },
+            where: {
+              userProfileId,
+              problemId,
+              OR: [
+                { attemptId: null },
+                { attempt: { is: { confirmedAt: { not: null }, outcome: "INCOMPLETE" } } },
+              ],
+            },
           });
           if (item !== null) {
             await tx.dailyPlanItem.update({

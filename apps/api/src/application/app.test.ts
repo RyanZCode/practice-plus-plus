@@ -189,6 +189,7 @@ describe("API", () => {
       attemptTimerMinutes: 30,
       allowPremiumProblems: true,
       difficultyPreference: "ANY",
+      preferredLanguage: null,
       dailyTarget: 2,
       redoIntervals: { high: 1, low: 7, medium: 3 },
       resetTime: "04:00",

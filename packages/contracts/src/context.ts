@@ -93,7 +93,7 @@ const selectionSchema = z.strictObject({
   kind: z.enum(["DIAGNOSTIC", "FRESH", "REDO", "TRANSFER"]),
   reason: z.string().max(100),
   transferId: z.uuid().nullable(),
-  status: z.enum(["PENDING", "ACTIVE", "FINISHED", "INCOMPLETE"]),
+  status: z.enum(["PENDING", "ACTIVE", "FINISHED"]),
 });
 const omissionSchema = z.strictObject({
   goals: z.number().int().nonnegative(),
@@ -125,6 +125,7 @@ export const contextPacketSchema = z
       lowIntervalDays: z.number().int().min(1).max(90),
       allowPremiumProblems: z.boolean(),
       difficultyPreference: z.enum(["ANY", "EASIER", "MEDIUM_ONLY"]),
+      preferredLanguage: z.string().max(50).nullable().default(null),
     }),
     goals: z.array(learnerGoalSchema).max(contextLimits.goals),
     preferences: z.array(teachingPreferenceSchema).max(contextLimits.preferences),

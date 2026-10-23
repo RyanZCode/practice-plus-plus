@@ -252,7 +252,7 @@ export function AnalyticsView({
           <p>
             {summary.freshOutcomes.assisted} assisted · {summary.freshOutcomes.gaveUp} gave up
           </p>
-          <p>{freshAttempts} confirmed, non-incomplete fresh attempts</p>
+          <p>{freshAttempts} confirmed fresh attempts</p>
         </article>
         <article className="analytics-card">
           <h3>Exact redo retention</h3>
@@ -265,7 +265,6 @@ export function AnalyticsView({
             {summary.redo.outcomes.independent} independent · {summary.redo.outcomes.assisted}{" "}
             assisted · {summary.redo.outcomes.gaveUp} gave up
           </p>
-          <p>{summary.redo.outcomes.incomplete} incomplete, excluded from rate</p>
         </article>
       </div>
 
@@ -372,7 +371,7 @@ function PatternRow({
               </dd>
               <dd className="detail-caption">
                 {redo.outcomes.independent} independent · {redo.outcomes.assisted} assisted ·{" "}
-                {redo.outcomes.gaveUp} gave up · {redo.outcomes.incomplete} incomplete
+                {redo.outcomes.gaveUp} gave up
               </dd>
             </div>
             <div>
@@ -410,15 +409,15 @@ function PatternRow({
               )}
             </dl>
             <p className="detail-caption">
-              Fresh evidence uses the latest 10 confirmed, non-incomplete fresh attempts. Assisted
-              attempts, giving up, shaky confidence, and suboptimal solutions count toward the
-              needs-practice signal. Multi-pattern attempts split their weight equally.
+              Fresh evidence uses the latest 10 confirmed fresh attempts. Assisted attempts, giving
+              up, shaky confidence, and suboptimal solutions count toward the needs-practice signal.
+              Multi-pattern attempts split their weight equally.
             </p>
           </details>
           <details className="pattern-problems">
             <summary>Practiced problems ({pattern.problems.length})</summary>
             {pattern.problems.length === 0 ? (
-              <p>No confirmed, non-incomplete problems in this pattern yet.</p>
+              <p>No confirmed problems in this pattern yet.</p>
             ) : (
               <ol>
                 {pattern.problems.map((problem) => (
@@ -466,9 +465,9 @@ function MetricDefinitions() {
       <dl>
         <dt>Pattern evidence</dt>
         <dd>
-          Uses the latest 10 confirmed, non-incomplete fresh attempts per pattern. Zero samples is
-          untested, one to four is building evidence, and five or more permits a directional signal.
-          It is not a mastery score.
+          Uses the latest 10 confirmed fresh attempts per pattern. Zero samples is untested, one to
+          four is building evidence, and five or more permits a directional signal. It is not a
+          mastery score.
         </dd>
         <dt>Needs practice</dt>
         <dd>
@@ -482,23 +481,22 @@ function MetricDefinitions() {
           details add no penalty.
         </dd>
         <dt>Stale</dt>
-        <dd>No confirmed, non-incomplete fresh or redo attempt for 30 practice-calendar days.</dd>
+        <dd>No confirmed fresh or redo attempt for 30 practice-calendar days.</dd>
         <dt>Recent concentration</dt>
         <dd>
           After at least four qualifying attempts in the last seven practice dates, more than half
           of weighted exposure belongs to one pattern.
         </dd>
         <dt>Fresh outcomes</dt>
-        <dd>All confirmed, non-incomplete fresh attempts through the current practice date.</dd>
+        <dd>All confirmed fresh attempts through the current practice date.</dd>
         <dt>Exact redo retention</dt>
         <dd>
-          Independent and assisted redo outcomes divided by all non-incomplete redo outcomes.
-          Incomplete redos are shown separately.
+          Independent and assisted redo outcomes divided by all attempts with a recorded result.
         </dd>
         <dt>Help used</dt>
         <dd>
-          Distinct confirmed, non-incomplete attempts using each category. One attempt may use
-          multiple categories.
+          Distinct attempts with a recorded result using each category. One attempt may use multiple
+          categories.
         </dd>
         <dt>Solution quality</dt>
         <dd>
@@ -760,8 +758,7 @@ export function StreakCalendarView({
             <summary>Completion rules</summary>
             <p>
               Confirmed independent, assisted, and gave-up attempts count toward the day's target,
-              including manual and extra practice. Incomplete attempts do not count. Counts can
-              exceed the target.
+              including manual and extra practice. Counts can exceed the target.
             </p>
             <p>
               Completed days meet or exceed the target. Partial days fall below it. Tracked days

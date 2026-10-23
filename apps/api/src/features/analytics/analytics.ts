@@ -301,7 +301,6 @@ function countOutcomes(attempts: readonly AnalyticsAttempt[]) {
     independent: attempts.filter((attempt) => attempt.outcome === "INDEPENDENT").length,
     assisted: attempts.filter((attempt) => attempt.outcome === "ASSISTED").length,
     gaveUp: attempts.filter((attempt) => attempt.outcome === "GAVE_UP").length,
-    incomplete: attempts.filter((attempt) => attempt.outcome === "INCOMPLETE").length,
   };
 }
 

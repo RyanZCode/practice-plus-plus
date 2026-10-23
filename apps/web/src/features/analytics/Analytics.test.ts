@@ -11,7 +11,7 @@ it("renders decision-oriented analytics with definitions and no skill-score clai
         summary: {
           freshOutcomes: { independent: 4, assisted: 2, gaveUp: 1 },
           redo: {
-            outcomes: { independent: 2, assisted: 1, gaveUp: 1, incomplete: 1 },
+            outcomes: { independent: 2, assisted: 1, gaveUp: 1 },
             successRate: 0.75,
           },
           assistance: {
@@ -64,7 +64,7 @@ it("renders decision-oriented analytics with definitions and no skill-score clai
               outcomes: { independent: 2, assisted: 2, gaveUp: 1 },
             },
             redo: {
-              outcomes: { independent: 1, assisted: 0, gaveUp: 1, incomplete: 0 },
+              outcomes: { independent: 1, assisted: 0, gaveUp: 1 },
               successRate: 0.5,
             },
             assistance: {
@@ -112,7 +112,7 @@ describe("analytics empty states", () => {
           summary: {
             freshOutcomes: { independent: 0, assisted: 0, gaveUp: 0 },
             redo: {
-              outcomes: { independent: 0, assisted: 0, gaveUp: 0, incomplete: 0 },
+              outcomes: { independent: 0, assisted: 0, gaveUp: 0 },
               successRate: null,
             },
             assistance: {

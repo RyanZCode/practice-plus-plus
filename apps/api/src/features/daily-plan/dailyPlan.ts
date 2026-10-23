@@ -210,7 +210,7 @@ function present(plan: Prisma.DailyPlanGetPayload<{ select: typeof select }>): D
           : item.attempt.confirmedAt === null
             ? "ACTIVE"
             : item.attempt.outcome === "INCOMPLETE"
-              ? "INCOMPLETE"
+              ? "PENDING"
               : "FINISHED",
     })),
   });

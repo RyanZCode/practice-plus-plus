@@ -77,6 +77,7 @@ model PracticeSettings {
   attemptTimerMinutes Int         @default(30) @map("attempt_timer_minutes") @db.SmallInt
   allowPremiumProblems Boolean     @default(true) @map("allow_premium_problems")
   difficultyPreference ProblemDifficultyPreference @default(ANY) @map("difficulty_preference")
+  preferredLanguage   String?     @map("preferred_language") @db.VarChar(50)
   timeZone            String      @map("time_zone") @db.VarChar(100)
   resetMinutes        Int         @map("reset_minutes") @db.SmallInt
   dailyTarget         Int         @map("daily_target") @db.SmallInt

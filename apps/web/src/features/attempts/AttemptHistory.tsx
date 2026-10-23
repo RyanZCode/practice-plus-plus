@@ -101,21 +101,28 @@ export function AttemptHistory({
         ) : null}
       </header>
       <div className="history-search">
-        <label>
-          <span className="visually-hidden">Search history</span>
-          <input
-            type="search"
-            value={search}
-            maxLength={200}
-            placeholder="Search history by title or number"
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
-        {search !== "" ? (
-          <button type="button" className="secondary-button" onClick={() => setSearch("")}>
-            Clear search
-          </button>
-        ) : null}
+        <div className="search-field history-search-field">
+          <label>
+            <span className="visually-hidden">Search history</span>
+            <input
+              type="search"
+              value={search}
+              maxLength={200}
+              placeholder="Search history by title or number"
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          {search !== "" ? (
+            <button
+              type="button"
+              className="search-clear-button"
+              aria-label="Clear search"
+              onClick={() => setSearch("")}
+            >
+              ×
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="history-surface page-surface" aria-busy={loading}>
         {loading ? <LoadingStatus>Loading history…</LoadingStatus> : null}

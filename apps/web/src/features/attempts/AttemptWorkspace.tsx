@@ -27,7 +27,7 @@ export function AttemptWorkspace({
   dailyProgress: ReactNode;
   onPause: () => void;
   onSkip: () => void;
-  onReport: (incomplete: boolean) => void;
+  onReport: () => void;
   onGiveUp: () => void;
   onCancel: () => void;
   onReview: () => void;
@@ -136,28 +136,28 @@ export function AttemptWorkspace({
             ) : null}
             {gaveUp ? (
               <div className="attempt-review-actions">
-                {attempt.solutionReviewedAt !== null ? (
-                  <a
-                    href={`https://leetcode.com/problems/${attempt.problem.slug}/solutions/`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Review LeetCode solutions ↗
-                  </a>
-                ) : (
-                  <button type="button" disabled={busy} onClick={onReview}>
-                    Review LeetCode solutions
-                  </button>
-                )}
+                <a
+                  className="secondary-button attempt-review-link"
+                  href={`https://leetcode.com/problems/${attempt.problem.slug}/solutions/`}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-disabled={busy || undefined}
+                  onClick={(event) => {
+                    if (busy) event.preventDefault();
+                    else if (attempt.solutionReviewedAt === null) onReview();
+                  }}
+                >
+                  Review LeetCode solutions ↗
+                </a>
                 <p className="settings-help">
-                  Close the reference and try coding from memory. Either result keeps the outcome
-                  gave up.
+                  Close the LeetCode reference and try solving the problem from memory. The attempt
+                  stays marked Gave up whether or not you solve it.
                 </p>
                 <button
                   type="button"
                   className="secondary-button"
                   disabled={busy}
-                  onClick={reporting ? onReturn : () => onReport(false)}
+                  onClick={reporting ? onReturn : onReport}
                 >
                   {reporting ? "Return to solution review" : "Review and confirm result"}
                 </button>
@@ -166,7 +166,7 @@ export function AttemptWorkspace({
             {attempt.outcome === null ? (
               <div className="attempt-result-actions">
                 {!reporting ? (
-                  <button type="button" disabled={busy} onClick={() => onReport(false)}>
+                  <button type="button" disabled={busy} onClick={onReport}>
                     Report result
                   </button>
                 ) : null}

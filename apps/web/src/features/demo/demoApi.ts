@@ -213,15 +213,10 @@ export async function demoRequest(path: string, init: RequestInit = {}): Promise
         (item, index, all) => all.findIndex((other) => other.type === item.type) === index,
       );
       const required = suggestedOutcome(assistance);
-      if (
-        input.outcome !== "INCOMPLETE" &&
-        input.outcome !== "GAVE_UP" &&
-        required &&
-        input.outcome !== required
-      )
+      if (input.outcome !== "GAVE_UP" && required && input.outcome !== required)
         return json({ error: "Outcome conflicts with assistance" }, 409);
       Object.assign(attempt, input, { assistance, confirmedAt: now });
-      if (input.outcome !== "INCOMPLETE") attempt.patterns = problemPatterns(attempt.problem.slug);
+      attempt.patterns = problemPatterns(attempt.problem.slug);
       for (const previous of data.attempts) {
         if (sameProblem(previous.problem, attempt.problem)) previous.review = null;
       }
@@ -232,7 +227,6 @@ export async function demoRequest(path: string, init: RequestInit = {}): Promise
       if (repeat) {
         const urgent =
           input.outcome === "GAVE_UP" ||
-          input.outcome === "INCOMPLETE" ||
           input.confidence === "SHAKY" ||
           assistance.some((event) => event.type === "CONCEPTUAL_HINT");
         const interval = urgent
@@ -244,7 +238,7 @@ export async function demoRequest(path: string, init: RequestInit = {}): Promise
         };
       }
       const item = data.plan.items.find((item) => sameProblem(item.problem, attempt.problem));
-      if (item) item.status = input.outcome === "INCOMPLETE" ? "INCOMPLETE" : "FINISHED";
+      if (item) item.status = "FINISHED";
     }
     if (action === "review" && attempt.review)
       attempt.review.manualDueDate = reviewOverrideSchema.parse(body).manualDueDate;

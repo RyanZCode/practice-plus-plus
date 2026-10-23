@@ -20,6 +20,7 @@ const settings = {
   lowIntervalDays: 7,
   allowPremiumProblems: true,
   difficultyPreference: "ANY",
+  preferredLanguage: null,
 };
 function problem(n: number, patternId = id(100)) {
   return {
