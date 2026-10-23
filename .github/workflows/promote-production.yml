@@ -1,4 +1,4 @@
-name: Promote production database
+name: Promote production release
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: production-database
+  group: production-release
   cancel-in-progress: false
 
 jobs:
@@ -80,13 +80,193 @@ jobs:
         env:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
 
+  verify-staging-api:
+    if: needs.detect-changes.outputs.api_changed == 'true'
+    needs: [validate-main, verify-staging, detect-changes]
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: practice-plus-plus
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: practice-plus-plus
+
+      - name: Verify staged API revision
+        env:
+          REVISION: ${{ needs.validate-main.outputs.revision }}
+        run: |
+          service="practice-plus-plus-staging-api"
+          region="us-east5"
+          service_json=$(gcloud run services describe "$service" --project practice-plus-plus --region "$region" --format=json)
+          ready_revision=$(jq -r '.status.latestReadyRevisionName // empty' <<< "$service_json")
+          service_url=$(jq -r '.status.url // empty' <<< "$service_json")
+          if [[ -z "$ready_revision" || -z "$service_url" ]]; then
+            echo "The staging Cloud Run service has no ready revision."
+            exit 1
+          fi
+
+          deployed_version=$(gcloud run revisions describe "$ready_revision" --project practice-plus-plus --region "$region" --format=json | jq -r '.spec.containers[0].env[]? | select(.name == "APP_VERSION") | .value // empty')
+          if [[ "$deployed_version" != "$REVISION" ]]; then
+            echo "The staging API is not running the revision selected for production promotion."
+            exit 1
+          fi
+          curl --fail --silent --show-error --max-time 10 "$service_url/health/ready" >/dev/null
+
+  detect-changes:
+    needs: validate-main
+    runs-on: ubuntu-latest
+    outputs:
+      api_changed: ${{ steps.changes.outputs.api_changed }}
+      web_changed: ${{ steps.changes.outputs.web_changed }}
+
+    steps:
+      - name: Check out release history
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.validate-main.outputs.revision }}
+          fetch-depth: 0
+
+      - name: Identify application changes
+        id: changes
+        env:
+          REVISION: ${{ needs.validate-main.outputs.revision }}
+        run: |
+          changed_files=$(git diff --name-only "$REVISION^1" "$REVISION")
+          if grep -Eq '^(apps/api/|packages/|Dockerfile$|certificates/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$)' <<< "$changed_files"; then
+            echo "api_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "api_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+          if grep -Eq '^(apps/web/|packages/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$)' <<< "$changed_files"; then
+            echo "web_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "web_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  prepare-release:
+    if: ${{ always() && needs.validate-main.result == 'success' && needs.verify-staging.result == 'success' && needs.detect-changes.result == 'success' && (needs.verify-staging-api.result == 'success' || needs.verify-staging-api.result == 'skipped') }}
+    needs: [validate-main, verify-staging, verify-staging-api, detect-changes]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      api_image: ${{ steps.push-api-image.outputs.image }}
+
+    steps:
+      - name: Check out release
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate-main.outputs.revision }}
+
+      - name: Check Cloudflare deployment credential
+        if: needs.detect-changes.outputs.web_changed == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then
+            echo "The production CLOUDFLARE_API_TOKEN secret is required."
+            exit 1
+          fi
+
+      - name: Check Google Cloud deployment configuration
+        if: needs.detect-changes.outputs.api_changed == 'true'
+        env:
+          WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          DEPLOYER_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+        run: |
+          if [[ -z "$WORKLOAD_IDENTITY_PROVIDER" || -z "$DEPLOYER_SERVICE_ACCOUNT" ]]; then
+            echo "GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOYER_SERVICE_ACCOUNT must be configured in the production environment."
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        if: needs.detect-changes.outputs.web_changed == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.19.0
+
+      - name: Enable pnpm
+        if: needs.detect-changes.outputs.web_changed == 'true'
+        run: corepack enable
+
+      - name: Install dependencies
+        if: needs.detect-changes.outputs.web_changed == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build production frontend
+        if: needs.detect-changes.outputs.web_changed == 'true'
+        run: |
+          pnpm --filter @practice-plus-plus/contracts build
+          pnpm --filter @practice-plus-plus/web build
+        env:
+          VITE_API_URL: https://practice-plus-plus-api-234306743250.us-east5.run.app
+          VITE_SUPABASE_URL: https://cmrdxyvkyaubhiqrxdoo.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_TDgZ6WnO9qbMMThaW6OufQ_G8Jb_TYI
+          VITE_APP_ENV: production
+          VITE_APP_VERSION: ${{ needs.validate-main.outputs.revision }}
+          VITE_ERROR_MONITORING_DSN: https://hpkjbSMXGR4u42VmSoHJU2rH@s2802444.us-west-2a.betterstackdata.com/2802444
+
+      - name: Save production frontend
+        if: needs.detect-changes.outputs.web_changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-web-${{ needs.validate-main.outputs.revision }}
+          path: apps/web/dist
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Authenticate to Google Cloud
+        if: needs.detect-changes.outputs.api_changed == 'true'
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: practice-plus-plus
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud CLI
+        if: needs.detect-changes.outputs.api_changed == 'true'
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: practice-plus-plus
+
+      - name: Build and push production API image
+        if: needs.detect-changes.outputs.api_changed == 'true'
+        id: push-api-image
+        env:
+          REVISION: ${{ needs.validate-main.outputs.revision }}
+        run: |
+          image="us-east5-docker.pkg.dev/practice-plus-plus/practice-plus-plus/api:$REVISION"
+          gcloud auth configure-docker us-east5-docker.pkg.dev --quiet
+          docker build --tag "$image" .
+          docker push "$image"
+          image_digest=$(docker image inspect "$image" --format='{{index .RepoDigests 0}}')
+          if [[ "$image_digest" != *@sha256:* ]]; then
+            echo "The pushed API image digest could not be read."
+            exit 1
+          fi
+          echo "image=$image_digest" >> "$GITHUB_OUTPUT"
+
   backup-production:
-    needs: [validate-main, verify-staging]
+    needs: [validate-main, verify-staging, prepare-release]
     uses: ./.github/workflows/backup-production.yml
     secrets: inherit
 
   migrate-production:
-    needs: [validate-main, verify-staging, backup-production]
+    if: ${{ always() && needs.validate-main.result == 'success' && needs.verify-staging.result == 'success' && needs.prepare-release.result == 'success' && needs.backup-production.result == 'success' }}
+    needs: [validate-main, verify-staging, prepare-release, backup-production]
     runs-on: ubuntu-latest
     environment: production
 
@@ -111,3 +291,112 @@ jobs:
         run: pnpm --filter @practice-plus-plus/api prisma:migrate:deploy
         env:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+  deploy-production-api:
+    if: ${{ always() && needs.migrate-production.result == 'success' && needs.prepare-release.result == 'success' && needs.detect-changes.outputs.api_changed == 'true' }}
+    needs: [validate-main, detect-changes, prepare-release, migrate-production]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out release
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate-main.outputs.revision }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: practice-plus-plus
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: practice-plus-plus
+
+      - name: Deploy and verify tagged revision
+        id: deploy
+        env:
+          IMAGE: ${{ needs.prepare-release.outputs.api_image }}
+          REVISION: ${{ needs.validate-main.outputs.revision }}
+        run: |
+          service="practice-plus-plus-api"
+          region="us-east5"
+          tag="release-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [[ "$IMAGE" != us-east5-docker.pkg.dev/practice-plus-plus/practice-plus-plus/api@sha256:* ]]; then
+            echo "The release API image digest is missing or invalid."
+            exit 1
+          fi
+
+          gcloud run deploy "$service" \
+            --project practice-plus-plus \
+            --region "$region" \
+            --image "$IMAGE" \
+            --no-traffic \
+            --tag "$tag" \
+            --update-env-vars "APP_VERSION=$REVISION" \
+            --quiet
+
+          service_json=$(gcloud run services describe "$service" --project practice-plus-plus --region "$region" --format=json)
+          tagged_revision=$(jq -r --arg tag "$tag" '.status.traffic[]? | select(.tag == $tag) | .revisionName' <<< "$service_json")
+          tagged_url=$(jq -r --arg tag "$tag" '.status.traffic[]? | select(.tag == $tag) | .url' <<< "$service_json")
+          if [[ -z "$tagged_revision" || -z "$tagged_url" ]]; then
+            echo "Cloud Run did not return the tagged revision URL."
+            exit 1
+          fi
+
+          deployed_image=$(gcloud run revisions describe "$tagged_revision" --project practice-plus-plus --region "$region" --format='value(spec.containers[0].image)')
+          if [[ "$deployed_image" != "$IMAGE" ]]; then
+            echo "The Cloud Run revision does not use the prepared image digest."
+            exit 1
+          fi
+
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error --max-time 10 "$tagged_url/health/ready" >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$ready" != "true" ]]; then
+            echo "The tagged Cloud Run revision did not become ready."
+            exit 1
+          fi
+
+          gcloud run services update-traffic "$service" \
+            --project practice-plus-plus \
+            --region "$region" \
+            --to-revisions "$tagged_revision=100" \
+            --quiet
+
+          service_url=$(gcloud run services describe "$service" --project practice-plus-plus --region "$region" --format='value(status.url)')
+          curl --fail --silent --show-error --max-time 10 "$service_url/health/ready" >/dev/null
+
+  deploy-production-frontend:
+    if: ${{ always() && needs.migrate-production.result == 'success' && needs.prepare-release.result == 'success' && needs.detect-changes.outputs.web_changed == 'true' && (needs.deploy-production-api.result == 'success' || needs.deploy-production-api.result == 'skipped') }}
+    needs:
+      [validate-main, detect-changes, prepare-release, migrate-production, deploy-production-api]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download production frontend
+        uses: actions/download-artifact@v4
+        with:
+          name: production-web-${{ needs.validate-main.outputs.revision }}
+          path: apps/web/dist
+
+      - name: Deploy production frontend
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: d4a39156df6c27c5ba824430943981d1
+          command: pages deploy apps/web/dist --project-name=practice-plus-plus --branch=main --commit-hash=${{ needs.validate-main.outputs.revision }}
