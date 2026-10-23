@@ -11,6 +11,7 @@ supabase/.temp/
 .env
 .env.*
 !.env.example
+gha-creds-*.json
 
 .DS_Store
 Thumbs.db
