@@ -1,5 +1,6 @@
 import {
   suggestedOutcome,
+  suggestedFollowUp,
   redoNextActionSchema,
   tutorHintNames,
   type Assistance,
@@ -79,6 +80,12 @@ export function AttemptOutcomeForm({
     assessmentDraft?.reproducedFromMemory ?? null,
   );
   const [selectedAction, setSelectedAction] = useState<string>();
+  const [confidence, setConfidence] = useState<ConfirmAttempt["confidence"]>(
+    assessmentDraft?.confidence ?? null,
+  );
+  const [optimality, setOptimality] = useState<ConfirmAttempt["optimality"]>(
+    assessmentDraft?.optimality ?? null,
+  );
   const [summary, setSummary] = useState({
     approach: assessmentDraft?.summary?.approach ?? attempt.summary?.approach ?? "",
     stuckPoint: assessmentDraft?.summary?.stuckPoint ?? attempt.summary?.stuckPoint ?? "",
@@ -91,9 +98,14 @@ export function AttemptOutcomeForm({
     nextTeachingAction:
       assessmentDraft?.summary?.nextTeachingAction ?? attempt.summary?.nextTeachingAction ?? "",
   });
-  const successfulRedo =
-    attempt.type === "REDO" && (outcome === "INDEPENDENT" || outcome === "ASSISTED");
-  const nextActionType = selectedAction ?? (outcome === "ASSISTED" ? "REPEAT" : "COMPLETE");
+  const nextActionType =
+    selectedAction ??
+    suggestedFollowUp({
+      outcome: outcome === "" ? null : outcome,
+      confidence,
+      optimality,
+      followUpContext: attempt.followUpContext,
+    });
   const required = suggestedOutcome([...attempt.assistance, ...assistance]);
   const reviewed = required === "GAVE_UP";
   const canConfirm = attempt.outcome !== null;
@@ -149,6 +161,8 @@ export function AttemptOutcomeForm({
           ) {
             if (control.value !== value) changes.push(key);
             control.value = value;
+            if (key === "confidence") setConfidence(draft.confidence);
+            if (key === "optimality") setOptimality(draft.optimality);
           }
         }
       }
@@ -184,18 +198,14 @@ export function AttemptOutcomeForm({
           Object.entries(summary).map(([key, value]) => [key, value.trim() || null]),
         ) as NonNullable<ConfirmAttempt["summary"]>;
         void onConfirm({
-          ...(successfulRedo && nextActionType !== ""
-            ? {
-                nextAction: redoNextActionSchema.parse({
-                  type: nextActionType,
-                  ...(nextActionType === "TRANSFER" ? { pattern: text("transferPattern") } : {}),
-                  ...(nextActionType === "CUSTOM_DATE" ||
-                  (nextActionType === "TRANSFER" && text("dueDate") !== null)
-                    ? { dueDate: text("dueDate") }
-                    : {}),
-                }),
-              }
-            : {}),
+          nextAction: redoNextActionSchema.parse({
+            type: nextActionType,
+            ...(nextActionType === "TRANSFER" ? { pattern: text("transferPattern") } : {}),
+            ...(nextActionType === "CUSTOM_DATE" ||
+            (nextActionType === "TRANSFER" && text("dueDate") !== null)
+              ? { dueDate: text("dueDate") }
+              : {}),
+          }),
           outcome,
           confidence: text("confidence") as ConfirmAttempt["confidence"],
           optimality: text("optimality") as ConfirmAttempt["optimality"],
@@ -390,19 +400,11 @@ export function AttemptOutcomeForm({
             </label>
           </fieldset>
         ) : null}
-        {canConfirm && successfulRedo ? (
+        {canConfirm ? (
           <fieldset>
-            <legend>After this redo</legend>
-            {outcome === "ASSISTED" ? (
-              <p>
-                Repeat is suggested because this solve used help. Confirm this choice or select
-                another action.
-              </p>
-            ) : (
-              <p>Confirm no follow-up, or choose more practice.</p>
-            )}
+            <legend>Next practice</legend>
             <label>
-              After this redo
+              Follow-up
               <select
                 value={nextActionType}
                 onChange={(event) => setSelectedAction(event.target.value)}
@@ -417,7 +419,11 @@ export function AttemptOutcomeForm({
               <>
                 <label>
                   Pattern to practice
-                  <select name="transferPattern" required defaultValue="">
+                  <select
+                    name="transferPattern"
+                    required
+                    defaultValue={attempt.patterns?.[0] ?? ""}
+                  >
                     <option value="" disabled>
                       Select a revealed pattern
                     </option>
@@ -427,8 +433,9 @@ export function AttemptOutcomeForm({
                   </select>
                 </label>
                 <p>
-                  Eligible 7 calendar days after this attempt's practice date. The daily plan will
-                  choose the problem when space and a matching fresh problem are available.
+                  Eligible after your configured medium interval from this attempt's practice date.
+                  The daily plan will choose the problem when space and a matching fresh problem are
+                  available.
                 </p>
               </>
             ) : null}
@@ -452,7 +459,13 @@ export function AttemptOutcomeForm({
             <summary>Optional details</summary>
             <label>
               Confidence {updated("confidence")}
-              <select name="confidence" defaultValue={assessmentDraft?.confidence ?? ""}>
+              <select
+                name="confidence"
+                defaultValue={assessmentDraft?.confidence ?? ""}
+                onChange={(event) =>
+                  setConfidence((event.target.value || null) as ConfirmAttempt["confidence"])
+                }
+              >
                 <option value="">Not specified</option>
                 <option value="CONFIDENT">Confident</option>
                 <option value="SHAKY">Shaky</option>
@@ -460,7 +473,13 @@ export function AttemptOutcomeForm({
             </label>
             <label>
               Solution quality {updated("optimality")}
-              <select name="optimality" defaultValue={assessmentDraft?.optimality ?? ""}>
+              <select
+                name="optimality"
+                defaultValue={assessmentDraft?.optimality ?? ""}
+                onChange={(event) =>
+                  setOptimality((event.target.value || null) as ConfirmAttempt["optimality"])
+                }
+              >
                 <option value="">Not specified</option>
                 <option value="OPTIMAL">Optimal</option>
                 <option value="SUBOPTIMAL">Suboptimal</option>
@@ -557,9 +576,7 @@ export function AttemptOutcomeForm({
               ? "Drafting assessment…"
               : busy
                 ? "Saving…"
-                : successfulRedo
-                  ? "Confirm outcome and next action"
-                  : "Confirm outcome"}
+                : "Confirm outcome and next action"}
           </button>
         ) : null}
       </fieldset>

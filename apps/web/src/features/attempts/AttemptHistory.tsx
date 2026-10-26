@@ -233,7 +233,7 @@ function HistoryRow({
               Transfer
               {attempt.nextAction.dueDate
                 ? ` ${formatPracticeDate(attempt.nextAction.dueDate)}`
-                : " after 7 days"}
+                : " scheduled"}
             </>
           ) : attempt.nextAction?.type === "COMPLETE" ? (
             "Complete"

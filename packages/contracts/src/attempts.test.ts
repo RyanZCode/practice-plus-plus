@@ -1,3 +1,4 @@
+import { suggestedFollowUp } from "./index.js";
 import { describe, expect, it } from "vitest";
 import {
   attemptAssessmentDraftInputSchema,
@@ -132,4 +133,28 @@ describe("attempt assessment draft", () => {
   ])("rejects content or evidence outside the draft contract", (input) => {
     expect(attemptAssessmentDraftInputSchema.safeParse(input).success).toBe(false);
   });
+});
+
+describe("suggested follow-up", () => {
+  it.each([
+    ["INDEPENDENT", null, null, undefined, "COMPLETE"],
+    ["INDEPENDENT", "CONFIDENT", "OPTIMAL", undefined, "COMPLETE"],
+    ["INDEPENDENT", "SHAKY", null, undefined, "TRANSFER"],
+    ["INDEPENDENT", null, "SUBOPTIMAL", undefined, "TRANSFER"],
+    ["ASSISTED", null, null, undefined, "TRANSFER"],
+    ["GAVE_UP", null, null, undefined, "REPEAT"],
+    ["INDEPENDENT", "SHAKY", "SUBOPTIMAL", "TRANSFER", "COMPLETE"],
+    ["ASSISTED", "CONFIDENT", "OPTIMAL", "TRANSFER", "TRANSFER"],
+    ["GAVE_UP", null, null, "TRANSFER", "REPEAT"],
+    ["INDEPENDENT", "CONFIDENT", "OPTIMAL", "REPAIR", "TRANSFER"],
+    ["ASSISTED", null, null, "REPAIR", "TRANSFER"],
+    ["INCOMPLETE", null, null, undefined, "COMPLETE"],
+  ] as const)(
+    "suggests %s / %s / %s / %s => %s",
+    (outcome, confidence, optimality, followUpContext, expected) => {
+      expect(suggestedFollowUp({ outcome, confidence, optimality, followUpContext })).toBe(
+        expected,
+      );
+    },
+  );
 });

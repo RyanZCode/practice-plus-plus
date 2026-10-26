@@ -95,7 +95,8 @@ describe("browser demo", () => {
       notes: null,
       reproducedFromMemory: null,
     });
-    expect(saved.review?.generatedDueDate).toBeTruthy();
+    expect(saved.review).toBeNull();
+    expect(saved.nextAction).toMatchObject({ type: "TRANSFER", pattern: "Arrays & Hashing" });
     expect(saved.assistance).toEqual([{ type: "CONCEPTUAL_HINT", hintLevel: 1 }]);
     expect(await loadActiveAttempt(api, token)).toBeNull();
     expect((await loadSavedDailyPlan(api, token))?.items[1]?.status).toBe("FINISHED");

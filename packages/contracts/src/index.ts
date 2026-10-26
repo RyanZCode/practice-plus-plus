@@ -520,6 +520,23 @@ export const redoNextActionSchema = z.discriminatedUnion("type", [
     dueDate: z.iso.date().optional(),
   }),
 ]);
+export function suggestedFollowUp(input: {
+  outcome: "INDEPENDENT" | "ASSISTED" | "GAVE_UP" | "INCOMPLETE" | null;
+  confidence: "CONFIDENT" | "SHAKY" | null;
+  optimality: "OPTIMAL" | "SUBOPTIMAL" | "UNKNOWN" | null;
+  followUpContext?: "TRANSFER" | "REPAIR" | undefined;
+}): "TRANSFER" | "REPEAT" | "COMPLETE" {
+  if (input.outcome === "GAVE_UP") return "REPEAT";
+  if (input.outcome === "ASSISTED") return "TRANSFER";
+  if (input.outcome !== "INDEPENDENT") return "COMPLETE";
+  if (input.followUpContext === "TRANSFER") return "COMPLETE";
+  return input.followUpContext === "REPAIR" ||
+    input.confidence === "SHAKY" ||
+    input.optimality === "SUBOPTIMAL"
+    ? "TRANSFER"
+    : "COMPLETE";
+}
+
 export const confirmAttemptSchema = z.strictObject({
   nextAction: redoNextActionSchema.optional(),
   outcome: z.enum(["INDEPENDENT", "ASSISTED", "GAVE_UP"]),
@@ -547,6 +564,7 @@ export type ReviewObligation = z.infer<typeof reviewObligationSchema>;
 export const reviewOverrideSchema = z.strictObject({ manualDueDate: z.iso.date().nullable() });
 
 export const attemptSchema = z.strictObject({
+  followUpContext: z.enum(["TRANSFER", "REPAIR"]).optional(),
   nextAction: redoNextActionSchema.optional(),
   id: z.string().uuid(),
   patterns: z.array(z.enum(mvpPatternNames)).optional(),

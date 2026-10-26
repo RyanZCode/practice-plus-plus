@@ -9,6 +9,7 @@ import {
   startAttemptSchema,
   confirmAttemptSchema,
   suggestedOutcome,
+  suggestedFollowUp,
   reportAttemptSchema,
   type ReportAttempt,
   type ConfirmAttempt,
@@ -31,6 +32,8 @@ import type { PrismaClient, Prisma } from "../../shared/generated/prisma/client.
 import { getApplicationProfile } from "../account/profile.js";
 
 const select = {
+  transferAttempt: { select: { patternId: true } },
+  transfersCreated: { select: { generatedEligibleDate: true, manualEligibleDate: true } },
   nextAction: true,
   id: true,
   type: true,
@@ -91,6 +94,27 @@ export interface AttemptStore {
 }
 
 export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
+  async function followUpContext(
+    db: Prisma.TransactionClient,
+    userProfileId: string,
+    record: AttemptRecord,
+  ): Promise<Attempt["followUpContext"]> {
+    if (record.transferAttempt != null) return "TRANSFER";
+    if (record.type !== "REDO") return undefined;
+    const previous = await db.attempt.findMany({
+      where: {
+        userProfileId,
+        problemId: record.problem.id,
+        confirmedAt: { not: null },
+        startedAt: { lt: record.startedAt },
+        outcome: { in: ["INDEPENDENT", "ASSISTED", "GAVE_UP"] },
+      },
+      orderBy: [{ startedAt: "desc" }, { id: "asc" }],
+      take: 1,
+      select: { outcome: true },
+    });
+    return previous[0]?.outcome === "GAVE_UP" ? "REPAIR" : undefined;
+  }
   async function present(
     db: Prisma.TransactionClient,
     userProfileId: string,
@@ -99,6 +123,7 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
     if (record.outcome === null || record.outcome === "INCOMPLETE") {
       return attemptSchema.parse(toAttempt(record));
     }
+    const context = await followUpContext(db, userProfileId, record);
     const tags = await db.problemPattern.findMany({
       where: {
         problemId: record.problem.id,
@@ -117,6 +142,7 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
     });
     return attemptSchema.parse({
       ...toAttempt(record),
+      ...(context === undefined ? {} : { followUpContext: context }),
       ...(tags.length === 0 ? {} : { patterns: tags.map((tag) => tag.pattern.name) }),
     });
   }
@@ -283,6 +309,7 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
             throw new HttpError(409, "This attempt is already confirmed with a different outcome.");
           }
           if (
+            input.nextAction !== undefined &&
             JSON.stringify(
               record.nextAction == null ? undefined : redoNextActionSchema.parse(record.nextAction),
             ) !== JSON.stringify(input.nextAction)
@@ -294,12 +321,26 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
           }
           return record;
         }
-        const { assistance, nextAction, summary, ...details } = input;
-        const successfulRedo =
-          record.type === "REDO" &&
-          (input.outcome === "INDEPENDENT" || input.outcome === "ASSISTED");
-        if (!successfulRedo && nextAction !== undefined) {
-          throw new HttpError(400, "Next actions apply only to successful redos.");
+        const { assistance, nextAction: requestedNextAction, summary, ...details } = input;
+        let nextAction = requestedNextAction;
+        const context = await followUpContext(tx, userProfileId, record);
+        if (nextAction === undefined) {
+          const suggestion = suggestedFollowUp({ ...input, followUpContext: context });
+          if (suggestion === "TRANSFER") {
+            const tags = await tx.problemPattern.findMany({
+              where: { problemId: record.problem.id },
+              select: { patternId: true, pattern: { select: { name: true } } },
+              orderBy: { pattern: { name: "asc" } },
+            });
+            const tag =
+              tags.find((tag) => tag.patternId === record.transferAttempt?.patternId) ?? tags[0];
+            if (tag === undefined)
+              throw new HttpError(409, "This problem has no pattern for a transfer.");
+            nextAction = redoNextActionSchema.parse({
+              type: "TRANSFER",
+              pattern: tag.pattern.name,
+            });
+          }
         }
         const derivedUrgency = deriveReviewUrgency({
           ...input,
@@ -308,10 +349,18 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
         });
         const urgency =
           nextAction === undefined
-            ? derivedUrgency
+            ? input.outcome === "GAVE_UP"
+              ? "HIGH"
+              : null
             : nextAction.type === "REPEAT" || nextAction.type === "CUSTOM_DATE"
               ? (derivedUrgency ?? "LOW")
               : null;
+        const needsSettings = urgency !== null || nextAction?.type === "TRANSFER";
+        const settings = needsSettings
+          ? await tx.practiceSettings.findUnique({ where: { userProfileId } })
+          : null;
+        if (needsSettings && settings === null)
+          throw new HttpError(409, "Save practice settings before confirming.");
         let transfer;
         if (nextAction?.type === "TRANSFER") {
           const tags = await tx.problemPattern.findMany({
@@ -324,38 +373,31 @@ export function createPrismaAttemptStore(client: PrismaClient): AttemptStore {
             create: {
               patternId: tag.patternId,
               generatedEligibleDate: new Date(
-                `${calculateDueDate(record.practiceDate.toISOString().slice(0, 10), "LOW", {
-                  high: 7,
-                  medium: 7,
-                  low: 7,
+                `${calculateDueDate(record.practiceDate.toISOString().slice(0, 10), "MEDIUM", {
+                  high: settings!.highIntervalDays,
+                  medium: settings!.mediumIntervalDays,
+                  low: settings!.lowIntervalDays,
                 })}T00:00:00.000Z`,
               ),
               ...(nextAction.dueDate === undefined
                 ? {}
-                : {
-                    manualEligibleDate: new Date(`${nextAction.dueDate}T00:00:00.000Z`),
-                  }),
+                : { manualEligibleDate: new Date(`${nextAction.dueDate}T00:00:00.000Z`) }),
             },
           };
         }
         let review;
         if (urgency !== null) {
-          const settings = await tx.practiceSettings.findUnique({ where: { userProfileId } });
-          if (settings === null)
-            throw new HttpError(409, "Save practice settings before confirming.");
           review = {
             create: {
               urgency,
               ...(nextAction?.type === "CUSTOM_DATE"
-                ? {
-                    manualDueDate: new Date(`${nextAction.dueDate}T00:00:00.000Z`),
-                  }
+                ? { manualDueDate: new Date(`${nextAction.dueDate}T00:00:00.000Z`) }
                 : {}),
               generatedDueDate: new Date(
                 `${calculateDueDate(record.practiceDate.toISOString().slice(0, 10), urgency, {
-                  high: settings.highIntervalDays,
-                  medium: settings.mediumIntervalDays,
-                  low: settings.lowIntervalDays,
+                  high: settings!.highIntervalDays,
+                  medium: settings!.mediumIntervalDays,
+                  low: settings!.lowIntervalDays,
                 })}T00:00:00.000Z`,
               ),
             },
@@ -786,8 +828,23 @@ function parseHistoryQuery(rawQuery: unknown): AttemptHistoryQuery {
 }
 
 function toAttempt(record: AttemptRecord): Attempt {
+  const nextAction =
+    record.nextAction == null ? undefined : redoNextActionSchema.parse(record.nextAction);
+  const transfer = record.transfersCreated?.[0];
   return attemptSchema.parse({
-    ...(record.nextAction == null ? {} : { nextAction: record.nextAction }),
+    ...(nextAction === undefined
+      ? {}
+      : {
+          nextAction:
+            nextAction.type === "TRANSFER" && transfer !== undefined
+              ? {
+                  ...nextAction,
+                  dueDate: (transfer.manualEligibleDate ?? transfer.generatedEligibleDate)
+                    .toISOString()
+                    .slice(0, 10),
+                }
+              : nextAction,
+        }),
     id: record.id,
     review:
       record.review === null

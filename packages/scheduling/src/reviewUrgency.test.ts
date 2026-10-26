@@ -46,36 +46,32 @@ describe("deriveReviewUrgency", () => {
     },
   );
 
-  it.each(["GAVE_UP", "INCOMPLETE"] as const)("gives %s high priority", (outcome) => {
-    expect(deriveReviewUrgency({ ...confirmedAttempt, assistance: [], outcome })).toBe("HIGH");
+  it("gives gave-up attempts high urgency and ignores legacy incomplete outcomes", () => {
+    expect(deriveReviewUrgency({ ...confirmedAttempt, assistance: [], outcome: "GAVE_UP" })).toBe(
+      "HIGH",
+    );
     expect(
-      deriveReviewUrgency({
-        ...confirmedAttempt,
-        outcome,
-        confidence: "CONFIDENT",
-        optimality: "OPTIMAL",
-        assistance: help("CLARIFICATION"),
-      }),
-    ).toBe("HIGH");
+      deriveReviewUrgency({ ...confirmedAttempt, assistance: [], outcome: "INCOMPLETE" }),
+    ).toBeNull();
   });
 
   const combinations: [Assistance["type"][], ReviewUrgency][] = [
     [[], "MEDIUM"],
-    [["CLARIFICATION"], "LOW"],
-    [["OPTIMIZATION"], "LOW"],
-    [["CLARIFICATION", "OPTIMIZATION"], "LOW"],
+    [["CLARIFICATION"], "MEDIUM"],
+    [["OPTIMIZATION"], "MEDIUM"],
+    [["CLARIFICATION", "OPTIMIZATION"], "MEDIUM"],
     [["DEBUGGING"], "MEDIUM"],
     [["CLARIFICATION", "DEBUGGING"], "MEDIUM"],
     [["OPTIMIZATION", "DEBUGGING"], "MEDIUM"],
     [["CLARIFICATION", "OPTIMIZATION", "DEBUGGING"], "MEDIUM"],
-    [["CONCEPTUAL_HINT"], "HIGH"],
-    [["CLARIFICATION", "CONCEPTUAL_HINT"], "HIGH"],
-    [["OPTIMIZATION", "CONCEPTUAL_HINT"], "HIGH"],
-    [["DEBUGGING", "CONCEPTUAL_HINT"], "HIGH"],
-    [["CLARIFICATION", "OPTIMIZATION", "CONCEPTUAL_HINT"], "HIGH"],
-    [["CLARIFICATION", "DEBUGGING", "CONCEPTUAL_HINT"], "HIGH"],
-    [["OPTIMIZATION", "DEBUGGING", "CONCEPTUAL_HINT"], "HIGH"],
-    [["CLARIFICATION", "OPTIMIZATION", "DEBUGGING", "CONCEPTUAL_HINT"], "HIGH"],
+    [["CONCEPTUAL_HINT"], "MEDIUM"],
+    [["CLARIFICATION", "CONCEPTUAL_HINT"], "MEDIUM"],
+    [["OPTIMIZATION", "CONCEPTUAL_HINT"], "MEDIUM"],
+    [["DEBUGGING", "CONCEPTUAL_HINT"], "MEDIUM"],
+    [["CLARIFICATION", "OPTIMIZATION", "CONCEPTUAL_HINT"], "MEDIUM"],
+    [["CLARIFICATION", "DEBUGGING", "CONCEPTUAL_HINT"], "MEDIUM"],
+    [["OPTIMIZATION", "DEBUGGING", "CONCEPTUAL_HINT"], "MEDIUM"],
+    [["CLARIFICATION", "OPTIMIZATION", "DEBUGGING", "CONCEPTUAL_HINT"], "MEDIUM"],
   ];
 
   it.each(combinations)("combines %j with confidence and quality", (types, urgency) => {
@@ -83,12 +79,7 @@ describe("deriveReviewUrgency", () => {
     const qualities: Attempt["optimality"][] = ["OPTIMAL", "SUBOPTIMAL", "UNKNOWN", null];
     for (const confidence of confidences) {
       for (const optimality of qualities) {
-        const expected =
-          confidence === "SHAKY" || urgency === "HIGH"
-            ? "HIGH"
-            : confidence === "CONFIDENT" && optimality === "OPTIMAL"
-              ? urgency
-              : "MEDIUM";
+        const expected = urgency;
         const attempt = {
           ...confirmedAttempt,
           confidence,
