@@ -442,19 +442,20 @@ describe("attempt persistence", () => {
     async (outcome) => {
       const { tx, store } = database();
       tx.attempt.findFirst.mockResolvedValue({ ...record, type: "REDO" });
+      tx.problemPattern.findMany.mockResolvedValue([
+        { patternId: "pattern-id", pattern: { name: "Arrays & Hashing" } },
+      ]);
       const now = new Date("2026-09-10T12:00:00Z");
       await store.confirm(userId, attempt.id, confirmAttemptSchema.parse({ outcome }), now);
       const data = tx.attempt.update.mock.calls[0]?.[0].data;
       expect(data).toMatchObject({ outcome, confirmedAt: now });
-      expect(data.nextAction).toBeUndefined();
+      expect(data.review).toBeUndefined();
       if (outcome === "ASSISTED") {
-        expect(data.review.create).toEqual({
-          urgency: "MEDIUM",
-          generatedDueDate: new Date("2026-09-09T00:00:00Z"),
-        });
-      } else {
-        expect(data.review).toBeUndefined();
-      }
+        expect(data.nextAction).toEqual({ type: "TRANSFER", pattern: "Arrays & Hashing" });
+        expect(data.transfersCreated.create.generatedEligibleDate).toEqual(
+          new Date("2026-09-09T00:00:00Z"),
+        );
+      } else expect(data.nextAction).toBeUndefined();
     },
   );
   it.each(["INDEPENDENT", "ASSISTED"])(
@@ -503,7 +504,7 @@ describe("attempt persistence", () => {
           if (nextAction.type === "TRANSFER") {
             expect(data.transfersCreated.create).toEqual({
               patternId: "pattern-id",
-              generatedEligibleDate: new Date("2026-09-13T00:00:00Z"),
+              generatedEligibleDate: new Date("2026-09-11T00:00:00Z"),
               ...(nextAction.dueDate
                 ? { manualEligibleDate: new Date("2026-10-02T00:00:00Z") }
                 : {}),
@@ -556,37 +557,164 @@ describe("attempt persistence", () => {
     expect(tx.attempt.update).not.toHaveBeenCalled();
     expect(tx.reviewObligation.updateMany).not.toHaveBeenCalled();
   });
-  it("keeps automatic follow-up for gave-up redos and rejects a next action", async () => {
-    const { tx, store } = database();
-    tx.attempt.findFirst.mockResolvedValue({ ...record, type: "REDO" });
-    await expect(
-      store.confirm(
+  it("allows manual follow-up choices on fresh and gave-up attempts", async () => {
+    for (const outcome of ["INDEPENDENT", "GAVE_UP"] as const) {
+      const { tx, store } = database();
+      tx.attempt.findFirst.mockResolvedValue(record);
+      await store.confirm(
         userId,
         attempt.id,
-        confirmAttemptSchema.parse({ outcome: "GAVE_UP", nextAction: { type: "COMPLETE" } }),
+        confirmAttemptSchema.parse({ outcome, nextAction: { type: "COMPLETE" } }),
         new Date(),
-      ),
-    ).rejects.toThrow("only to successful redos");
-    await store.confirm(
-      userId,
-      attempt.id,
-      confirmAttemptSchema.parse({ outcome: "GAVE_UP" }),
-      new Date(),
-    );
-    expect(tx.attempt.update.mock.calls[0]?.[0].data.review.create.urgency).toBe("HIGH");
+      );
+      expect(tx.attempt.update.mock.calls[0]?.[0].data.review).toBeUndefined();
+    }
   });
-  it("rejects redo actions on fresh attempts", async () => {
+  it.each([
+    {
+      outcome: "ASSISTED",
+      confidence: null,
+      optimality: null,
+      context: undefined,
+      previous: undefined,
+      transfer: true,
+    },
+    {
+      outcome: "INDEPENDENT",
+      confidence: "SHAKY",
+      optimality: null,
+      context: undefined,
+      previous: undefined,
+      transfer: true,
+    },
+    {
+      outcome: "INDEPENDENT",
+      confidence: null,
+      optimality: "SUBOPTIMAL",
+      context: undefined,
+      previous: undefined,
+      transfer: true,
+    },
+    {
+      outcome: "INDEPENDENT",
+      confidence: null,
+      optimality: null,
+      context: "TRANSFER",
+      previous: undefined,
+      transfer: false,
+    },
+    {
+      outcome: "ASSISTED",
+      confidence: null,
+      optimality: null,
+      context: "TRANSFER",
+      previous: undefined,
+      transfer: true,
+    },
+    {
+      outcome: "GAVE_UP",
+      confidence: null,
+      optimality: null,
+      context: "TRANSFER",
+      previous: undefined,
+      transfer: false,
+    },
+    {
+      outcome: "INDEPENDENT",
+      confidence: null,
+      optimality: null,
+      context: undefined,
+      previous: "GAVE_UP",
+      transfer: true,
+    },
+  ])(
+    "schedules the follow-up for %j",
+    async ({ outcome, confidence, optimality, context, previous, transfer }) => {
+      const { tx, store } = database();
+      tx.attempt.findFirst.mockResolvedValue({
+        ...record,
+        type: previous ? "REDO" : "FRESH",
+        ...(context ? { transferAttempt: { patternId: "pattern-id" } } : {}),
+      });
+      tx.attempt.findMany.mockResolvedValue(previous ? [{ outcome: previous }] : []);
+      tx.problemPattern.findMany.mockResolvedValue([
+        { patternId: "pattern-id", pattern: { name: "Arrays & Hashing" } },
+      ]);
+      const input = confirmAttemptSchema.parse({ outcome, confidence, optimality });
+      const now = new Date("2026-09-10T12:00:00Z");
+      await store.confirm(userId, attempt.id, input, now);
+      const data = tx.attempt.update.mock.calls[0]?.[0].data;
+      if (transfer) {
+        expect(data.nextAction).toEqual({ type: "TRANSFER", pattern: "Arrays & Hashing" });
+        expect(data.transfersCreated.create.generatedEligibleDate).toEqual(
+          new Date("2026-09-09T00:00:00Z"),
+        );
+        expect(data.review).toBeUndefined();
+      } else {
+        expect(data.transfersCreated).toBeUndefined();
+        if (outcome === "GAVE_UP") expect(data.review.create.urgency).toBe("HIGH");
+        else expect(data.review).toBeUndefined();
+      }
+      expect(tx.transferObligation.updateMany).toHaveBeenCalledWith({
+        where: {
+          attemptId: attempt.id,
+          resolvedAt: null,
+          sourceAttempt: { userProfileId: userId },
+        },
+        data: { resolvedAt: now },
+      });
+      tx.attempt.findFirst.mockResolvedValue({
+        ...record,
+        ...data,
+        assistance: input.assistance,
+        review: record.review,
+        nextAction: data.nextAction,
+      });
+      await store.confirm(userId, attempt.id, input, now);
+      expect(tx.attempt.update).toHaveBeenCalledTimes(1);
+    },
+  );
+  it("exposes transfer context after reporting and the stored eligibility date in history", async () => {
     const { tx, store } = database();
-    tx.attempt.findFirst.mockResolvedValue(record);
-    await expect(
-      store.confirm(
-        userId,
-        attempt.id,
-        confirmAttemptSchema.parse({ outcome: "INDEPENDENT", nextAction: { type: "REPEAT" } }),
-        new Date(),
-      ),
-    ).rejects.toThrow("only to successful redos");
-    expect(tx.attempt.update).not.toHaveBeenCalled();
+    const transferred = {
+      ...record,
+      outcome: "ASSISTED",
+      transferAttempt: { patternId: "pattern-id" },
+      nextAction: { type: "TRANSFER", pattern: "Arrays & Hashing" },
+      transfersCreated: [
+        {
+          generatedEligibleDate: new Date("2026-09-09"),
+          manualEligibleDate: new Date("2026-09-15"),
+        },
+      ],
+    };
+    tx.problemPattern.findMany.mockResolvedValue([
+      { patternId: "pattern-id", pattern: { name: "Arrays & Hashing" } },
+    ]);
+    tx.attempt.findFirst.mockResolvedValue(transferred);
+    expect(await store.active(userId)).toMatchObject({
+      followUpContext: "TRANSFER",
+      nextAction: { dueDate: "2026-09-15" },
+    });
+    expect(tx.practiceSettings.findUnique).not.toHaveBeenCalled();
+  });
+  it("derives repair context from the preceding confirmed result for the same user and problem", async () => {
+    const { tx, store } = database();
+    tx.attempt.findFirst.mockResolvedValue({ ...record, type: "REDO", outcome: "INDEPENDENT" });
+    tx.attempt.findMany.mockResolvedValue([{ outcome: "GAVE_UP" }]);
+    expect(await store.active(userId)).toMatchObject({ followUpContext: "REPAIR" });
+    expect(tx.attempt.findMany).toHaveBeenCalledWith({
+      where: {
+        userProfileId: userId,
+        problemId,
+        confirmedAt: { not: null },
+        startedAt: { lt: record.startedAt },
+        outcome: { in: ["INDEPENDENT", "ASSISTED", "GAVE_UP"] },
+      },
+      orderBy: [{ startedAt: "desc" }, { id: "asc" }],
+      take: 1,
+      select: { outcome: true },
+    });
   });
   it("binds matching plan work and transfers when an attempt starts", async () => {
     const { tx, store } = database();
@@ -664,7 +792,6 @@ describe("attempt persistence", () => {
   });
   it.each([
     ["INDEPENDENT", null, null],
-    ["ASSISTED", "MEDIUM", "2026-09-11"],
     ["GAVE_UP", "HIGH", "2026-09-08"],
   ] as const)(
     "creates review work atomically for %s using current intervals and the attempt date",
@@ -707,10 +834,10 @@ describe("attempt persistence", () => {
     await store.confirm(
       userId,
       attempt.id,
-      confirmAttemptSchema.parse({ outcome: "ASSISTED" }),
+      confirmAttemptSchema.parse({ outcome: "ASSISTED", nextAction: { type: "REPEAT" } }),
       new Date(),
     );
-    expect(tx.attempt.update.mock.calls[0]?.[0].data.review.create.urgency).toBe("HIGH");
+    expect(tx.attempt.update.mock.calls[0]?.[0].data.review.create.urgency).toBe("MEDIUM");
   });
   it("does not recalculate dates or lose overrides on repeated confirmation after settings change", async () => {
     const { tx, store } = database();
@@ -1162,6 +1289,9 @@ describe("attempt persistence", () => {
   it("saves optional evidence and confirmation together without code or patterns", async () => {
     const { tx, store } = database();
     tx.attempt.findFirst.mockResolvedValue(record);
+    tx.problemPattern.findMany.mockResolvedValue([
+      { patternId: "pattern-id", pattern: { name: "Arrays & Hashing" } },
+    ]);
     const input = confirmAttemptSchema.parse({
       outcome: "ASSISTED",
       confidence: "SHAKY",
@@ -1180,8 +1310,12 @@ describe("attempt persistence", () => {
         data: {
           ...input,
           confirmedAt: now,
-          review: {
-            create: { urgency: "HIGH", generatedDueDate: new Date("2026-09-07T00:00:00Z") },
+          nextAction: { type: "TRANSFER", pattern: "Arrays & Hashing" },
+          transfersCreated: {
+            create: {
+              patternId: "pattern-id",
+              generatedEligibleDate: new Date("2026-09-09T00:00:00Z"),
+            },
           },
           assistance: {
             create: [

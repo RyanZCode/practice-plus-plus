@@ -724,7 +724,7 @@ export function Practice({
               ) : (
                 <p>
                   {saved.nextAction?.type === "TRANSFER"
-                    ? `Fresh same-pattern transfer: ${saved.nextAction.pattern}. Eligible ${saved.nextAction.dueDate ?? "7 calendar days after this attempt"}. A matching problem is selected when a daily plan has space.`
+                    ? `Fresh same-pattern transfer: ${saved.nextAction.pattern}. Eligible ${saved.nextAction.dueDate ?? "after your configured medium interval"}. A matching problem is selected when a daily plan has space.`
                     : "No review scheduled for this problem."}
                 </p>
               )}

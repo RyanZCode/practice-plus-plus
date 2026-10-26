@@ -7,6 +7,7 @@ import {
   reportAttemptSchema,
   reviewOverrideSchema,
   suggestedOutcome,
+  suggestedFollowUp,
   catalogPageSize,
   type Attempt,
   type CatalogListProblem,
@@ -99,7 +100,12 @@ async function start(problemId: string): Promise<Attempt | null> {
   const problem = await findProblem(problemId);
   if (!problem) return null;
   const now = new Date();
+  const previous = data.attempts.findLast(
+    (item) =>
+      sameProblem(item.problem, problem) && item.confirmedAt && item.outcome !== "INCOMPLETE",
+  );
   const attempt = attemptSchema.parse({
+    ...(previous?.outcome === "GAVE_UP" ? { followUpContext: "REPAIR" } : {}),
     id: crypto.randomUUID(),
     problem,
     type: data.attempts.some((item) => sameProblem(item.problem, problem)) ? "REDO" : "FRESH",
@@ -215,26 +221,35 @@ export async function demoRequest(path: string, init: RequestInit = {}): Promise
       const required = suggestedOutcome(assistance);
       if (input.outcome !== "GAVE_UP" && required && input.outcome !== required)
         return json({ error: "Outcome conflicts with assistance" }, 409);
-      Object.assign(attempt, input, { assistance, confirmedAt: now });
+      const suggestion = suggestedFollowUp({ ...input, followUpContext: attempt.followUpContext });
+      const nextAction =
+        input.nextAction ??
+        (suggestion === "TRANSFER"
+          ? { type: "TRANSFER" as const, pattern: problemPatterns(attempt.problem.slug)[0]! }
+          : { type: suggestion });
+      Object.assign(attempt, input, { nextAction, assistance, confirmedAt: now });
       attempt.patterns = problemPatterns(attempt.problem.slug);
       for (const previous of data.attempts) {
         if (sameProblem(previous.problem, attempt.problem)) previous.review = null;
       }
-      const repeat =
-        input.nextAction?.type === "REPEAT" ||
-        input.nextAction?.type === "CUSTOM_DATE" ||
-        (!input.nextAction && input.outcome !== "INDEPENDENT");
-      if (repeat) {
-        const urgent =
-          input.outcome === "GAVE_UP" ||
-          input.confidence === "SHAKY" ||
-          assistance.some((event) => event.type === "CONCEPTUAL_HINT");
-        const interval = urgent
-          ? data.settings.redoIntervals.high
-          : data.settings.redoIntervals.medium;
+      if (nextAction.type === "TRANSFER") {
+        attempt.nextAction = {
+          ...nextAction,
+          dueDate:
+            nextAction.dueDate ??
+            shiftDate(attempt.practiceDate, data.settings.redoIntervals.medium),
+        };
+      }
+      if (nextAction.type === "REPEAT" || nextAction.type === "CUSTOM_DATE") {
+        const interval =
+          input.outcome === "GAVE_UP"
+            ? data.settings.redoIntervals.high
+            : input.outcome === "INDEPENDENT"
+              ? data.settings.redoIntervals.low
+              : data.settings.redoIntervals.medium;
         attempt.review = {
-          generatedDueDate: shiftDate(data.date, interval),
-          manualDueDate: input.nextAction?.type === "CUSTOM_DATE" ? input.nextAction.dueDate : null,
+          generatedDueDate: shiftDate(attempt.practiceDate, interval),
+          manualDueDate: nextAction.type === "CUSTOM_DATE" ? nextAction.dueDate : null,
         };
       }
       const item = data.plan.items.find((item) => sameProblem(item.problem, attempt.problem));
