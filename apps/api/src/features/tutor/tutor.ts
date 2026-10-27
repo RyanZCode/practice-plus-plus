@@ -18,7 +18,8 @@ import { ProviderError, type ProviderMessage } from "../../shared/providers.js";
 interface TutorAttempt {
   confirmedAt: Date | null;
   outcome: string | null;
-  startedAt: Date;
+  timerEndsAt: Date;
+  timerPausedAt: Date | null;
   timerSkippedAt: Date | null;
   assistance: { type: string; hintLevel: number | null }[];
 }
@@ -36,7 +37,7 @@ export function assertTutorHelp(attempt: TutorAttempt, help: TutorHelp, now: Dat
       throw new HttpError(400, "Only three conceptual hint levels are available.");
     if (
       attempt.timerSkippedAt === null &&
-      now.getTime() < attempt.startedAt.getTime() + 30 * 60 * 1000
+      (attempt.timerPausedAt ?? now).getTime() < attempt.timerEndsAt.getTime()
     )
       throw new HttpError(
         409,
@@ -74,7 +75,8 @@ export function createPrismaTutorStore(client: PrismaClient): TutorStore {
             confirmedAt: true,
             solutionReviewedAt: true,
             outcome: true,
-            startedAt: true,
+            timerEndsAt: true,
+            timerPausedAt: true,
             timerSkippedAt: true,
             assistance: { select: { type: true, hintLevel: true } },
           },

@@ -18,6 +18,8 @@ const attempt = {
   confirmedAt: null,
   timerSkippedAt: now,
   startedAt: now,
+  timerEndsAt: new Date(now.getTime() + 30 * 60 * 1000),
+  timerPausedAt: null,
   assistance: [],
 };
 const input: TutorRequest = {
@@ -99,6 +101,38 @@ async function setup(
 }
 
 describe("attempt tutor", () => {
+  it.each([1, 10, 30, 60, 180])("uses the saved %i-minute timer for hints", (minutes) => {
+    const timerEndsAt = new Date(now.getTime() + minutes * 60 * 1000);
+    const active = { ...attempt, timerSkippedAt: null, timerEndsAt };
+    expect(() => assertTutorHelp(active, input.help, new Date(timerEndsAt.getTime() - 1))).toThrow(
+      "timer",
+    );
+    expect(() => assertTutorHelp(active, input.help, timerEndsAt)).not.toThrow();
+  });
+
+  it("keeps paused time from unlocking hints and honors the resumed deadline", () => {
+    const paused = {
+      ...attempt,
+      timerSkippedAt: null,
+      timerPausedAt: new Date(now.getTime() + 5 * 60 * 1000),
+    };
+    const later = new Date(now.getTime() + 60 * 60 * 1000);
+    expect(() => assertTutorHelp(paused, input.help, later)).toThrow("timer");
+    expect(() =>
+      assertTutorHelp({ ...paused, timerSkippedAt: later }, input.help, later),
+    ).not.toThrow();
+    expect(() =>
+      assertTutorHelp({ ...paused, timerPausedAt: paused.timerEndsAt }, input.help, later),
+    ).not.toThrow();
+    const resumed = {
+      ...paused,
+      timerPausedAt: null,
+      timerEndsAt: new Date(later.getTime() + 25 * 60 * 1000),
+    };
+    expect(() => assertTutorHelp(resumed, input.help, later)).toThrow("timer");
+    expect(() => assertTutorHelp(resumed, input.help, resumed.timerEndsAt)).not.toThrow();
+  });
+
   it("enforces the timer, sequential guidance and explicit solution review", () => {
     expect(() => assertTutorHelp({ ...attempt, timerSkippedAt: null }, input.help, now)).toThrow(
       "timer",
