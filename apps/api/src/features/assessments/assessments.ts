@@ -219,6 +219,8 @@ export function assessmentMessages(
         "Use null when the structured evidence does not support an optional field. Never invent elapsed time, reproduction success, confidence, solution quality, or learning details.",
         "When completed code is supplied, use it as evidence for solution quality and the approach, but never reproduce it or include code excerpts in the draft.",
         "When completed code is supplied, populate optimality with OPTIMAL, SUBOPTIMAL, or UNKNOWN. Choose UNKNOWN only when the code and problem metadata are insufficient to judge.",
+        "When optimality is SUBOPTIMAL, explain why in notes: identify the bottleneck or unnecessary work, compare current and better achievable time or space complexity when supported, and briefly describe the improvement. Do not label a solution suboptimal without a supported explanation. Preserve other relevant notes within the field limit.",
+        "Solution quality and independence are separate. A suboptimal solution remains INDEPENDENT if the learner solved it without substantive assistance. Feedback in this post-attempt assessment does not retroactively count as assistance.",
         "When a current summary is supplied, preserve every non-empty detail in the returned summary. You may condense or rephrase it, but do not omit a detail. If you cannot improve it, carry it forward unchanged.",
         "Use the Attempt Tutor conversation history when it is supplied to understand the learner's approach, stuck points, assistance, and progress. Summarize it rather than quoting it, and never reproduce pasted code.",
         "Use concise paraphrases only. Never include source code, code excerpts, message quotations, hidden pattern tags, or unsupported claims.",
@@ -355,6 +357,7 @@ export function createAssessmentRouter({
             : null;
       if (
         normalizedDraft === null ||
+        (normalizedDraft.optimality === "SUBOPTIMAL" && !normalizedDraft.notes?.trim()) ||
         !normalizedDraft.evidence.includes("ATTEMPT") ||
         normalizedDraft.evidence.some((item) => !supportedEvidence.has(item))
       ) {

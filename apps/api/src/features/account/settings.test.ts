@@ -6,6 +6,7 @@ const settings = {
   defaultAiModel: "gpt-5.4-mini" as const,
   reasoningEffort: null,
   attemptTimerMinutes: 30,
+  openLeetCodeOnStart: true,
   allowPremiumProblems: true,
   difficultyPreference: "ANY" as const,
   preferredLanguage: null,
@@ -19,6 +20,7 @@ const settingsRecord = {
   defaultAiModel: "gpt-5.4-mini",
   reasoningEffort: null,
   attemptTimerMinutes: 30,
+  openLeetCodeOnStart: true,
   allowPremiumProblems: true,
   difficultyPreference: "ANY",
   preferredLanguage: null,
@@ -49,16 +51,18 @@ describe("Prisma settings store", () => {
     await expect(store.findByUserProfileId("profile-id")).resolves.toBeNull();
   });
 
-  it("upserts settings for the authenticated application profile", async () => {
-    const upsert = vi.fn().mockResolvedValue(settingsRecord);
+  it.each([true, false])("saves automatic LeetCode opening as %s", async (openLeetCodeOnStart) => {
+    const savedSettings = { ...settings, openLeetCodeOnStart };
+    const savedRecord = { ...settingsRecord, openLeetCodeOnStart };
+    const upsert = vi.fn().mockResolvedValue(savedRecord);
     const store = createPrismaSettingsStore({
       practiceSettings: { findUnique: vi.fn(), upsert },
     });
 
-    await expect(store.save("profile-id", settings)).resolves.toEqual(settings);
+    await expect(store.save("profile-id", savedSettings)).resolves.toEqual(savedSettings);
     expect(upsert).toHaveBeenCalledWith({
-      create: { ...settingsRecord, userProfileId: "profile-id" },
-      update: settingsRecord,
+      create: { ...savedRecord, userProfileId: "profile-id" },
+      update: savedRecord,
       where: { userProfileId: "profile-id" },
     });
   });

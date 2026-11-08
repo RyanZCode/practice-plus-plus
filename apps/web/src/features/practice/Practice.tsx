@@ -41,6 +41,7 @@ import { loadTutorConversation } from "../tutor/tutorConversationStorage";
 import { loadMemorySuggestions } from "../learning-context/summaryApi";
 import { generateAssessmentDraft, loadAssessmentDraft } from "../assessments/assessmentApi";
 import { useAuth } from "../auth/auth";
+import { startWithProblemTab } from "./startWithProblemTab";
 import { useModelDiscovery } from "../settings/ModelDiscovery";
 import { generateExtraPracticeWithAi, generateIntegratedPlan } from "../planning/planningApi";
 import {
@@ -479,14 +480,16 @@ export function Practice({
     setBusy(true);
     setExtraPracticeError(undefined);
     try {
-      const next = personalized
-        ? await generateExtraPracticeWithAi(
-            apiUrl,
-            token,
-            openAiSelection(defaultModel, models, defaultReasoningEffort),
-            browserKey.getKey(userId) ?? "",
-          )
-        : await startExtraPractice(apiUrl, token);
+      const next = await startWithProblemTab(settings.openLeetCodeOnStart, () =>
+        personalized
+          ? generateExtraPracticeWithAi(
+              apiUrl,
+              token,
+              openAiSelection(defaultModel, models, defaultReasoningEffort),
+              browserKey.getKey(userId) ?? "",
+            )
+          : startExtraPractice(apiUrl, token),
+      );
       if (next === null) {
         setExtraPracticeError(
           "No eligible extra practice problems remain. Your saved plan is unchanged.",
@@ -509,7 +512,11 @@ export function Practice({
   function startProblem(problemId: string): void {
     setClassifying(false);
     onNavigate("practice");
-    void update(() => startAttempt(apiUrl, token, problemId));
+    void update(() =>
+      startWithProblemTab(settings.openLeetCodeOnStart, () =>
+        startAttempt(apiUrl, token, problemId),
+      ),
+    );
   }
 
   function resumeAttempt(): void {
