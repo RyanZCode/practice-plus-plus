@@ -148,6 +148,15 @@ jobs:
             echo "The pushed staging API image digest could not be read."
             exit 1
           fi
+          manifest=$(docker buildx imagetools inspect "$image_digest" --raw)
+          if jq -e '.manifests' <<< "$manifest" >/dev/null; then
+            platform_digest=$(jq -er '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64")] | if length == 1 then .[0].digest else error("Expected one linux/amd64 image") end' <<< "$manifest")
+            if [[ ! "$platform_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "The linux/amd64 image digest is invalid."
+              exit 1
+            fi
+            image_digest="${image_digest%@*}@$platform_digest"
+          fi
           echo "image=$image_digest" >> "$GITHUB_OUTPUT"
 
       - name: Apply staging migrations
