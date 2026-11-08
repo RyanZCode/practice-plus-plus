@@ -267,6 +267,7 @@ export const practiceSettingsSchema = z
     defaultAiModel: modelNameSchema,
     reasoningEffort: reasoningEffortSchema.nullable().default(null),
     attemptTimerMinutes: z.number().int().min(1).max(180),
+    openLeetCodeOnStart: z.boolean().default(true),
     allowPremiumProblems: z.boolean(),
     difficultyPreference: problemDifficultyPreferenceSchema,
     preferredLanguage: z.string().trim().min(1).max(50).nullable().default(null),

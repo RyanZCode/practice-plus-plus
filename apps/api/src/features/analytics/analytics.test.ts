@@ -39,6 +39,24 @@ function attempt(
 }
 
 describe("pattern evidence aggregation", () => {
+  it("counts suboptimal independent solves as weak evidence while preserving independence", () => {
+    const result = aggregatePatternEvidence(
+      [{ id: arrays, name: "Arrays & Hashing" }],
+      [1, 2, 3, 4, 5].map((id) =>
+        attempt(id, "INDEPENDENT", { optimality: id <= 3 ? "SUBOPTIMAL" : "OPTIMAL" }),
+      ),
+      "2026-09-18",
+    );
+    expect(result.patterns[0]).toMatchObject({
+      classification: "NEEDS_PRACTICE",
+      fresh: {
+        sampleCount: 5,
+        weightedWeakSignals: 3,
+        outcomes: { independent: 5, assisted: 0, gaveUp: 0 },
+      },
+      optimality: { optimal: 2, suboptimal: 3, unknownOrOmitted: 0 },
+    });
+  });
   it("lists each practiced problem once, by its latest qualifying attempt, across fresh and redo history", () => {
     const first = attempt(1, "INDEPENDENT");
     const otherPattern = attempt(4, "ASSISTED", { patternIds: [graphs] });

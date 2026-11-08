@@ -75,6 +75,7 @@ model PracticeSettings {
   defaultAiModel      String      @default("gpt-5.4-mini") @map("default_ai_model") @db.VarChar(200)
   reasoningEffort     String?     @map("reasoning_effort") @db.VarChar(20)
   attemptTimerMinutes Int         @default(30) @map("attempt_timer_minutes") @db.SmallInt
+  openLeetCodeOnStart Boolean @default(true) @map("open_leetcode_on_start")
   allowPremiumProblems Boolean     @default(true) @map("allow_premium_problems")
   difficultyPreference ProblemDifficultyPreference @default(ANY) @map("difficulty_preference")
   preferredLanguage   String?     @map("preferred_language") @db.VarChar(50)

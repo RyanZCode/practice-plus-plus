@@ -187,6 +187,7 @@ describe("API", () => {
       defaultAiModel: "gpt-5.4-mini",
       reasoningEffort: null,
       attemptTimerMinutes: 30,
+      openLeetCodeOnStart: true,
       allowPremiumProblems: true,
       difficultyPreference: "ANY",
       preferredLanguage: null,

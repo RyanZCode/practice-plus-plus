@@ -134,6 +134,53 @@ async function setup(
 }
 
 describe("attempt assessment drafts", () => {
+  it.each([null, "   ", "Repeated scans take O(n²) time; a lookup table can reduce this to O(n)."])(
+    "requires notes for a suboptimal independent assessment: %s",
+    async (notes) => {
+      const draft = {
+        ...generated,
+        outcome: "INDEPENDENT" as const,
+        optimality: "SUBOPTIMAL" as const,
+        notes,
+        evidence: ["ATTEMPT" as const],
+      };
+      const store: AssessmentStore = {
+        find: vi.fn(),
+        save: vi.fn().mockResolvedValue({ ...saved, ...draft }),
+      };
+      const { url } = await setup(
+        {
+          async *streamText() {
+            yield JSON.stringify(draft);
+          },
+        },
+        store,
+        {
+          ...packet,
+          current: {
+            ...packet.current,
+            attempt: { ...packet.current.attempt!, outcome: "INDEPENDENT", assistance: [] },
+          },
+        },
+      );
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { authorization: "Bearer token", "content-type": "application/json" },
+        body: JSON.stringify({
+          selection: { providerId: "openai", model: "test-model" },
+          apiKey: "private-key",
+          attemptId,
+        }),
+      });
+      if (notes?.trim()) {
+        expect(response.status).toBe(200);
+        expect(store.save).toHaveBeenCalledWith(userId, attemptId, draft);
+      } else {
+        expect(response.status).toBe(502);
+        expect(store.save).not.toHaveBeenCalled();
+      }
+    },
+  );
   it("generates and saves a validated draft from result-phase structured evidence", async () => {
     let providerRequest: ProviderRequest | undefined;
     const store: AssessmentStore = {

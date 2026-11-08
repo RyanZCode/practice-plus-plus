@@ -24,6 +24,7 @@ const sections: ReadonlyArray<{ value: SettingsSection; label: string }> = [
 ];
 
 interface SettingsDraft {
+  openLeetCodeOnStart: boolean;
   allowPremiumProblems: boolean;
   attemptTimerMinutes: string;
   defaultAiModel: string;
@@ -93,6 +94,7 @@ export function PracticeSettings({
       defaultAiModel: draft.defaultAiModel,
       reasoningEffort: draft.reasoningEffort || null,
       attemptTimerMinutes: Number(draft.attemptTimerMinutes),
+      openLeetCodeOnStart: draft.openLeetCodeOnStart,
       allowPremiumProblems: draft.allowPremiumProblems,
       difficultyPreference: draft.difficultyPreference,
       preferredLanguage:
@@ -363,6 +365,15 @@ export function PracticeSettings({
       <label className="premium-setting">
         <input
           type="checkbox"
+          checked={draft.openLeetCodeOnStart}
+          disabled={saving}
+          onChange={(event) => setDraft({ ...draft, openLeetCodeOnStart: event.target.checked })}
+        />
+        <span>Open LeetCode automatically when starting a problem</span>
+      </label>
+      <label className="premium-setting">
+        <input
+          type="checkbox"
           checked={draft.allowPremiumProblems}
           disabled={saving}
           onChange={(event) => setDraft({ ...draft, allowPremiumProblems: event.target.checked })}
@@ -616,8 +627,8 @@ export function PracticeSettings({
                     <hr />
                     {preferenceControls}
                     <p className="settings-notice">
-                      Changes apply to the next generated plan. Your saved plan and active attempt
-                      stay in place.
+                      Problem-opening preferences apply to new attempts. Selection preferences apply
+                      to the next generated plan.
                     </p>
                   </>
                 ) : section === "reviews" ? (
@@ -662,6 +673,7 @@ function toDraft(settings: SavedPracticeSettings | null): SettingsDraft {
   const preferredLanguage = settings?.preferredLanguage ?? null;
   const hasCommonLanguage = programmingLanguages.some((language) => language === preferredLanguage);
   return {
+    openLeetCodeOnStart: settings?.openLeetCodeOnStart ?? true,
     allowPremiumProblems: settings?.allowPremiumProblems ?? true,
     defaultAiModel: settings?.defaultAiModel ?? defaultOpenAiModel,
     difficultyPreference: settings?.difficultyPreference ?? "ANY",

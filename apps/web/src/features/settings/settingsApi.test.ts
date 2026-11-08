@@ -6,6 +6,7 @@ const settings = {
   defaultAiModel: "gpt-5.4-mini" as const,
   reasoningEffort: null,
   attemptTimerMinutes: 30,
+  openLeetCodeOnStart: true,
   allowPremiumProblems: true,
   difficultyPreference: "ANY" as const,
   preferredLanguage: null,

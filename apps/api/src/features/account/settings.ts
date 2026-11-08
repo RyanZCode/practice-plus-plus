@@ -12,6 +12,7 @@ interface PracticeSettingsRecord {
   readonly defaultAiModel: string;
   readonly reasoningEffort: string | null;
   readonly attemptTimerMinutes: number;
+  readonly openLeetCodeOnStart: boolean;
   readonly allowPremiumProblems: boolean;
   readonly difficultyPreference: "ANY" | "EASIER" | "MEDIUM_ONLY";
   readonly preferredLanguage: string | null;
@@ -92,6 +93,7 @@ function toPracticeSettings(record: PracticeSettingsRecord): PracticeSettings {
     defaultAiModel: record.defaultAiModel,
     reasoningEffort: record.reasoningEffort,
     attemptTimerMinutes: record.attemptTimerMinutes,
+    openLeetCodeOnStart: record.openLeetCodeOnStart,
     allowPremiumProblems: record.allowPremiumProblems,
     difficultyPreference: record.difficultyPreference,
     preferredLanguage: record.preferredLanguage,
@@ -111,6 +113,7 @@ function toPracticeSettingsRecord(settings: PracticeSettings): PracticeSettingsR
     defaultAiModel: settings.defaultAiModel,
     reasoningEffort: settings.reasoningEffort,
     attemptTimerMinutes: settings.attemptTimerMinutes,
+    openLeetCodeOnStart: settings.openLeetCodeOnStart,
     allowPremiumProblems: settings.allowPremiumProblems,
     difficultyPreference: settings.difficultyPreference,
     preferredLanguage: settings.preferredLanguage,

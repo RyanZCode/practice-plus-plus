@@ -6,6 +6,7 @@ const validSettings = {
   defaultAiModel: "gpt-5.4-mini",
   reasoningEffort: null,
   attemptTimerMinutes: 30,
+  openLeetCodeOnStart: true,
   allowPremiumProblems: true,
   difficultyPreference: "ANY",
   preferredLanguage: null,
@@ -16,6 +17,19 @@ const validSettings = {
 };
 
 describe("practice settings contract", () => {
+  it("defaults automatic LeetCode opening to enabled and accepts opting out", () => {
+    expect(
+      practiceSettingsSchema.parse({ ...validSettings, openLeetCodeOnStart: undefined })
+        .openLeetCodeOnStart,
+    ).toBe(true);
+    expect(
+      practiceSettingsSchema.parse({ ...validSettings, openLeetCodeOnStart: false })
+        .openLeetCodeOnStart,
+    ).toBe(false);
+    expect(
+      practiceSettingsSchema.safeParse({ ...validSettings, openLeetCodeOnStart: "false" }).success,
+    ).toBe(false);
+  });
   it("accepts valid settings", () => {
     expect(practiceSettingsSchema.parse(validSettings)).toEqual(validSettings);
   });
