@@ -438,6 +438,8 @@ model AttemptAssessmentDraft {
   notes                String?            @db.VarChar(1000)
   reproducedFromMemory Boolean?           @map("reproduced_from_memory")
   summary              Json?
+  transferPattern      String?            @map("transfer_pattern") @db.VarChar(100)
+  transferReason       String?            @map("transfer_reason") @db.VarChar(1000)
   evidence             String[]
   createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)

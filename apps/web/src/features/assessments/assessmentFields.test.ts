@@ -34,4 +34,11 @@ it("omits unspecified suggestions so regenerating a draft preserves existing edi
     "summary.approach": "Used a stack",
   });
   expect(assessmentFields({ ...draft, timeSpentSeconds: 90 }).minutes).toBe("1.5");
+  expect(
+    assessmentFields({
+      ...draft,
+      transferPattern: "Stack",
+      transferReason: "Practice the invariant.",
+    }).transferPattern,
+  ).toBe("Stack");
 });

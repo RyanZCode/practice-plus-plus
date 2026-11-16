@@ -26,6 +26,8 @@ async function post(
   });
   if (!response.ok) {
     if (response.status === 401) throw new Error("Your session expired. Sign in again.");
+    if (response.status === 400)
+      throw new Error("Check your API key and model in Settings, then try again.");
     if (response.status === 409) throw new Error(conflictMessage);
     throw new Error(failureMessage);
   }
@@ -38,6 +40,7 @@ export async function generateIntegratedPlan(
   selection: ProviderSelection,
   apiKey: string,
 ): Promise<DailyPlan> {
+  if (!apiKey.trim()) throw new Error("Add your API key in Settings before generating with AI.");
   return dailyPlanSchema.parse(
     await post(apiUrl, token, "/ai/planning/integrated", {
       selection,
@@ -52,6 +55,7 @@ export async function generateExtraPracticeWithAi(
   selection: ProviderSelection,
   apiKey: string,
 ): Promise<Attempt | null> {
+  if (!apiKey.trim()) throw new Error("Add your API key in Settings before generating with AI.");
   return activeAttemptResponseSchema.parse(
     await post(
       apiUrl,

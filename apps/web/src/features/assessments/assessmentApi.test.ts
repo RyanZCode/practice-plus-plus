@@ -42,6 +42,15 @@ describe("assessment draft client", () => {
       attemptId,
       completedCode: "const answer = solve(input);",
       tutorMessages: [{ role: "user" as const, content: "I was stuck on the invariant." }],
+      currentDetails: {
+        confidence: "SHAKY" as const,
+        optimality: null,
+        timeSpentSeconds: null,
+        approach: null,
+        notes: "I kept moving the wrong pointer.",
+        assistance: [],
+        reproducedFromMemory: null,
+      },
     };
     expect(
       await generateAssessmentDraft("https://api.example.com", "token", input, fetcher),

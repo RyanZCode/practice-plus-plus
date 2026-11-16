@@ -9,6 +9,7 @@ export function assessmentFields(draft: AttemptAssessmentDraft): Record<string, 
     approach: draft.approach,
     notes: draft.notes,
     reproduced: draft.reproducedFromMemory,
+    transferPattern: draft.transferPattern ?? null,
     ...Object.fromEntries(
       Object.entries(draft.summary ?? {}).map(([key, value]) => [`summary.${key}`, value]),
     ),

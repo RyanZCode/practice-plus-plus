@@ -3,6 +3,7 @@ import type { ContextPacket, DailyPlan } from "@practice-plus-plus/contracts";
 import pino from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../application/app.js";
+import { ProviderError } from "../../shared/providers.js";
 
 const userId = "25d64b95-b7cc-4fe5-91ac-ae296dc66383";
 const firstId = "6931f7d2-86fc-43de-b7db-dcc636528fc1";
@@ -161,6 +162,63 @@ describe("AI planning", () => {
     expect(response.headers.get("x-practice-plan-fallback")).toBe("deterministic");
     expect(harness.recommended).not.toHaveBeenCalled();
     expect(harness.current).toHaveBeenCalledWith(userId, expect.any(Date));
+  });
+
+  it.each(["integrated", "extra"])("rejects a missing key for %s planning", async (path) => {
+    const harness = await setup(recommendation);
+    for (const apiKey of [undefined, "", " "]) {
+      const response = await fetch(`${harness.url}/ai/planning/${path}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          selection: { providerId: "openai", model: "gpt-5.4-mini" },
+          apiKey,
+        }),
+      });
+      expect(response.status).toBe(400);
+      expect(response.headers.get("x-practice-plan-fallback")).toBeNull();
+    }
+    expect(harness.streamText).not.toHaveBeenCalled();
+    expect(harness.current).not.toHaveBeenCalled();
+    expect(harness.recommended).not.toHaveBeenCalled();
+    expect(harness.startExtra).not.toHaveBeenCalled();
+  });
+
+  it.each(["integrated", "extra"])(
+    "rejects an invalid or expired key for %s planning",
+    async (path) => {
+      const harness = await setup(new ProviderError("invalid_credentials"), path === "extra");
+      const response = await fetch(`${harness.url}/ai/planning/${path}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          selection: { providerId: "openai", model: "gpt-5.4-mini" },
+          apiKey: "expired-key",
+        }),
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "The provider rejected the API key" });
+      expect(response.headers.get("x-practice-plan-fallback")).toBeNull();
+      expect(harness.current).not.toHaveBeenCalled();
+      expect(harness.recommended).not.toHaveBeenCalled();
+      expect(harness.startExtra).not.toHaveBeenCalled();
+    },
+  );
+
+  it("retains the deterministic fallback when the provider is unavailable", async () => {
+    const harness = await setup(new ProviderError("unavailable"));
+    const response = await fetch(`${harness.url}/ai/planning/integrated`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        selection: { providerId: "openai", model: "gpt-5.4-mini" },
+        apiKey: "secret",
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-practice-plan-fallback")).toBe("deterministic");
+    expect(harness.current).toHaveBeenCalledWith(userId, expect.any(Date));
+    expect(harness.recommended).not.toHaveBeenCalled();
   });
 
   it("previews external choices and revalidates them on confirmation", async () => {

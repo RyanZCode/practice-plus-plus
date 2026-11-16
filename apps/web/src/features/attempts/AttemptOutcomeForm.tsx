@@ -6,6 +6,7 @@ import {
   type Assistance,
   type Attempt,
   type AttemptAssessmentDraft,
+  type AttemptAssessmentRequest,
   type ConfirmAttempt,
   type MemorySuggestion,
   type ReportAttempt,
@@ -25,6 +26,7 @@ const assistanceOptions: { type: Assistance["type"]; label: string }[] = [
 type DraftAssessmentInput = {
   completedCode: string | null;
   currentSummary: NonNullable<ConfirmAttempt["summary"]> | null;
+  currentDetails: NonNullable<AttemptAssessmentRequest["currentDetails"]>;
 };
 
 function confirmableOutcome(outcome: unknown): outcome is ConfirmAttempt["outcome"] {
@@ -80,6 +82,12 @@ export function AttemptOutcomeForm({
     assessmentDraft?.reproducedFromMemory ?? null,
   );
   const [selectedAction, setSelectedAction] = useState<string>();
+  const [transferPattern, setTransferPattern] = useState(
+    assessmentDraft?.transferPattern &&
+      attempt.patterns?.some((pattern) => pattern === assessmentDraft.transferPattern)
+      ? assessmentDraft.transferPattern
+      : (attempt.patterns?.[0] ?? ""),
+  );
   const [confidence, setConfidence] = useState<ConfirmAttempt["confidence"]>(
     assessmentDraft?.confidence ?? null,
   );
@@ -128,11 +136,24 @@ export function AttemptOutcomeForm({
   }
 
   async function draftAssessment() {
+    if (form.current === null) return;
+    const data = new FormData(form.current);
+    const text = (name: string) => String(data.get(name) ?? "").trim() || null;
+    const minutes = text("minutes");
     setDrafting(true);
     try {
       const draft = await onDraftAssessment({
         completedCode: completedCode.trim() || null,
         currentSummary: currentSummaryForDraft(),
+        currentDetails: {
+          confidence,
+          optimality,
+          assistance,
+          timeSpentSeconds: minutes === null ? null : Math.round(Number(minutes) * 60),
+          approach: text("approach"),
+          notes: text("notes"),
+          reproducedFromMemory: reproduced,
+        },
       });
       if (draft === null || form.current === null) return;
       const changes: string[] = [];
@@ -148,6 +169,12 @@ export function AttemptOutcomeForm({
         } else if (key === "reproduced") {
           if (String(reproduced) !== value) changes.push(key);
           setReproduced(draft.reproducedFromMemory);
+        } else if (
+          key === "transferPattern" &&
+          attempt.patterns?.some((pattern) => pattern === value)
+        ) {
+          if (transferPattern !== value) changes.push(key);
+          setTransferPattern(value);
         } else if (key.startsWith("summary.")) {
           const field = key.slice(8) as keyof typeof summary;
           if (summary[field] !== value) changes.push(key);
@@ -320,6 +347,13 @@ export function AttemptOutcomeForm({
                 .
               </p>
             ) : null}
+            {assessmentDraft?.transferPattern &&
+            attempt.patterns?.some((pattern) => pattern === assessmentDraft.transferPattern) ? (
+              <p>
+                <strong>Pattern to practice: {assessmentDraft.transferPattern}.</strong>{" "}
+                {assessmentDraft.transferReason}
+              </p>
+            ) : null}
           </details>
         ) : null}
         {attempt.assistance.length > 0 ? (
@@ -418,11 +452,12 @@ export function AttemptOutcomeForm({
             {nextActionType === "TRANSFER" ? (
               <>
                 <label>
-                  Pattern to practice
+                  Pattern to practice {updated("transferPattern")}
                   <select
                     name="transferPattern"
                     required
-                    defaultValue={attempt.patterns?.[0] ?? ""}
+                    value={transferPattern}
+                    onChange={(event) => setTransferPattern(event.target.value)}
                   >
                     <option value="" disabled>
                       Select a revealed pattern

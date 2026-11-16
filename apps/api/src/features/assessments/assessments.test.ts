@@ -28,6 +28,8 @@ const generated = {
   approach: "Tracked a moving frontier.",
   notes: "A small nudge helped identify the invariant.",
   reproducedFromMemory: null,
+  transferPattern: null,
+  transferReason: null,
   summary: {
     approach: "Tracked a moving frontier.",
     stuckPoint: "Did not identify the invariant initially.",
@@ -56,7 +58,13 @@ const packet = {
       confidence: null,
       optimality: null,
       approach: null,
-      problem: { leetcodeId: 1, title: "Two Sum", difficulty: "EASY" },
+      problem: {
+        leetcodeId: 1,
+        title: "Two Sum",
+        url: "https://leetcode.com/problems/two-sum/",
+        difficulty: "EASY",
+        patternIds: ["pattern-arrays", "pattern-two-pointers"],
+      },
       assistance: [
         {
           id: "e4f94d00-a76f-4a20-af6c-4bb28c4af431",
@@ -73,6 +81,16 @@ const packet = {
     },
   },
   messages: [],
+  profile: { preferredLanguage: "Python" },
+  goals: [{ description: "Recognize the main idea without hints." }],
+  preferences: [],
+  patterns: [
+    { id: "pattern-arrays", name: "Arrays & Hashing", freshSamples: 3 },
+    { id: "pattern-two-pointers", name: "Two Pointers", freshSamples: 1 },
+    { id: "pattern-trees", name: "Trees", freshSamples: 0 },
+  ],
+  memories: [{ content: "Needs practice explaining invariants." }],
+  reviews: [],
   history: [],
   summary: {
     id: "db09a1fb-f853-42fe-9cd4-5e82eb319b72",
@@ -134,6 +152,50 @@ async function setup(
 }
 
 describe("attempt assessment drafts", () => {
+  it.each([
+    [
+      "Two Pointers",
+      "Practice moving the pointers while maintaining the invariant.",
+      "Two Pointers",
+    ],
+    ["Trees", "Practice traversal.", null],
+    ["Invented pattern", "Practice another technique.", null],
+    ["Two Pointers", null, null],
+    [null, null, null],
+  ])(
+    "validates the recommended pattern against the current problem: %s",
+    async (pattern, reason, expected) => {
+      const output = { ...generated, transferPattern: pattern, transferReason: reason };
+      const store: AssessmentStore = {
+        find: vi.fn(),
+        save: vi.fn().mockResolvedValue(saved),
+      };
+      const { url } = await setup(
+        {
+          async *streamText() {
+            yield JSON.stringify(output);
+          },
+        },
+        store,
+      );
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { authorization: "Bearer token", "content-type": "application/json" },
+        body: JSON.stringify({
+          selection: { providerId: "openai", model: "test-model" },
+          apiKey: "private-key",
+          attemptId,
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(store.save).toHaveBeenCalledWith(userId, attemptId, {
+        ...generated,
+        transferPattern: expected,
+        transferReason: expected === null ? null : reason,
+      });
+    },
+  );
+
   it.each([null, "   ", "Repeated scans take O(n²) time; a lookup table can reduce this to O(n)."])(
     "requires notes for a suboptimal independent assessment: %s",
     async (notes) => {
@@ -204,6 +266,11 @@ describe("attempt assessment drafts", () => {
         apiKey: "private-key",
         attemptId,
         completedCode: "const answer = solve(input);",
+        currentDetails: {
+          confidence: "SHAKY",
+          notes: "I lost track of which pointer to move.",
+          assistance: [{ type: "CONCEPTUAL_HINT", hintLevel: 1 }],
+        },
         tutorMessages: [
           { role: "user", content: "I was stuck on maintaining the moving frontier." },
         ],
@@ -230,6 +297,21 @@ describe("attempt assessment drafts", () => {
     expect(providerRequest?.messages[0]?.content).toContain("solution quality");
     expect(providerRequest?.messages[1]?.content).toContain("const answer = solve(input);");
     expect(providerRequest?.messages[1]?.content).not.toContain("private-key");
+    expect(providerRequest?.messages[1]?.content).toContain(
+      "https://leetcode.com/problems/two-sum/",
+    );
+    expect(providerRequest?.messages[1]?.content).toContain(
+      "Recognize the main idea without hints.",
+    );
+    expect(providerRequest?.messages[1]?.content).toContain(
+      "Needs practice explaining invariants.",
+    );
+    expect(providerRequest?.messages[1]?.content).toContain(
+      "I lost track of which pointer to move.",
+    );
+    expect(providerRequest?.messages[0]?.content).toContain(
+      "No browsing tool or fetched problem statement",
+    );
   });
 
   it("accepts completed code as transient assessment evidence", async () => {
@@ -457,11 +539,16 @@ describe("attempt assessment drafts", () => {
 });
 
 it("upserts a separate draft without confirming or scheduling the attempt", async () => {
+  const recommendation = {
+    ...generated,
+    transferPattern: "Two Pointers",
+    transferReason: "Practice maintaining the invariant.",
+  };
   const record = {
     id: draftId,
     attemptId,
     userProfileId: userId,
-    ...generated,
+    ...recommendation,
     summary: generated.summary,
     createdAt: now,
     updatedAt: now,
@@ -473,8 +560,8 @@ it("upserts a separate draft without confirming or scheduling the attempt", asyn
   const client = {
     $transaction: vi.fn().mockImplementation((work) => work(tx)),
   } as unknown as PrismaClient;
-  expect(await createPrismaAssessmentStore(client).save(userId, attemptId, generated)).toEqual(
-    saved,
+  expect(await createPrismaAssessmentStore(client).save(userId, attemptId, recommendation)).toEqual(
+    { ...saved, ...recommendation },
   );
   expect(tx.attempt.findFirst).toHaveBeenCalledWith({
     where: { id: attemptId, userProfileId: userId, confirmedAt: null },
@@ -483,7 +570,15 @@ it("upserts a separate draft without confirming or scheduling the attempt", asyn
   expect(tx.attemptAssessmentDraft.upsert).toHaveBeenCalledWith(
     expect.objectContaining({
       where: { attemptId },
-      create: expect.objectContaining({ userProfileId: userId, attemptId }),
+      create: expect.objectContaining({
+        userProfileId: userId,
+        attemptId,
+        transferPattern: "Two Pointers",
+      }),
+      update: expect.objectContaining({
+        transferPattern: "Two Pointers",
+        transferReason: recommendation.transferReason,
+      }),
     }),
   );
   expect(tx).not.toHaveProperty("reviewObligation");
