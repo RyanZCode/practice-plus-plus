@@ -1,10 +1,17 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { attemptSchema, type Attempt } from "@practice-plus-plus/contracts";
+import {
+  attemptSchema,
+  type Attempt,
+  type AttemptAssessmentDraft,
+} from "@practice-plus-plus/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { AttemptOutcomeForm } from "./AttemptOutcomeForm";
 
-function render(overrides: Partial<Attempt>) {
+function render(
+  overrides: Partial<Attempt>,
+  assessmentDraft: AttemptAssessmentDraft | null = null,
+) {
   const attempt = attemptSchema.parse({
     id: "d3b65a55-1a50-43e1-82e0-e23a263925a5",
     type: "FRESH",
@@ -38,7 +45,7 @@ function render(overrides: Partial<Attempt>) {
       attempt,
       busy: false,
       memorySuggestions: [],
-      assessmentDraft: null,
+      assessmentDraft,
       canDraftAssessment: false,
       completedCode: "",
       onCompletedCodeChange: vi.fn(),
@@ -51,6 +58,42 @@ function render(overrides: Partial<Attempt>) {
 }
 
 describe("follow-up choices", () => {
+  const draft: AttemptAssessmentDraft = {
+    id: "10000000-0000-4000-8000-000000000001",
+    attemptId: "d3b65a55-1a50-43e1-82e0-e23a263925a5",
+    outcome: "ASSISTED",
+    confidence: null,
+    optimality: null,
+    timeSpentSeconds: null,
+    approach: null,
+    notes: null,
+    reproducedFromMemory: null,
+    summary: null,
+    transferPattern: "Two Pointers",
+    transferReason: "Practice maintaining the pointer invariant.",
+    evidence: ["ATTEMPT", "LEARNER_CONTEXT"],
+    createdAt: "2026-11-15T12:00:00.000Z",
+    updatedAt: "2026-11-15T12:00:00.000Z",
+  };
+
+  it("selects the saved recommendation and explains it in the assessment", () => {
+    const html = render({ patterns: ["Arrays & Hashing", "Two Pointers"] }, draft);
+    expect(html).toContain('<option selected="">Two Pointers</option>');
+    expect(html).toContain("Pattern to practice: Two Pointers.");
+    expect(html).toContain("Practice maintaining the pointer invariant.");
+  });
+
+  it("falls back to the first revealed pattern for old drafts and invalid suggestions", () => {
+    for (const transferPattern of [undefined, null, "Trees"]) {
+      const html = render(
+        { patterns: ["Arrays & Hashing", "Two Pointers"] },
+        { ...draft, transferPattern },
+      );
+      expect(html).toContain('<option selected="">Arrays &amp; Hashing</option>');
+      expect(html).not.toContain("Practice maintaining the pointer invariant.");
+    }
+  });
+
   it("suggests a transfer on a fresh assisted solve with a revealed pattern selected", () => {
     const html = render({});
     expect(html).toContain('<option value="TRANSFER" selected="">');

@@ -13,7 +13,7 @@ import type { DailyPlanStore } from "./dailyPlan.js";
 import type { AttemptStore } from "../attempts/attempts.js";
 import { HttpError } from "../../shared/errors.js";
 import { getApplicationProfile } from "../account/profile.js";
-import type { ProviderAdapter } from "../../shared/providers.js";
+import { ProviderError, type ProviderAdapter } from "../../shared/providers.js";
 
 export interface PlanningOptions {
   assembler: {
@@ -178,7 +178,8 @@ export function createPlanningRouter(options: PlanningOptions): express.Router {
       response.json(
         await options.store.recommended(userId, now, preview.recommendation.freshProblemIds),
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof ProviderError && error.code === "invalid_credentials") throw error;
       response.setHeader("X-Practice-Plan-Fallback", "deterministic");
       response.json(await options.store.current(userId, now));
     }

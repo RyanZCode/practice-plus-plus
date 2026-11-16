@@ -899,7 +899,11 @@ export function Practice({
                 showAssessment={!isDemo}
                 completedCode={completedCode}
                 onCompletedCodeChange={setCompletedCode}
-                onDraftAssessment={async ({ completedCode: code, currentSummary }) => {
+                onDraftAssessment={async ({
+                  completedCode: code,
+                  currentSummary,
+                  currentDetails,
+                }) => {
                   setBusy(true);
                   setError(undefined);
                   try {
@@ -920,6 +924,7 @@ export function Practice({
                       attemptId: attempt.id,
                       completedCode: code,
                       currentSummary,
+                      currentDetails,
                       tutorMessages,
                     });
                     setAssessmentDraft(draft);

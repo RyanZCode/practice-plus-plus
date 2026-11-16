@@ -189,6 +189,8 @@ export const assessmentEvidenceSchema = z.enum([
   "ATTEMPT_SUMMARY",
   "CONVERSATION_SUMMARY",
   "TUTOR_CONVERSATION",
+  "LEARNER_CONTEXT",
+  "CURRENT_DETAILS",
 ]);
 export const attemptAssessmentDraftInputSchema = z.strictObject({
   outcome: z.enum(["INDEPENDENT", "ASSISTED", "GAVE_UP"]),
@@ -199,6 +201,8 @@ export const attemptAssessmentDraftInputSchema = z.strictObject({
   notes: assessmentTextSchema.nullable(),
   reproducedFromMemory: z.boolean().nullable(),
   summary: attemptSummaryInputSchema.nullable(),
+  transferPattern: z.string().trim().min(1).max(100).nullable().optional(),
+  transferReason: assessmentTextSchema.nullable().optional(),
   evidence: z
     .array(assessmentEvidenceSchema)
     .min(1)
@@ -208,16 +212,6 @@ export const attemptAssessmentDraftInputSchema = z.strictObject({
     }),
 });
 export type AttemptAssessmentDraftInput = z.infer<typeof attemptAssessmentDraftInputSchema>;
-
-export const attemptAssessmentRequestSchema = z.strictObject({
-  selection: providerSelectionSchema,
-  apiKey: z.string().regex(/^[\x21-\x7e]{1,4096}$/),
-  attemptId: z.uuid(),
-  completedCode: z.string().max(16000).nullable().optional(),
-  currentSummary: attemptSummaryInputSchema.nullable().optional(),
-  tutorMessages: contextRequestSchema.shape.messages.unwrap().max(12).optional(),
-});
-export type AttemptAssessmentRequest = z.infer<typeof attemptAssessmentRequestSchema>;
 
 export const attemptAssessmentDraftSchema = attemptAssessmentDraftInputSchema.extend({
   outcome: z.enum(["INDEPENDENT", "ASSISTED", "GAVE_UP", "INCOMPLETE"]),
@@ -551,6 +545,26 @@ export const confirmAttemptSchema = z.strictObject({
   summary: attemptSummaryInputSchema.nullable().optional(),
 });
 export type ConfirmAttempt = z.infer<typeof confirmAttemptSchema>;
+export const attemptAssessmentRequestSchema = z.strictObject({
+  selection: providerSelectionSchema,
+  apiKey: z.string().regex(/^[\x21-\x7e]{1,4096}$/),
+  attemptId: z.uuid(),
+  completedCode: z.string().max(16000).nullable().optional(),
+  currentSummary: attemptSummaryInputSchema.nullable().optional(),
+  currentDetails: confirmAttemptSchema
+    .pick({
+      confidence: true,
+      optimality: true,
+      assistance: true,
+      timeSpentSeconds: true,
+      approach: true,
+      notes: true,
+      reproducedFromMemory: true,
+    })
+    .optional(),
+  tutorMessages: contextRequestSchema.shape.messages.unwrap().max(12).optional(),
+});
+export type AttemptAssessmentRequest = z.infer<typeof attemptAssessmentRequestSchema>;
 export type Assistance = z.infer<typeof assistanceSchema>;
 export function suggestedOutcome(assistance: Assistance[]): "GAVE_UP" | "ASSISTED" | null {
   if (assistance.some((event) => event.type === "SOLUTION_REVIEW")) return "GAVE_UP";
